@@ -2,9 +2,12 @@ package com.example.echo_panda_mobile.presentation.viewsmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.echo_panda_mobile.data.model.AuthResponse
 import com.example.echo_panda_mobile.data.model.RegisterRequest
+import com.example.echo_panda_mobile.data.model.UserRole
 import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.AuthResult
+import com.example.echo_panda_mobile.presentation.views.Routes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,30 +65,60 @@ class RegisterViewModel(
         )
     }
 
-    fun onRegisterClick() {
+    fun onRegisterClick(selectedRole: UserRole = UserRole.USER) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
             val state = _uiState.value
+            val roleStr = when (selectedRole) {
+                UserRole.ARTIST -> "artist"
+                UserRole.USER -> "user"
+                UserRole.UNKNOWN -> "user"
+            }
+            
             val result = repository.register(
                 RegisterRequest(
                     name                 = state.name.trim(),
                     email                = state.email.trim(),
                     password             = state.password,
                     passwordConfirmation = state.confirmPassword,
-                    role                 = state.selectedRole
+                    role                 = roleStr
                 )
             )
 
             when (result) {
-                is AuthResult.Success -> {
-                    val route = when (result.data.user.role) {
-                        "artist" -> "artist/dashboard"
-                        else     -> "user/home"
+                is AuthResult.Success<AuthResponse> -> {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading  = false,
+                        navigateTo = Routes.VERIFY_EMAIL
+                    )
+                }
+                is AuthResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading    = false,
+                        errorMessage = result.message
+                    )
+                }
+                else -> Unit
+            }
+        }
+    }
+
+    fun onGoogleSignIn(idToken: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+
+            val result = repository.signInWithGoogle(idToken)
+            when (result) {
+                is AuthResult.Success<*> -> {
+                    val authResponse = result.data as? AuthResponse
+                    val destination = when (authResponse?.user?.role?.lowercase()) {
+                        "artist" -> Routes.ARTIST_DASHBOARD
+                        else -> Routes.USER_HOME
                     }
                     _uiState.value = _uiState.value.copy(
                         isLoading  = false,
-                        navigateTo = route
+                        navigateTo = destination
                     )
                 }
                 is AuthResult.Error -> {
