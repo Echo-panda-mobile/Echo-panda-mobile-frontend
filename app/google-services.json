@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "391590449195",
+    "project_id": "echo-panda-auth",
+    "storage_bucket": "echo-panda-auth.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:391590449195:android:57e0fa0124095f93991a6e",
+        "android_client_info": {
+          "package_name": "com.example.echo_panda_mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "391590449195-ve946hqqjtq718laoa69nk001pn1bbrc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAD3QAoxFp-AqdgAKkYaKAzjAVX44W7tAc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "391590449195-ve946hqqjtq718laoa69nk001pn1bbrc.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

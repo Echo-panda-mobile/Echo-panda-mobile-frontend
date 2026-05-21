@@ -72,6 +72,13 @@ goto fail
 
 set CLASSPATH=
 
+@rem Increase Java network timeouts for wrapper downloads (milliseconds)
+if "%JAVA_TOOL_OPTIONS%"=="" (
+	set JAVA_TOOL_OPTIONS=-Dsun.net.client.defaultConnectTimeout=600000 -Dsun.net.client.defaultReadTimeout=600000
+) else (
+	set JAVA_TOOL_OPTIONS=-Dsun.net.client.defaultConnectTimeout=600000 -Dsun.net.client.defaultReadTimeout=600000 %JAVA_TOOL_OPTIONS%
+)
+
 
 @rem Execute Gradle
 "%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" -jar "%APP_HOME%\gradle\wrapper\gradle-wrapper.jar" %*
