@@ -7,7 +7,7 @@ import com.example.echo_panda_mobile.data.model.LoginRequest
 import com.example.echo_panda_mobile.data.model.UserRole
 import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.AuthResult
-import com.example.echo_panda_mobile.presentation.views.Routes
+import com.example.echo_panda_mobile.presentation.navigation.Routes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

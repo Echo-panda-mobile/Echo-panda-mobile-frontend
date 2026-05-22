@@ -12,6 +12,9 @@ object AppStrings {
         "profile" to "Profile",
         "artist_profile" to "Artist Profile",
         "home" to "Home",
+        "discover" to "Discover",
+        "albums" to "Albums",
+        "library" to "Library",
         "liked_songs" to "Liked Songs",
         "playlists" to "Playlists",
         "favorites" to "Favorites",
@@ -47,7 +50,7 @@ object AppStrings {
         // Auth
         "login" to "Login",
         "logout" to "Log Out",
-        "logout_confirm" to "Are you sure you want to log out?",
+        "logout_confirm" to "Are you sure you want to log out of Echo Panda?",
         "sign_up" to "Sign Up",
         "password" to "Password",
         "email" to "Email",
@@ -63,12 +66,20 @@ object AppStrings {
         "edit_profile" to "Edit Profile",
         "followers" to "Followers",
         "following" to "Following",
+        "your_playlists" to "Your Playlists",
+        "no_playlists" to "No Playlists Yet",
+        "no_playlists_desc" to "Start creating your own music world!",
 
         // Home
         "continue_listening" to "Continue Listening",
         "popular_artists" to "Popular Artists",
         "top_albums" to "Top Albums",
         "based_on_recent" to "Based on your recent listening",
+
+        // Discover
+        "music_genres" to "Music Genres",
+        "mood_playlist" to "Mood Playlist",
+        "new_release_songs" to "New Release Songs",
 
         // Messages
         "loading" to "Loading...",
@@ -81,7 +92,8 @@ object AppStrings {
         "back" to "Back",
         "next" to "Next",
         "done" to "Done",
-        "close" to "Close"
+        "close" to "Close",
+        "view_all" to "View All"
     )
 
     private val khmerStrings = mapOf(
@@ -89,27 +101,30 @@ object AppStrings {
         "settings" to "ការកំណត់",
         "my_profile" to "ប្រវត្តិរូបរបស់ខ្ញុំ",
         "profile" to "ប្រវត្តិរូប",
-        "artist_profile" to "ប្រវត្តិរូបសិល្បីករ",
+        "artist_profile" to "ប្រវត្តិរូបសិល្បករ",
         "home" to "ដើម",
-        "liked_songs" to "បទノ្ងៀត",
+        "discover" to "ស្វែងរក",
+        "albums" to "អាល់ប៊ុម",
+        "library" to "បណ្ណាល័យ",
+        "liked_songs" to "បទដែលចូលចិត្ត",
         "playlists" to "បញ្ជីចម្រៀង",
-        "favorites" to "សិល្បៈដែលចូលចិត្ត",
+        "favorites" to "សំណព្វចិត្ត",
 
         // Settings
         "dark_mode" to "របៀបងងឹត",
         "dark_mode_desc" to "បង្ហាញកម្មវិធីងងឹត",
         "light_mode" to "របៀបពន្លឺ",
         "light_mode_desc" to "បង្ហាញកម្មវិធីពន្លឺ",
-        "language" to "ភាษា",
+        "language" to "ភាសា",
         "english" to "English",
         "khmer" to "ខ្មែរ",
         "notifications" to "ការជូនដំណឹង",
-        "notifications_desc" to "ទទួលការជូនដំណឹងផ្ទាល់ខ្លួន",
+        "notifications_desc" to "ទទួលការជូនដំណឹង",
         "audio_quality" to "គុណភាពសម្លេង",
         "audio_quality_desc" to "បច្ចុប្បន្ន: ខ្ពស់",
         "explicit_content" to "ខ្លឹមសារច្បាស់លាស់",
         "explicit_content_desc" to "អនុញ្ញាតឱ្យបទលម្អិត",
-        "two_factor_auth" to "ការផ្ធាក់ផ្ធង់ពីរកត្តា",
+        "two_factor_auth" to "ការផ្ទៀងផ្ទាត់ពីរកត្តា",
         "two_factor_auth_desc" to "សុវត្ថិភាពគណនីរបស់អ្នក",
         "privacy_policy" to "គោលការណ៍ឯកជនភាព",
         "privacy_policy_desc" to "មើលគោលការណ៍របស់យើង",
@@ -119,14 +134,14 @@ object AppStrings {
         "account" to "គណនី",
         "audio" to "សម្លេង",
         "display" to "បង្ហាញ",
-        "privacy_security" to "ឯកជនភាព ও សុវត្ថិភាព",
+        "privacy_security" to "ឯកជនភាព និង សុវត្ថិភាព",
         "private_account" to "គណនីឯកជន",
         "private_account_desc" to "ធ្វើឱ្យប្រវត្តិរូបរបស់អ្នកឯកជន",
 
         // Auth
         "login" to "ចូល",
-        "logout" to "ចេញ",
-        "logout_confirm" to "តើអ្នកប្រាកដថាចង់ចេញមែន?",
+        "logout" to "ចាកចេញ",
+        "logout_confirm" to "តើអ្នកប្រាកដថាចង់ចាកចេញពី Echo Panda មែនទេ?",
         "sign_up" to "ចុះឈ្មោះ",
         "password" to "ពាក្យសម្ងាត់",
         "email" to "អ៊ីមែល",
@@ -135,19 +150,27 @@ object AppStrings {
 
         // Profile
         "save_changes" to "រក្សាទុកការផ្លាស់ប្តូរ",
-        "upload_photo" to "ផ្ទុកឯកសារ",
+        "upload_photo" to "ផ្ទុករូបថត",
         "change_photo" to "ផ្លាស់ប្តូររូបថត",
-        "clear_photo" to "ដកចេញរូបថត",
-        "profile_updated" to "ប្រវត្តិរូបបានរក្សាទុកដោយជោគជ័យ",
+        "clear_photo" to "ដករូបថតចេញ",
+        "profile_updated" to "ប្រវត្តិរូបត្រូវបានធ្វើបច្ចុប្បន្នភាព",
         "edit_profile" to "កែសម្រួលប្រវត្តិរូប",
         "followers" to "អ្នកតាមដាន",
-        "following" to "ដែលត្រូវបានតាមដាន",
+        "following" to "កំពុងតាមដាន",
+        "your_playlists" to "បញ្ជីចម្រៀងរបស់អ្នក",
+        "no_playlists" to "មិនទាន់មានបញ្ជីចម្រៀង",
+        "no_playlists_desc" to "ចាប់ផ្តើមបង្កើតពិភពតន្ត្រីផ្ទាល់ខ្លួនរបស់អ្នក!",
 
         // Home
         "continue_listening" to "បន្តស្ដាប់",
-        "popular_artists" to "សិល្បីករពេញលេញ",
-        "top_albums" to "អាល់បូមលម្អ",
-        "based_on_recent" to "ផ្អែកលើការស្តាប់ថ្មីៗ",
+        "popular_artists" to "សិល្បករពេញនិយម",
+        "top_albums" to "អាល់ប៊ុមល្បីៗ",
+        "based_on_recent" to "ផ្អែកលើការស្តាប់ថ្មីៗរបស់អ្នក",
+
+        // Discover
+        "music_genres" to "ប្រភេទតន្ត្រី",
+        "mood_playlist" to "បញ្ជីចម្រៀងតាមអារម្មណ៍",
+        "new_release_songs" to "បទចម្រៀងចេញថ្មី",
 
         // Messages
         "loading" to "កំពុងផ្ទុក...",
@@ -157,10 +180,11 @@ object AppStrings {
         "save" to "រក្សាទុក",
         "delete" to "លុប",
         "edit" to "កែសម្រួល",
-        "back" to "ថយក្រោយ",
+        "back" to "ត្រឡប់ក្រោយ",
         "next" to "បន្ទាប់",
-        "done" to "ធ្វើស្វាគមន៍",
-        "close" to "បិទ"
+        "done" to "រួចរាល់",
+        "close" to "បិទ",
+        "view_all" to "មើលទាំងអស់"
     )
 
     fun getString(key: String, language: String = "en"): String {

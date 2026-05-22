@@ -33,15 +33,15 @@ class AuthStateManager(private val context: Context) {
      * Load authentication state from DataStore on app startup
      */
     suspend fun loadAuthState() {
-        val preferences = context.dataStore.data.map { pref ->
-            val isAuth = pref[AuthPreferencesKeys.IS_AUTHENTICATED]?.toBoolean() ?: false
+        context.dataStore.data.map { pref ->
+            val isAuth = (pref[AuthPreferencesKeys.IS_AUTHENTICATED] as? String)?.toBoolean() ?: false
             
             if (isAuth) {
-                val userId = pref[AuthPreferencesKeys.USER_ID] ?: ""
-                val name = pref[AuthPreferencesKeys.USER_NAME] ?: ""
-                val email = pref[AuthPreferencesKeys.USER_EMAIL] ?: ""
-                val roleStr = pref[AuthPreferencesKeys.USER_ROLE] ?: "USER"
-                val token = pref[AuthPreferencesKeys.USER_TOKEN] ?: ""
+                val userId = (pref[AuthPreferencesKeys.USER_ID] as? String) ?: ""
+                val name = (pref[AuthPreferencesKeys.USER_NAME] as? String) ?: ""
+                val email = (pref[AuthPreferencesKeys.USER_EMAIL] as? String) ?: ""
+                val roleStr = (pref[AuthPreferencesKeys.USER_ROLE] as? String) ?: "USER"
+                val token = (pref[AuthPreferencesKeys.USER_TOKEN] as? String) ?: ""
                 
                 val role = try {
                     UserRole.valueOf(roleStr)
@@ -66,9 +66,7 @@ class AuthStateManager(private val context: Context) {
             } else {
                 AuthState()
             }
-        }
-        
-        preferences.collect { newState ->
+        }.collect { newState ->
             _authState.value = newState
         }
     }
