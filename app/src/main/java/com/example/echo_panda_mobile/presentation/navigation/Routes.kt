@@ -11,8 +11,9 @@ object Routes {
     const val USER_HOME     = "user/home"
     const val USER_DISCOVER = "user/discover"
     const val USER_ALBUMS   = "user/albums"
+    const val USER_ALBUM_DETAIL = "user/album_detail/{albumId}"
+    const val USER_PLAYER   = "user/player/{trackId}"
     const val USER_LIBRARY  = "user/library"
-    const val USER_PLAYER   = "user/player"
     const val USER_PROFILE  = "user/profile"
     const val USER_SETTINGS = "user/settings"
 
@@ -21,6 +22,10 @@ object Routes {
     const val ARTIST_MY_MUSIC  = "artist/my_music"
     const val ARTIST_UPLOAD    = "artist/upload"
     const val ARTIST_PROFILE   = "artist/profile"
+    const val ARTIST_VIEW      = "artist/view/{artistId}"
+    
+    // Intro
+    const val INTRO = "intro"
 
     // Bottom nav index → route mapping
     fun bottomNavRoute(index: Int) = when (index) {

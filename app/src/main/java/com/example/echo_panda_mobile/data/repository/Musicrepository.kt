@@ -56,6 +56,64 @@ class MusicRepository {
         )
     }
 
+    suspend fun getNewAlbums(): MusicResult<List<Album>> {
+        delay(400)
+        return MusicResult.Success(
+            listOf(
+                Album("5", "Harry's House", "Harry Styles", placeholderColors = listOf(Color(0xFF2A1E3A), Color(0xFF120920))),
+                Album("6", "Justice",       "Justin Bieber",placeholderColors = listOf(Color(0xFF1E3A2A), Color(0xFF0D2019))),
+                Album("7", "Future Nostalgia","Dua Lipa",   placeholderColors = listOf(Color(0xFF3A1E2F), Color(0xFF20090F))),
+                Album("8", "Certified Lover Boy", "Drake",  placeholderColors = listOf(Color(0xFF1E2A3A), Color(0xFF091520))),
+            )
+        )
+    }
+
+    suspend fun getPopularAlbums(): MusicResult<List<Album>> {
+        delay(400)
+        return MusicResult.Success(
+            listOf(
+                Album("9", "Midnights",     "Taylor Swift", placeholderColors = listOf(Color(0xFF1A1A2A), Color(0xFF0A0A12))),
+                Album("10", "SOS",          "SZA",          placeholderColors = listOf(Color(0xFF2A1A1A), Color(0xFF120A0A))),
+                Album("11", "Un Verano Sin Ti", "Bad Bunny", placeholderColors = listOf(Color(0xFF3A2A1A), Color(0xFF1A1208))),
+                Album("12", "Renaissance",  "Beyoncé",      placeholderColors = listOf(Color(0xFF1A2A2A), Color(0xFF0A1212))),
+            )
+        )
+    }
+
+    suspend fun getAlbumById(id: String): MusicResult<Album> {
+        delay(500)
+        // Find in our mock lists or create a detailed one
+        val allMockAlbums = listOf(
+            Album("1", "Adele 21",   "Adele",      placeholderColors = listOf(Color(0xFF3A2A1A), Color(0xFF1A1208))),
+            Album("2", "Scorpion",   "Drake",      placeholderColors = listOf(Color(0xFF1A1A2A), Color(0xFF0A0A12))),
+            Album("4", "After Hours","The Weeknd", placeholderColors = listOf(Color(0xFF3A1A1A), Color(0xFF1A0808))),
+            Album("13", "The Eminem Show", "Eminem", placeholderColors = listOf(Color(0xFF3A0000), Color(0xFF1A0000)))
+        )
+        
+        val base = allMockAlbums.find { it.id == id } ?: allMockAlbums.last()
+        
+        val mockTracks = listOf(
+            Track("t1", "White America", base.artist, durationMs = 324000, placeholderColors = base.placeholderColors),
+            Track("t2", "Business", base.artist, durationMs = 251000, placeholderColors = base.placeholderColors),
+            Track("t3", "Cleaning' Out My Closet", base.artist, durationMs = 297000, placeholderColors = base.placeholderColors),
+            Track("t4", "Square Dance", base.artist, durationMs = 323000, placeholderColors = base.placeholderColors),
+            Track("t5", "When The Music Stops", base.artist, durationMs = 269000, placeholderColors = base.placeholderColors),
+            Track("t6", "Soldier", base.artist, durationMs = 226000, placeholderColors = base.placeholderColors),
+            Track("t7", "Say Good Bye Hollywood", base.artist, durationMs = 272000, placeholderColors = base.placeholderColors),
+            Track("t8", "Drips", base.artist, durationMs = 285000, placeholderColors = base.placeholderColors),
+            Track("t9", "Without Me", base.artist, durationMs = 290000, placeholderColors = base.placeholderColors),
+            Track("t10", "Sing For The Moment", base.artist, durationMs = 339000, placeholderColors = base.placeholderColors),
+        )
+
+        return MusicResult.Success(
+            base.copy(
+                tracks = mockTracks,
+                totalDuration = "1h 14m",
+                artistImageUrl = null // would be artist avatar
+            )
+        )
+    }
+
     suspend fun getTopMixes(): MusicResult<List<Playlist>> {
         delay(300)
         return MusicResult.Success(
@@ -141,6 +199,82 @@ class MusicRepository {
                 BrowseCategory("bc5", "Bollywood",      Color(0xFFF57F17), listOf(Color(0xFFE65100), Color(0xFFFFB300))),
                 BrowseCategory("bc6", "Pop\nFusion",    Color(0xFF2E7D32), listOf(Color(0xFF1B5E20), Color(0xFF43A047))),
             )
+        )
+    }
+
+    private val allMockTracks = listOf(
+        Track("t1", "Time", "Lusiano", durationMs = 180000, placeholderColors = listOf(Color(0xFF3A1A1A), Color(0xFF1A0A0A))),
+        Track("t2", "112", "Jazzek", durationMs = 210000, placeholderColors = listOf(Color(0xFF101A3A), Color(0xFF080E1A))),
+        Track("t3", "We Dont Care", "DL Gulum", durationMs = 195000, placeholderColors = listOf(Color(0xFF1A2A1A), Color(0xFF0A120A))),
+        Track("t4", "Midnight", "Ella M.", durationMs = 225000, placeholderColors = listOf(Color(0xFF2A1A3A), Color(0xFF12081E))),
+        Track("p1", "Dracula - JENNIE Remix", "Jennie", durationMs = 205000, placeholderColors = listOf(Color(0xFF2A1A1A), Color(0xFF120A0A))),
+        Track("p2", "One Of The Girls", "Jennie", durationMs = 244000, placeholderColors = listOf(Color(0xFF1A1A2A), Color(0xFF0A0A12))),
+        Track("p3", "like JENNIE", "Jennie", durationMs = 188000, placeholderColors = listOf(Color(0xFF3A2A1A), Color(0xFF1A1208))),
+        Track("p4", "Mantra", "Jennie", durationMs = 175000, placeholderColors = listOf(Color(0xFF1A2A2A), Color(0xFF0A1212))),
+        Track("p5", "Solo", "Jennie", durationMs = 169000, placeholderColors = listOf(Color(0xFF2A2A1A), Color(0xFF12120A))),
+        Track("tr1", "White America", "Eminem", durationMs = 324000, placeholderColors = listOf(Color(0xFF3A0000), Color(0xFF1A0000))),
+        Track("tr2", "Business", "Eminem", durationMs = 251000, placeholderColors = listOf(Color(0xFF3A0000), Color(0xFF1A0000))),
+        Track("tr9", "Without Me", "Eminem", durationMs = 290000, placeholderColors = listOf(Color(0xFF3A0000), Color(0xFF1A0000))),
+    )
+
+    suspend fun getTrackById(id: String): MusicResult<Track> {
+        delay(600)
+        val track = allMockTracks.find { it.id == id } 
+            ?: allMockTracks.firstOrNull { it.id.startsWith("t") } 
+            ?: allMockTracks.first()
+
+        val dynamicLyrics = when (track.artist.lowercase()) {
+            "jennie" -> """
+                [Intro]
+                Yeah, yeah, yeah...
+                
+                [Verse 1]
+                I'm sitting here in the dark
+                Thinking 'bout how we fell apart
+                The memories keep rushing in
+                I don't know where to begin
+                
+                [Chorus]
+                Cause I'm a shining solo
+                I'm going solo-lo-lo-lo-lo
+                Watch me as I light up the night
+                Everything is gonna be alright
+                
+                [Verse 2]
+                Don't need nobody to hold my hand
+                I'm making my own master plan
+                From Paris down to Tokyo
+                You know I'm ready for the show
+            """.trimIndent()
+            "eminem" -> """
+                Look, if you had one shot, or one opportunity
+                To seize everything you ever wanted in one moment
+                Would you capture it, or just let it slip?
+                
+                Yo, his palms are sweaty, knees weak, arms are heavy
+                There's vomit on his sweater already, mom's spaghetti
+                He's nervous, but on the surface he looks calm and ready
+                To drop bombs, but he keeps on forgettin'
+            """.trimIndent()
+            else -> """
+                (Instrumental Intro)
+                
+                Verse 1:
+                Walking down this empty street
+                Feeling the rhythm of the beat
+                The stars above are shining bright
+                In the middle of the neon light
+                
+                Chorus:
+                Oh, this is our time to fly
+                Reach for the colors in the sky
+                No matter what they say or do
+                I'll always be right here with you
+            """.trimIndent()
+        }
+
+        return MusicResult.Success(
+            track.copy(lyrics = dynamicLyrics)
         )
     }
 }
