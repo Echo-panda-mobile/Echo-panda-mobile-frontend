@@ -12,6 +12,7 @@ import com.example.echo_panda_mobile.presentation.views.auth.LoginScreen
 import com.example.echo_panda_mobile.presentation.views.auth.SignUpScreen
 import com.example.echo_panda_mobile.presentation.views.user.profile.UserProfileScreen
 import com.example.echo_panda_mobile.presentation.views.user.profile.UserSettingsScreen
+import com.example.echo_panda_mobile.presentation.views.user.library.LibraryScreen
 import com.google.firebase.auth.FirebaseAuth
 
 @Composable
@@ -88,6 +89,10 @@ fun AppNavigation() {
 
         composable(Routes.USER_DISCOVER) {
             DiscoverScreen(selectedNav = selectedNav, onNavSelect = onNavSelect)
+        }
+
+        composable(Routes.USER_LIBRARY) {
+            LibraryScreen(selectedNav = selectedNav, onNavSelect = onNavSelect)
         }
 
         composable(Routes.USER_PROFILE) {
