@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
 import com.example.echo_panda_mobile.data.model.*
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.theme.LocalAppLanguage
@@ -172,16 +173,21 @@ fun ArtPlaceholder(
 }
 
 @Composable
-fun ArtistCircleCard(artist: Artist, onClick: () -> Unit = {}) {
+fun ArtistCircleCard(
+    artist: Artist, 
+    modifier: Modifier = Modifier, 
+    size: Dp = 76.dp,
+    onClick: () -> Unit = {}
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .width(76.dp)
+        modifier = modifier
+            .width(size)
             .clickable { onClick() }
     ) {
         Box(
             modifier = Modifier
-                .size(76.dp)
+                .size(size)
                 .clip(CircleShape)
         ) {
             ArtPlaceholder(colors = artist.placeholderColors, modifier = Modifier.fillMaxSize())
@@ -189,7 +195,7 @@ fun ArtistCircleCard(artist: Artist, onClick: () -> Unit = {}) {
                 Icons.Default.Person,
                 contentDescription = null,
                 tint = Color.White.copy(alpha = 0.3f),
-                modifier = Modifier.size(36.dp).align(Alignment.Center)
+                modifier = Modifier.size(size * 0.47f).align(Alignment.Center)
             )
         }
         Spacer(modifier = Modifier.height(6.dp))
@@ -209,14 +215,21 @@ fun ArtistCircleCard(artist: Artist, onClick: () -> Unit = {}) {
 @Composable
 fun SquareArtCard(
     colors: List<Color>,
+    modifier: Modifier = Modifier,
     overlayText: String? = null,
-    size: androidx.compose.ui.unit.Dp = 110.dp,
-    cornerRadius: androidx.compose.ui.unit.Dp = 12.dp,
+    size: Dp = 110.dp,
+    cornerRadius: Dp = 12.dp,
     onClick: () -> Unit = {}
 ) {
+    val sizeModifier = if (size != Dp.Unspecified) {
+        Modifier.size(size)
+    } else {
+        Modifier.fillMaxWidth().aspectRatio(1f)
+    }
+
     Box(
-        modifier = Modifier
-            .size(size)
+        modifier = modifier
+            .then(sizeModifier)
             .clip(RoundedCornerShape(cornerRadius))
             .clickable { onClick() }
     ) {
@@ -225,13 +238,23 @@ fun SquareArtCard(
 }
 
 @Composable
-fun AlbumCard(album: Album, onClick: () -> Unit = {}) {
+fun AlbumCard(
+    album: Album, 
+    modifier: Modifier = Modifier,
+    width: Dp = 110.dp,
+    onClick: () -> Unit = {}
+) {
+    val finalModifier = if (width != Dp.Unspecified) modifier.width(width) else modifier
     Column(
-        modifier = Modifier
-            .width(110.dp)
+        modifier = finalModifier
             .clickable { onClick() }
     ) {
-        SquareArtCard(colors = album.placeholderColors, overlayText = album.title)
+        SquareArtCard(
+            colors = album.placeholderColors, 
+            overlayText = album.title,
+            modifier = Modifier.fillMaxWidth(),
+            size = width
+        )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = album.title,  
@@ -256,18 +279,228 @@ fun AlbumCard(album: Album, onClick: () -> Unit = {}) {
 }
 
 @Composable
+fun AlbumListRow(
+    album: Album,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SquareArtCard(
+            colors = album.placeholderColors,
+            size = 64.dp,
+            cornerRadius = 8.dp
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = album.title,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = album.artist,
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Icon(
+            Icons.Default.MoreVert,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.4f),
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+fun SongRow(
+    index: Int,
+    track: Track,
+    isPlaying: Boolean = false,
+    onClick: () -> Unit = {}
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 10.dp, horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Index or Play Icon
+        Box(modifier = Modifier.width(32.dp), contentAlignment = Alignment.CenterStart) {
+            if (isPlaying) {
+                Icon(Icons.Default.Pause, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            } else {
+                Text(
+                    text = (index + 1).toString(),
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        // Small Artwork
+        SquareArtCard(
+            colors = track.placeholderColors,
+            size = 48.dp,
+            cornerRadius = 4.dp
+        )
+
+        Spacer(Modifier.width(16.dp))
+
+        // Title and Artist
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = track.title,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = track.artist,
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        // Duration
+        val minutes = (track.durationMs / 1000) / 60
+        val seconds = (track.durationMs / 1000) % 60
+        Text(
+            text = String.format("%d:%02d", minutes, seconds),
+            color = Color.White.copy(alpha = 0.5f),
+            fontSize = 13.sp,
+            modifier = Modifier.padding(horizontal = 12.dp)
+        )
+
+        // More Icon
+        Icon(
+            Icons.Default.MoreVert,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.5f),
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+fun MiniPlayer(
+    track: Track,
+    isPlaying: Boolean,
+    progress: Float,
+    onTogglePlay: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF121212).copy(alpha = 0.95f))
+            .clickable { onClick() }
+    ) {
+        // Progress Bar
+        LinearProgressIndicator(
+            progress = progress,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(2.dp),
+            color = Color.White,
+            trackColor = Color.White.copy(alpha = 0.2f)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SquareArtCard(
+                colors = track.placeholderColors,
+                size = 40.dp,
+                cornerRadius = 4.dp
+            )
+            
+            Spacer(Modifier.width(12.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = track.title,
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = track.artist,
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            IconButton(onClick = onPrevious) {
+                Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+            }
+            
+            IconButton(onClick = onTogglePlay) {
+                Icon(
+                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            IconButton(onClick = onNext) {
+                Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+            }
+            
+            IconButton(onClick = { /* More options */ }) {
+                Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+@Composable
 fun LabeledArtCard(
     title: String,
     subLabel: String,
     colors: List<Color>,
+    modifier: Modifier = Modifier,
+    size: Dp = 110.dp,
     onClick: () -> Unit = {}
 ) {
+    val finalModifier = if (size != Dp.Unspecified) modifier.width(size) else modifier
     Column(
-        modifier = Modifier
-            .width(110.dp)
+        modifier = finalModifier
             .clickable { onClick() }
     ) {
-        SquareArtCard(colors = colors, overlayText = title)
+        SquareArtCard(
+            colors = colors, 
+            overlayText = title, 
+            modifier = Modifier.fillMaxWidth(),
+            size = size
+        )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = subLabel, 

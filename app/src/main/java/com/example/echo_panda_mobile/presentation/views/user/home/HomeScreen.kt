@@ -22,13 +22,18 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.echo_panda_mobile.presentation.components.*
 import com.example.echo_panda_mobile.presentation.viewmodel.HomeViewModel
+import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
 
 @Composable
 fun HomeScreen(
     selectedNav: Int = 0,
     onNavSelect: (Int) -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
-    viewModel: HomeViewModel = viewModel()
+    onNavigateToAlbum: (String) -> Unit = {},
+    onNavigateToPlayer: (String) -> Unit = {},
+    onNavigateToArtist: (String) -> Unit = {},
+    viewModel: HomeViewModel = viewModel(),
+    globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -104,7 +109,15 @@ fun HomeScreen(
                                         RecentPlaylistCard(
                                             playlist = playlist,
                                             modifier = Modifier.weight(1f),
-                                            onClick = { /* TODO */ }
+                                            onClick = { 
+                                                // Mock playing a track from this playlist
+                                                val mockTrack = com.example.echo_panda_mobile.data.model.Track(
+                                                    id = "p1", title = playlist.title, artist = "Various Artists",
+                                                    placeholderColors = playlist.placeholderColors
+                                                )
+                                                globalPlayerViewModel.playTrack(mockTrack)
+                                                onNavigateToPlayer(mockTrack.id)
+                                            }
                                         )
                                     }
                                     if (rowItems.size < 2) Spacer(Modifier.weight(1f))
@@ -125,7 +138,10 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         state.popularArtists.take(4).forEach { artist ->
-                            ArtistCircleCard(artist = artist)
+                            ArtistCircleCard(
+                                artist = artist,
+                                onClick = { onNavigateToArtist(artist.id) }
+                            )
                         }
                     }
 
@@ -141,7 +157,10 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         state.topAlbums.take(3).forEach { album ->
-                            AlbumCard(album = album)
+                            AlbumCard(
+                                album = album,
+                                onClick = { onNavigateToAlbum(album.id) }
+                            )
                         }
                     }
 

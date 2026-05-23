@@ -16,7 +16,10 @@ data class Album(
     val title: String,
     val artist: String,
     val imageUrl: String? = null,
-    val placeholderColors: List<Color> = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26))
+    val placeholderColors: List<Color> = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26)),
+    val tracks: List<Track> = emptyList(),
+    val totalDuration: String = "0m",
+    val artistImageUrl: String? = null
 )
 
 data class Track(
@@ -26,7 +29,8 @@ data class Track(
     val album: String? = null,
     val durationMs: Long = 0,
     val imageUrl: String? = null,
-    val placeholderColors: List<Color> = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26))
+    val placeholderColors: List<Color> = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26)),
+    val lyrics: String? = null
 )
 
 data class Playlist(

@@ -1,5 +1,7 @@
 package com.example.echo_panda_mobile.presentation.views.user.artist
 
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,7 +19,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import com.example.echo_panda_mobile.data.repository.AuthRepository
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +28,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.echo_panda_mobile.data.model.ArtistDashboardData
+import com.example.echo_panda_mobile.data.model.User
+import com.example.echo_panda_mobile.presentation.viewsmodel.ArtistDashboardViewModel
 
 // Color Palette for Artist Dashboard
 val DarkBg = Color(0xFF0A0E16)
@@ -40,11 +44,18 @@ val TextMuted = Color(0xFF9DA3AA)
 @Composable
 fun ArtistDashboardScreen(
     onNavigateToProfile: () -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    currentUser: User? = null,
+    viewModel: ArtistDashboardViewModel = remember { ArtistDashboardViewModel() }
 ) {
-    val scrollState = rememberScrollState()
-    var currentUser by remember { mutableStateOf<com.example.echo_panda_mobile.data.model.User?>(null) }
-    val welcomeName = currentUser?.name?.takeIf { it.isNotBlank() } ?: "Artist"
+    // Load dashboard data on compose
+    LaunchedEffect(currentUser) {
+        currentUser?.let { viewModel.loadDashboard(it) }
+    }
+
+    // Observe UI state from ViewModel
+    val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     Box(
         modifier = Modifier
@@ -57,87 +68,299 @@ fun ArtistDashboardScreen(
                 )
             )
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .statusBarsPadding()
-                .navigationBarsPadding()
-        ) {
-            // Header
-            HeaderSection(
-                welcomeName = welcomeName,
-                onSettingsClick = onNavigateToSettings
-            )
+        when (uiState) {
+            ArtistDashboardViewModel.DashboardUiState.Loading -> {
+                // Show loading skeleton
+                DashboardLoadingState()
+            }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Revenue Card (Primary Stat)
-            RevenueCard()
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Stats Grid (3 columns)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                StatCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Streams",
-                    value = "2.5M",
-                    subtitle = "+12% this month",
-                    icon = Icons.Filled.TrendingUp,
-                    color = StatColor
-                )
-                StatCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Listeners",
-                    value = "185K",
-                    subtitle = "+8% this month",
-                    icon = Icons.Filled.Person,
-                    color = Color(0xFF4ECDC4)
-                )
-                StatCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Songs",
-                    value = "24",
-                    subtitle = "Published",
-                    icon = Icons.Filled.MusicNote,
-                    color = Color(0xFFA78BFA)
+            is ArtistDashboardViewModel.DashboardUiState.Success -> {
+                val dashboardData =
+                    (uiState as ArtistDashboardViewModel.DashboardUiState.Success).data
+                DashboardContent(
+                    dashboardData = dashboardData,
+                    isRefreshing = isRefreshing,
+                    onRefresh = { currentUser?.let { viewModel.refreshDashboard(it) } },
+                    onNavigateToProfile = onNavigateToProfile,
+                    onNavigateToSettings = onNavigateToSettings
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Top Track Section
-            TopTrackSection()
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Recent Activity
-            RecentActivitySection()
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Action Buttons
-            ActionButtonsSection(
-                onProfileClick = onNavigateToProfile,
-                onSettingsClick = onNavigateToSettings
-            )
-
-            Spacer(modifier = Modifier.height(100.dp)) // Added space for bottom nav
+            is ArtistDashboardViewModel.DashboardUiState.Error -> {
+                // Show error state with retry
+                val errorMessage =
+                    (uiState as ArtistDashboardViewModel.DashboardUiState.Error).message
+                DashboardErrorState(
+                    errorMessage = errorMessage,
+                    onRetry = { currentUser?.let { viewModel.retry(it) } }
+                )
+            }
         }
 
-        // Bottom Navigation Bar
+        // Bottom Navigation Bar (always visible)
         ArtistBottomNavigationBar(
             modifier = Modifier.align(Alignment.BottomCenter),
             onHomeClick = {},
             onProfileClick = onNavigateToProfile,
             onSettingsClick = onNavigateToSettings
         )
+    }
+}
+
+@Composable
+private fun DashboardContent(
+    dashboardData: ArtistDashboardData,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    onNavigateToProfile: () -> Unit,
+    onNavigateToSettings: () -> Unit
+) {
+    val scrollState = rememberScrollState()
+    val welcomeName = dashboardData.user.name.takeIf { it.isNotBlank() } ?: "Artist"
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        // Header
+        HeaderSection(
+            welcomeName = welcomeName,
+            onSettingsClick = onNavigateToSettings
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Revenue Card (Primary Stat)
+        RevenueCard(
+            revenue = dashboardData.stats.monthlyRevenue,
+            growthPercentage = dashboardData.stats.revenueGrowth
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Stats Grid (3 columns)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            StatCard(
+                modifier = Modifier.weight(1f),
+                title = "Streams",
+                value = dashboardData.stats.streams,
+                subtitle = "+${dashboardData.stats.streamsGrowth.toInt()}% this month",
+                icon = Icons.Filled.TrendingUp,
+                color = StatColor
+            )
+            StatCard(
+                modifier = Modifier.weight(1f),
+                title = "Listeners",
+                value = dashboardData.stats.listeners,
+                subtitle = "+${dashboardData.stats.listenersGrowth.toInt()}% this month",
+                icon = Icons.Filled.Person,
+                color = Color(0xFF4ECDC4)
+            )
+            StatCard(
+                modifier = Modifier.weight(1f),
+                title = "Songs",
+                value = dashboardData.stats.publishedSongs.toString(),
+                subtitle = "Published",
+                icon = Icons.Filled.MusicNote,
+                color = Color(0xFFA78BFA)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Top Track Section
+        TopTrackSection(
+            trackTitle = dashboardData.topTrack.title,
+            streams = dashboardData.topTrack.streams,
+            ranking = dashboardData.topTrack.ranking
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Recent Activity
+        RecentActivitySection(activities = dashboardData.recentActivities.map { it.text })
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Action Buttons
+        ActionButtonsSection(
+            onProfileClick = onNavigateToProfile,
+            onSettingsClick = onNavigateToSettings
+        )
+
+        Spacer(modifier = Modifier.height(100.dp)) // Added space for bottom nav
+    }
+}
+
+@Composable
+private fun DashboardLoadingState() {
+    val scrollState = rememberScrollState()
+    val shimmerAlpha = remember { androidx.compose.animation.core.Animatable(0.3f) }
+
+    LaunchedEffect(Unit) {
+        shimmerAlpha.animateTo(
+            targetValue = 0.8f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1000),
+                repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+            )
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        // Header Skeleton
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.6f)
+                        .height(28.dp)
+                        .background(CardBg.copy(alpha = shimmerAlpha.value), RoundedCornerShape(8.dp))
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.4f)
+                        .height(16.dp)
+                        .background(CardBg.copy(alpha = shimmerAlpha.value), RoundedCornerShape(8.dp))
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(CardBg.copy(alpha = shimmerAlpha.value), RoundedCornerShape(12.dp))
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Revenue Card Skeleton
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .height(160.dp)
+                .background(CardBg.copy(alpha = shimmerAlpha.value), RoundedCornerShape(20.dp))
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Stats Grid Skeleton
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            repeat(3) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(140.dp)
+                        .background(CardBg.copy(alpha = shimmerAlpha.value), RoundedCornerShape(16.dp))
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Top Track Skeleton
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .height(160.dp)
+                .background(CardBg.copy(alpha = shimmerAlpha.value), RoundedCornerShape(16.dp))
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Activities Skeleton
+        repeat(3) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(48.dp)
+                    .background(CardBg.copy(alpha = shimmerAlpha.value), RoundedCornerShape(12.dp))
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+    }
+}
+
+@Composable
+private fun DashboardErrorState(
+    errorMessage: String,
+    onRetry: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.TrendingUp,
+                contentDescription = "Error",
+                tint = StatColor.copy(alpha = 0.6f),
+                modifier = Modifier.size(64.dp)
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Oops! Something went wrong",
+                color = TextLight,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = errorMessage,
+                color = TextMuted,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+            Button(
+                onClick = onRetry,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = StatColor)
+            ) {
+                Text(text = "Retry", color = DarkBg, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 
@@ -185,7 +408,10 @@ private fun HeaderSection(
 }
 
 @Composable
-private fun RevenueCard() {
+private fun RevenueCard(
+    revenue: Double = 12450.0,
+    growthPercentage: Double = 18.0
+) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -221,7 +447,7 @@ private fun RevenueCard() {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "$12,450",
+                    text = "$${String.format("%.0f", revenue)}",
                     color = TextLight,
                     fontSize = 36.sp,
                     fontWeight = FontWeight.Bold
@@ -238,7 +464,7 @@ private fun RevenueCard() {
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
-                        text = "+18% from last month",
+                        text = "+${growthPercentage.toInt()}% from last month",
                         color = TextLight.copy(alpha = 0.85f),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
@@ -305,7 +531,11 @@ private fun StatCard(
 }
 
 @Composable
-private fun TopTrackSection() {
+private fun TopTrackSection(
+    trackTitle: String = "Summer Nights",
+    streams: String = "456.2K",
+    ranking: String = "3rd most streamed"
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -354,13 +584,13 @@ private fun TopTrackSection() {
                     verticalArrangement = Arrangement.SpaceEvenly
                 ) {
                     Text(
-                        text = "Summer Nights",
+                        text = trackTitle,
                         color = TextLight,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "456.2K streams",
+                        text = "$streams streams",
                         color = TextMuted,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Normal
@@ -373,7 +603,7 @@ private fun TopTrackSection() {
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = "3rd most streamed",
+                            text = ranking,
                             color = Color(0xFF4CAF50),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
@@ -386,7 +616,7 @@ private fun TopTrackSection() {
 }
 
 @Composable
-private fun RecentActivitySection() {
+private fun RecentActivitySection(activities: List<String> = emptyList()) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -400,16 +630,18 @@ private fun RecentActivitySection() {
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        val activities = listOf(
-            "102K new listeners this week",
-            "8.5K saves on 'Summer Nights'",
-            "Your playlist trending in 5 countries",
-            "New fan reached 1K followers"
-        )
-
-        activities.forEach { activity ->
-            ActivityItem(activity)
-            Spacer(modifier = Modifier.height(10.dp))
+        if (activities.isEmpty()) {
+            Text(
+                text = "No recent activities",
+                color = TextMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Normal
+            )
+        } else {
+            activities.forEach { activity ->
+                ActivityItem(activity)
+                Spacer(modifier = Modifier.height(10.dp))
+            }
         }
     }
 }

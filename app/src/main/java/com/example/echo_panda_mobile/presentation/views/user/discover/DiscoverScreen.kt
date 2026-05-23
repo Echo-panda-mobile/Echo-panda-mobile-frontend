@@ -29,6 +29,7 @@ import com.example.echo_panda_mobile.presentation.viewmodel.DiscoverViewModel
 fun DiscoverScreen(
     selectedNav: Int = 1,
     onNavSelect: (Int) -> Unit = {},
+    onNavigateToArtist: (String) -> Unit = {},
     viewModel: DiscoverViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -131,7 +132,10 @@ fun DiscoverScreen(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     state.popularArtists.forEach { artist ->
-                        ArtistCircleCard(artist = artist)
+                        ArtistCircleCard(
+                            artist = artist,
+                            onClick = { onNavigateToArtist(artist.id) }
+                        )
                     }
                 }
 
