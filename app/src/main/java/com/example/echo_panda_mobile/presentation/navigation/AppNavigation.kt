@@ -28,6 +28,7 @@ import com.example.echo_panda_mobile.presentation.views.user.profile.UserProfile
 import com.example.echo_panda_mobile.presentation.views.user.profile.UserSettingsScreen
 import com.example.echo_panda_mobile.presentation.views.intro.EchoPandaOnboardingView
 import com.example.echo_panda_mobile.presentation.views.user.library.LibraryScreen
+import com.example.echo_panda_mobile.presentation.views.user.library.FavoritesScreen
 import com.google.firebase.auth.FirebaseAuth
 import android.content.Context
 
@@ -142,7 +143,21 @@ fun AppNavigation() {
             composable(Routes.USER_LIBRARY) {
                 LibraryScreen(
                     selectedNav = selectedNav,
-                    onNavSelect = onNavSelect
+                    onNavSelect = onNavSelect,
+                    onNavigateToFavorites = {
+                        navController.navigate(Routes.USER_FAVORITES)
+                    }
+                )
+            }
+
+            composable(Routes.USER_FAVORITES) {
+                FavoritesScreen(
+                    selectedNav = selectedNav,
+                    onNavSelect = onNavSelect,
+                    onBack = { navController.popBackStack() },
+                    onNavigateToPlayer = { trackId ->
+                        navController.navigate(Routes.USER_PLAYER.replace("{trackId}", trackId))
+                    }
                 )
             }
 

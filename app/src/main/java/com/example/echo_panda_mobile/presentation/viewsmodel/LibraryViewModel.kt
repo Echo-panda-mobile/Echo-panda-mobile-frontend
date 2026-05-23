@@ -38,20 +38,10 @@ class LibraryViewModel : ViewModel() {
             
             // Mock data based on the screenshot
             val items = listOf(
-                LibraryItem.ArtistItem(
-                    Artist(id = "1", name = "Conan Gray")
-                ),
-                LibraryItem.PlaylistItem(
-                    Playlist(id = "2", title = "3:00am vibes"),
-                    trackCount = 18
-                ),
-                LibraryItem.AlbumItem(
-                    Album(id = "3", title = "Wiped Out!", artist = "The Neighbourhood")
-                ),
-                LibraryItem.PlaylistItem(
-                    Playlist(id = "4", title = "Extra Dynamic"),
-                    subtitle = "Updated Aug 10 • ur mom ashley"
-                )
+                LibraryItem.ArtistItem(Artist(id = "1", name = "Conan Gray")),
+                LibraryItem.PlaylistItem(Playlist(id = "2", title = "3:00am vibes"), trackCount = 18),
+                LibraryItem.AlbumItem(Album(id = "3", title = "Wiped Out!", artist = "The Neighbourhood")),
+                LibraryItem.PlaylistItem(Playlist(id = "4", title = "Extra Dynamic"), subtitle = "Updated Aug 10 • ur mom ashley")
             )
             
             _uiState.update { 
@@ -68,11 +58,11 @@ class LibraryViewModel : ViewModel() {
         _uiState.update { currentState ->
             val newFilter = if (currentState.selectedFilter == filter) "All" else filter
             val filtered = when (newFilter) {
-                "All", "Recently" -> currentState.allItems // In this mock, "Recently" shows all
+                "All", "Recently" -> currentState.allItems
                 "Playlists" -> currentState.allItems.filter { it is LibraryItem.PlaylistItem }
-                "Artists"   -> currentState.allItems.filter { it is LibraryItem.ArtistItem }
-                "Albums"    -> currentState.allItems.filter { it is LibraryItem.AlbumItem }
-                else        -> currentState.allItems
+                "Artists" -> currentState.allItems.filter { it is LibraryItem.ArtistItem }
+                "Albums" -> currentState.allItems.filter { it is LibraryItem.AlbumItem }
+                else -> currentState.allItems
             }
             currentState.copy(
                 selectedFilter = newFilter,

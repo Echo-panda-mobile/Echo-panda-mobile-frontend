@@ -28,11 +28,13 @@ import com.example.echo_panda_mobile.presentation.components.EchoPandaBottomBar
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.viewsmodel.LibraryItem
 import com.example.echo_panda_mobile.presentation.viewsmodel.LibraryViewModel
+import com.example.echo_panda_mobile.presentation.viewsmodel.LibraryState
 
 @Composable
 fun LibraryScreen(
     selectedNav: Int = 3,
     onNavSelect: (Int) -> Unit = {},
+    onNavigateToFavorites: () -> Unit = {},
     viewModel: LibraryViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -71,7 +73,7 @@ fun LibraryScreen(
                     icon = Icons.Default.FavoriteBorder,
                     text = "Your Liked Songs",
                     gradient = Brush.verticalGradient(listOf(Color(0xFF00D9FF), Color(0xFF00A3C2))),
-                    onClick = { /* TODO */ }
+                    onClick = onNavigateToFavorites
                 )
                 Spacer(Modifier.height(32.dp))
             }
@@ -155,7 +157,7 @@ fun FilterChipsRow(
                 modifier = Modifier
                     .clip(CircleShape)
                     .border(
-                        width = 1.dp, 
+                        width = 1.dp,
                         color = if (isSelected) EchoPandaColors.AccentBlue else Color.White.copy(alpha = 0.5f),
                         shape = CircleShape
                     )

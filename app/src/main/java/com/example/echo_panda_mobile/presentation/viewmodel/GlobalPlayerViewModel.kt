@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.update
 data class GlobalPlayerState(
     val currentTrack: Track? = null,
     val isPlaying: Boolean = false,
-    val progress: Float = 0.4f // Mock progress for UI
+    val progress: Float = 0.4f
 )
 
 class GlobalPlayerViewModel : ViewModel() {

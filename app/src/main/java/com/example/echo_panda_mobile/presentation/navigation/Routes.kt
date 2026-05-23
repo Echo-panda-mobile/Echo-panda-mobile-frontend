@@ -14,6 +14,7 @@ object Routes {
     const val USER_ALBUM_DETAIL = "user/album_detail/{albumId}"
     const val USER_PLAYER   = "user/player/{trackId}"
     const val USER_LIBRARY  = "user/library"
+    const val USER_FAVORITES = "user/favorites"
     const val USER_PROFILE  = "user/profile"
     const val USER_SETTINGS = "user/settings"
 
@@ -43,7 +44,8 @@ object Routes {
         route.startsWith(USER_ALBUMS) -> 2
         route.startsWith("user/album_detail") -> 2
         route.startsWith(USER_LIBRARY) -> 3
-        route.startsWith("artist/view") -> 1 // Usually accessed from Discover
+        route.startsWith(USER_FAVORITES) -> 3
+        route.startsWith("artist/view") -> 1
         else -> 0
     }
 }
