@@ -3,12 +3,14 @@ package com.example.echo_panda_mobile.presentation.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
+import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.presentation.views.admin.AdminDashboardScreen
 
 fun NavGraphBuilder.adminNavGraph(
@@ -19,23 +21,31 @@ fun NavGraphBuilder.adminNavGraph(
         route = "admin_graph"
     ) {
         composable(Routes.ADMIN_DASHBOARD) {
+            // remember = one instance per composable lifetime, not per recomposition
+            val authRepo = remember { AuthRepository() }
+
             AdminDashboardScreen(
-                onNavigateToUsers = { navController.navigate(Routes.ADMIN_USER_MANAGEMENT) },
-                onNavigateToContent = { navController.navigate(Routes.ADMIN_CONTENT_MODERATION) },
+                onNavigateToUsers = {
+                    navController.navigate(Routes.ADMIN_USER_MANAGEMENT)
+                },
+                onNavigateToContent = {
+                    navController.navigate(Routes.ADMIN_CONTENT_MODERATION)
+                },
                 onLogout = {
-                    val repo = com.example.echo_panda_mobile.data.repository.AuthRepository()
-                    repo.logout()
+                    authRepo.logout()
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }
                 }
             )
         }
+
         composable(Routes.ADMIN_USER_MANAGEMENT) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("User Management")
             }
         }
+
         composable(Routes.ADMIN_CONTENT_MODERATION) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("Content Moderation")

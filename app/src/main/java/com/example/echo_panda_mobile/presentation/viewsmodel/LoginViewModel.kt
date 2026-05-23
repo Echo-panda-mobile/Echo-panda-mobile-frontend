@@ -14,12 +14,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class LoginUiState(
-    val email: String          = "",
-    val password: String       = "",
-    val isLoading: Boolean     = false,
-    val errorMessage: String?  = null,
-    val isPasswordVisible: Boolean = false,
-    val navigateTo: String?    = null   // route to navigate after success
+    val email             : String  = "",
+    val password          : String  = "",
+    val isLoading         : Boolean = false,
+    val errorMessage      : String? = null,
+    val isPasswordVisible : Boolean = false,
+    val navigateTo        : String? = null
 )
 
 class LoginViewModel(
@@ -57,13 +57,9 @@ class LoginViewModel(
             when (result) {
                 is AuthResult.Success<*> -> {
                     val authResponse = result.data as? AuthResponse
-                    
-                    val destination = when (authResponse?.user?.role?.uppercase()) {
-                        "ARTIST" -> Routes.ARTIST_DASHBOARD
-                        "ADMIN"  -> Routes.ADMIN_DASHBOARD
-                        else     -> Routes.USER_HOME
-                    }
-                    
+                    // Navigate to the GRAPH route, not the leaf destination.
+                    // NavHost resolves the startDestination inside each graph automatically.
+                    val destination = Routes.getHomeRoute(authResponse?.user?.role)
                     _uiState.value = _uiState.value.copy(
                         isLoading  = false,
                         navigateTo = destination
@@ -88,11 +84,7 @@ class LoginViewModel(
             when (result) {
                 is AuthResult.Success<*> -> {
                     val authResponse = result.data as? AuthResponse
-                    val destination = when (authResponse?.user?.role?.uppercase()) {
-                        "ARTIST" -> Routes.ARTIST_DASHBOARD
-                        "ADMIN"  -> Routes.ADMIN_DASHBOARD
-                        else     -> Routes.USER_HOME
-                    }
+                    val destination  = Routes.getHomeRoute(authResponse?.user?.role)
                     _uiState.value = _uiState.value.copy(
                         isLoading  = false,
                         navigateTo = destination
@@ -110,10 +102,7 @@ class LoginViewModel(
     }
 
     fun onGoogleSignInFailed(message: String) {
-        _uiState.value = _uiState.value.copy(
-            isLoading = false,
-            errorMessage = message
-        )
+        _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = message)
     }
 
     fun onNavigationHandled() {
