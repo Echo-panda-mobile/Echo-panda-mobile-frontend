@@ -57,21 +57,11 @@ class LoginViewModel(
             when (result) {
                 is AuthResult.Success<*> -> {
                     val authResponse = result.data as? AuthResponse
-                    // Check if user's actual role matches selected role
-                    val userRole = authResponse?.user?.role?.uppercase()
-                    val selectedRoleStr = selectedRole.name
                     
-                    val destination = if (selectedRoleStr == "ARTIST" && userRole == "ARTIST") {
-                        Routes.ARTIST_DASHBOARD
-                    } else if (selectedRoleStr == "USER" && userRole != "ARTIST") {
-                        Routes.USER_HOME
-                    } else {
-                        // If role mismatch, still route based on actual user role
-                        if (authResponse?.user?.role == "artist") {
-                            Routes.ARTIST_DASHBOARD
-                        } else {
-                            Routes.USER_HOME
-                        }
+                    val destination = when (authResponse?.user?.role?.uppercase()) {
+                        "ARTIST" -> Routes.ARTIST_DASHBOARD
+                        "ADMIN"  -> Routes.ADMIN_DASHBOARD
+                        else     -> Routes.USER_HOME
                     }
                     
                     _uiState.value = _uiState.value.copy(
@@ -98,9 +88,10 @@ class LoginViewModel(
             when (result) {
                 is AuthResult.Success<*> -> {
                     val authResponse = result.data as? AuthResponse
-                    val destination = when (authResponse?.user?.role?.lowercase()) {
-                        "artist" -> Routes.ARTIST_DASHBOARD
-                        else -> Routes.USER_HOME
+                    val destination = when (authResponse?.user?.role?.uppercase()) {
+                        "ARTIST" -> Routes.ARTIST_DASHBOARD
+                        "ADMIN"  -> Routes.ADMIN_DASHBOARD
+                        else     -> Routes.USER_HOME
                     }
                     _uiState.value = _uiState.value.copy(
                         isLoading  = false,

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 enum class UserRole {
     USER,
     ARTIST,
+    ADMIN,
     UNKNOWN
 }
 

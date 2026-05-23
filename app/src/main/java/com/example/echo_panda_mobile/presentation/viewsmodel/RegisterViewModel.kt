@@ -72,6 +72,7 @@ class RegisterViewModel(
             val state = _uiState.value
             val roleStr = when (selectedRole) {
                 UserRole.ARTIST -> "artist"
+                UserRole.ADMIN -> "admin"
                 UserRole.USER -> "user"
                 UserRole.UNKNOWN -> "user"
             }
@@ -112,9 +113,10 @@ class RegisterViewModel(
             when (result) {
                 is AuthResult.Success<*> -> {
                     val authResponse = result.data as? AuthResponse
-                    val destination = when (authResponse?.user?.role?.lowercase()) {
-                        "artist" -> Routes.ARTIST_DASHBOARD
-                        else -> Routes.USER_HOME
+                    val destination = when (authResponse?.user?.role?.uppercase()) {
+                        "ARTIST" -> Routes.ARTIST_DASHBOARD
+                        "ADMIN"  -> Routes.ADMIN_DASHBOARD
+                        else     -> Routes.USER_HOME
                     }
                     _uiState.value = _uiState.value.copy(
                         isLoading  = false,

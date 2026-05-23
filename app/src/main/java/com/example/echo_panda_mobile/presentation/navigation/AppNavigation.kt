@@ -3,7 +3,6 @@ package com.example.echo_panda_mobile.presentation.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,17 +17,7 @@ import com.example.echo_panda_mobile.presentation.components.MiniPlayer
 import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
 import com.example.echo_panda_mobile.presentation.views.auth.LoginScreen
 import com.example.echo_panda_mobile.presentation.views.auth.SignUpScreen
-import com.example.echo_panda_mobile.presentation.views.user.album.AlbumDetailScreen
-import com.example.echo_panda_mobile.presentation.views.user.album.AlbumScreen
-import com.example.echo_panda_mobile.presentation.views.user.artist.ArtistDetailScreen
-import com.example.echo_panda_mobile.presentation.views.user.discover.DiscoverScreen
-import com.example.echo_panda_mobile.presentation.views.user.home.HomeScreen
-import com.example.echo_panda_mobile.presentation.views.user.player.PlayerScreen
-import com.example.echo_panda_mobile.presentation.views.user.profile.UserProfileScreen
-import com.example.echo_panda_mobile.presentation.views.user.profile.UserSettingsScreen
 import com.example.echo_panda_mobile.presentation.views.intro.EchoPandaOnboardingView
-import com.example.echo_panda_mobile.presentation.views.user.library.LibraryScreen
-import com.example.echo_panda_mobile.presentation.views.user.library.FavoritesScreen
 import com.google.firebase.auth.FirebaseAuth
 import android.content.Context
 
@@ -45,6 +34,7 @@ fun AppNavigation() {
     val auth = remember { FirebaseAuth.getInstance() }
     var currentUser by remember { mutableStateOf(auth.currentUser) }
     var hasSeenIntro by remember { mutableStateOf(true) }
+    var userRole by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(auth) {
         val listener = FirebaseAuth.AuthStateListener {
@@ -54,19 +44,28 @@ fun AppNavigation() {
         onDispose { auth.removeAuthStateListener(listener) }
     }
 
-    // Check if user has seen intro (on first login)
+    // Check if user has seen intro and fetch role
     LaunchedEffect(currentUser) {
         if (currentUser != null) {
             val preferences = navController.context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
             hasSeenIntro = preferences.getBoolean("has_seen_intro_${currentUser?.uid}", false)
+            
+            // Fetch role from AuthRepository or Firestore
+            // For now, let's assume we have a way to get it. 
+            // We can use AuthRepository().getCurrentUserProfile()
+            val repo = com.example.echo_panda_mobile.data.repository.AuthRepository()
+            val profile = repo.getCurrentUserProfile()
+            userRole = profile?.role?.uppercase()
+        } else {
+            userRole = null
         }
     }
 
-    val startRoute = remember(currentUser, hasSeenIntro) {
+    val startRoute = remember(currentUser, hasSeenIntro, userRole) {
         when {
             currentUser == null -> Routes.LOGIN
             !hasSeenIntro -> Routes.INTRO
-            else -> Routes.USER_HOME
+            else -> Routes.getHomeRoute(userRole)
         }
     }
 
@@ -113,122 +112,32 @@ fun AppNavigation() {
                 )
             }
 
-            composable(Routes.USER_HOME) {
-                HomeScreen(
-                    selectedNav = selectedNav, 
-                    onNavSelect = onNavSelect,
-                    onNavigateToProfile = { navController.navigate(Routes.USER_PROFILE) },
-                    onNavigateToAlbum = { albumId ->
-                        navController.navigate(Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId))
-                    },
-                    onNavigateToPlayer = { trackId ->
-                        navController.navigate(Routes.USER_PLAYER.replace("{trackId}", trackId))
-                    },
-                    onNavigateToArtist = { artistId ->
-                        navController.navigate(Routes.ARTIST_VIEW.replace("{artistId}", artistId))
-                    }
-                )
+            composable(Routes.FORGOT_PASSWORD) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.Text("Forgot Password Screen")
+                }
             }
 
-            composable(Routes.USER_DISCOVER) {
-                DiscoverScreen(
-                    selectedNav = selectedNav,
-                    onNavSelect = onNavSelect,
-                    onNavigateToArtist = { artistId ->
-                        navController.navigate(Routes.ARTIST_VIEW.replace("{artistId}", artistId))
-                    }
-                )
+            composable(Routes.VERIFY_EMAIL) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.Text("Verify Email Screen")
+                }
             }
 
-            composable(Routes.USER_LIBRARY) {
-                LibraryScreen(
-                    selectedNav = selectedNav,
-                    onNavSelect = onNavSelect,
-                    onNavigateToFavorites = {
-                        navController.navigate(Routes.USER_FAVORITES)
-                    }
-                )
-            }
+            // Nested Navigation Graphs
+            userNavGraph(
+                navController = navController,
+                selectedNav = selectedNav,
+                onNavSelect = onNavSelect
+            )
 
-            composable(Routes.USER_FAVORITES) {
-                FavoritesScreen(
-                    selectedNav = selectedNav,
-                    onNavSelect = onNavSelect,
-                    onBack = { navController.popBackStack() },
-                    onNavigateToPlayer = { trackId ->
-                        navController.navigate(Routes.USER_PLAYER.replace("{trackId}", trackId))
-                    }
-                )
-            }
+            artistNavGraph(
+                navController = navController
+            )
 
-            composable(Routes.USER_ALBUMS) {
-                AlbumScreen(
-                    selectedNav = selectedNav, 
-                    onNavSelect = onNavSelect,
-                    onNavigateToDetail = { albumId -> 
-                        navController.navigate(Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId))
-                    },
-                    onSearch = { query ->
-                        // Implement search logic or navigate to search results
-                    },
-                    onVoiceSearch = {
-                        // Trigger Voice Search Intent
-                    }
-                )
-            }
-
-            composable(Routes.USER_ALBUM_DETAIL) { backStackEntry ->
-                val albumId = backStackEntry.arguments?.getString("albumId") ?: ""
-                AlbumDetailScreen(
-                    albumId = albumId,
-                    selectedNav = selectedNav,
-                    onNavSelect = onNavSelect,
-                    onBack = { navController.popBackStack() },
-                    onNavigateToPlayer = { trackId ->
-                        navController.navigate(Routes.USER_PLAYER.replace("{trackId}", trackId))
-                    }
-                )
-            }
-
-            composable(Routes.USER_PLAYER) { backStackEntry ->
-                val trackId = backStackEntry.arguments?.getString("trackId") ?: ""
-                PlayerScreen(
-                    trackId = trackId,
-                    onBack = { navController.popBackStack() }
-                )
-            }
-
-            composable(Routes.USER_PROFILE) {
-                UserProfileScreen(
-                    onBack = { navController.popBackStack() },
-                    onSettings = { navController.navigate(Routes.USER_SETTINGS) },
-                    onEditProfile = { /* TODO */ },
-                    onLogoutSuccess = {
-                        navController.navigate(Routes.LOGIN) {
-                            popUpTo(0) { inclusive = true }
-                        }
-                    }
-                )
-            }
-
-            composable(Routes.USER_SETTINGS) {
-                UserSettingsScreen(onBack = { navController.popBackStack() })
-            }
-
-            // Artist View Route (for clicking on artist cards)
-            composable(Routes.ARTIST_VIEW) { backStackEntry ->
-                val artistId = backStackEntry.arguments?.getString("artistId") ?: ""
-                ArtistDetailScreen(
-                    artistId = artistId,
-                    onBack = { navController.popBackStack() },
-                    onNavigateToAlbum = { albumId ->
-                        navController.navigate(Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId))
-                    },
-                    onNavigateToPlayer = { trackId ->
-                        navController.navigate(Routes.USER_PLAYER.replace("{trackId}", trackId))
-                    }
-                )
-            }
+            adminNavGraph(
+                navController = navController
+            )
 
             // Intro/Onboarding Route
             composable(Routes.INTRO) {
@@ -239,7 +148,7 @@ fun AppNavigation() {
                             val preferences = navController.context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
                             preferences.edit().putBoolean("has_seen_intro_${currentUser?.uid}", true).apply()
                         }
-                        navController.navigate(Routes.USER_HOME) {
+                        navController.navigate(Routes.getHomeRoute(userRole)) {
                             popUpTo(Routes.INTRO) { inclusive = true }
                             launchSingleTop = true
                         }
@@ -247,6 +156,7 @@ fun AppNavigation() {
                 )
             }
         }
+
 
         // Global Mini Player - appears everywhere except login/signup and full player
         val isPlayerScreen = currentRoute?.startsWith("user/player") == true

@@ -25,8 +25,19 @@ object Routes {
     const val ARTIST_PROFILE   = "artist/profile"
     const val ARTIST_VIEW      = "artist/view/{artistId}"
     
+    // Admin
+    const val ADMIN_DASHBOARD = "admin/dashboard"
+    const val ADMIN_USER_MANAGEMENT = "admin/users"
+    const val ADMIN_CONTENT_MODERATION = "admin/content"
+
     // Intro
     const val INTRO = "intro"
+
+    fun getHomeRoute(role: String?) = when (role?.uppercase()) {
+        "ARTIST" -> ARTIST_DASHBOARD
+        "ADMIN"  -> ADMIN_DASHBOARD
+        else     -> USER_HOME
+    }
 
     // Bottom nav index → route mapping
     fun bottomNavRoute(index: Int) = when (index) {
