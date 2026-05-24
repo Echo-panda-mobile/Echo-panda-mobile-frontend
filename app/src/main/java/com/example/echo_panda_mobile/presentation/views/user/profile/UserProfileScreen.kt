@@ -2,12 +2,9 @@
 
 package com.example.echo_panda_mobile.presentation.views.user.profile
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,8 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,220 +39,297 @@ fun UserProfileScreen(
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
 
-    // State for Logout Dialog
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showEditProfileDialog by remember { mutableStateOf(false) }
 
+    // Logout Dialog
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text("Log Out", color = MaterialTheme.colorScheme.onSurface) },
-            text = { Text("Are you sure you want to log out of Echo Panda?", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            containerColor = EchoPandaColors.BgCardDark,
+            title = { Text("Log Out", color = Color.White) },
+            text = { Text("Are you sure you want to log out?", color = EchoPandaColors.TextMutedDark) },
             confirmButton = {
                 TextButton(onClick = {
                     showLogoutDialog = false
                     FirebaseAuth.getInstance().signOut()
                     onLogoutSuccess()
                 }) {
-                    Text("Log Out", color = MaterialTheme.colorScheme.error)
+                    Text("Log Out", color = EchoPandaColors.ErrorRed)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showLogoutDialog = false }) {
-                    Text("Cancel", color = MaterialTheme.colorScheme.onSurface)
+                    Text("Cancel", color = Color.White)
                 }
             }
         )
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        MaterialTheme.colorScheme.background
-                    ),
-                    startY = 0f,
-                    endY = 1000f
+    // Edit Profile Dialog
+    if (showEditProfileDialog) {
+        var newName by remember { mutableStateOf(uiState.user?.name ?: "") }
+        var newEmail by remember { mutableStateOf(uiState.user?.email ?: "") }
+
+        AlertDialog(
+            onDismissRequest = { showEditProfileDialog = false },
+            containerColor = EchoPandaColors.BgCardDark,
+            title = { Text("Edit Profile", color = Color.White) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = newName,
+                        onValueChange = { newName = it },
+                        label = { Text("Name") },
+                        colors = TextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent
+                        )
+                    )
+                    OutlinedTextField(
+                        value = newEmail,
+                        onValueChange = { newEmail = it },
+                        label = { Text("Email") },
+                        colors = TextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateProfile(newName, newEmail)
+                        showEditProfileDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = EchoPandaColors.AccentBlue)
+                ) {
+                    Text("Save", color = Color.Black)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditProfileDialog = false }) {
+                    Text("Cancel", color = Color.White)
+                }
+            }
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("My Profile", fontWeight = FontWeight.Bold, color = Color.White) },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .size(40.dp)
+                            .background(EchoPandaColors.BgCardDark, RoundedCornerShape(8.dp))
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = EchoPandaColors.AccentBlue)
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = onSettings,
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .size(40.dp)
+                            .background(EchoPandaColors.BgCardDark, RoundedCornerShape(8.dp))
+                    ) {
+                        Icon(Icons.Default.Settings, "Settings", tint = EchoPandaColors.AccentBlue)
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = EchoPandaColors.BgDarkEnd
                 )
             )
-    ) {
+        },
+        containerColor = EchoPandaColors.BgDarkEnd
+    ) { padding ->
         if (uiState.isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.align(Alignment.Center),
-                color = MaterialTheme.colorScheme.primary
-            )
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
+            }
         } else {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(padding)
                     .verticalScroll(scrollState)
-                    .statusBarsPadding()
+                    .padding(horizontal = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // --- TOP NAVIGATION ---
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Profile Image
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF0F2537)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(70.dp),
+                        tint = EchoPandaColors.AccentBlue
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Name and Email
+                Text(
+                    text = uiState.user?.name ?: "John Doe",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = uiState.user?.email ?: "john.doe@example.com",
+                    fontSize = 14.sp,
+                    color = EchoPandaColors.TextMutedDark
+                )
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // Stats Cards
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onBackground)
-                    }
-                    IconButton(onClick = onSettings) {
-                        Icon(Icons.Default.Settings, "Settings", tint = MaterialTheme.colorScheme.onBackground)
-                    }
-                }
-
-                // --- PROFILE HEADER ---
-                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Box(contentAlignment = Alignment.BottomEnd) {
-                        Surface(
-                            modifier = Modifier
-                                .size(140.dp)
-                                .clip(CircleShape)
-                                .clickable { onEditProfile() },
-                            color = MaterialTheme.colorScheme.surfaceVariant
-                        ) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                modifier = Modifier.size(80.dp).padding(30.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Surface(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .clickable { onEditProfile() },
-                            color = MaterialTheme.colorScheme.primary,
-                            tonalElevation = 4.dp
-                        ) {
-                            Icon(
-                                Icons.Default.CameraAlt,
-                                null,
-                                modifier = Modifier.padding(10.dp),
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = uiState.user?.name ?: "User",
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.ExtraBold
+                    ProfileStatCard(
+                        count = uiState.playlists.size.toString(),
+                        label = "Playlists",
+                        modifier = Modifier.weight(1f)
                     )
-                    Text(
-                        text = uiState.user?.email ?: "",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 14.sp
+                    ProfileStatCard(
+                        count = "0",
+                        label = "Followers",
+                        modifier = Modifier.weight(1f)
                     )
-
-                    // Dynamic Stats Row
-                    Row(modifier = Modifier.padding(vertical = 24.dp)) {
-                        ProfileStat(uiState.playlists.size.toString(), "Playlists")
-                        VerticalDivider()
-                        ProfileStat(uiState.likedSongsCount.toString(), "Liked Songs")
-                        VerticalDivider()
-                        ProfileStat(uiState.followingCount.toString(), "Following")
-                    }
+                    ProfileStatCard(
+                        count = uiState.followingCount.toString(),
+                        label = "Following",
+                        modifier = Modifier.weight(1f)
+                    )
                 }
 
-                // --- DYNAMIC CONTENT ---
-                if (uiState.playlists.isNotEmpty()) {
-                    ProfileSectionTitle("Your Playlists")
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(uiState.playlists) { playlistName ->
-                            PlaylistItem(playlistName)
-                        }
-                    }
-                } else {
-                    ProfileSectionTitle("No Playlists Yet")
-                    Text(
-                        "Start creating your own music world!",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        fontSize = 14.sp
+                Spacer(modifier = Modifier.height(40.dp))
+
+                // Account Actions Section
+                Text(
+                    text = "Account Actions",
+                    modifier = Modifier.fillMaxWidth(),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AccountActionItem(
+                        icon = Icons.Default.Edit,
+                        title = "Edit Profile",
+                        subtitle = "Update your information",
+                        onClick = { showEditProfileDialog = true }
+                    )
+                    AccountActionItem(
+                        icon = Icons.Default.Favorite,
+                        title = "Liked Songs",
+                        subtitle = "View your saved songs",
+                        onClick = { /* Navigate to Liked Songs */ }
+                    )
+                    AccountActionItem(
+                        icon = Icons.Default.FileDownload,
+                        title = "Download Management",
+                        subtitle = "Manage your downloads",
+                        onClick = { /* Navigate to Downloads */ }
                     )
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // --- LOGOUT BUTTON ---
+                // Log Out Button
                 Button(
                     onClick = { showLogoutDialog = true },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
                         .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
-                        contentColor = MaterialTheme.colorScheme.error
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B6B)),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Log Out", fontWeight = FontWeight.Bold)
+                    Text("Log Out", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
                 }
 
-                Text(
-                    text = "Echo Panda v1.0.42",
-                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 40.dp),
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
+                Spacer(modifier = Modifier.height(40.dp))
             }
         }
     }
 }
 
 @Composable
-fun ProfileStat(number: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 20.dp)) {
-        Text(number, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+fun ProfileStatCard(count: String, label: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .background(EchoPandaColors.BgCardDark, RoundedCornerShape(16.dp))
+            .padding(vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = count,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = EchoPandaColors.AccentBlue
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = EchoPandaColors.TextMutedDark
+        )
     }
 }
 
 @Composable
-fun VerticalDivider() {
-    Box(modifier = Modifier.width(1.dp).height(30.dp).background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f)))
-}
-
-@Composable
-fun ProfileSectionTitle(title: String) {
-    Text(
-        text = title,
-        color = MaterialTheme.colorScheme.onBackground,
-        fontSize = 20.sp,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(start = 16.dp, bottom = 12.dp)
-    )
-}
-
-@Composable
-fun PlaylistItem(name: String) {
-    Column(modifier = Modifier.width(120.dp)) {
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), modifier = Modifier.size(40.dp))
+fun AccountActionItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(EchoPandaColors.BgCardDark, RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = EchoPandaColors.AccentBlue,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, color = Color.White, fontWeight = FontWeight.Medium, fontSize = 16.sp)
+            Text(text = subtitle, color = EchoPandaColors.TextMutedDark, fontSize = 12.sp)
         }
-        Text(name, color = MaterialTheme.colorScheme.onBackground, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp), maxLines = 1)
+        Icon(
+            Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = EchoPandaColors.TextMutedDark
+        )
     }
 }

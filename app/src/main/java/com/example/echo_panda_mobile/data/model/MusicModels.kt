@@ -8,6 +8,7 @@ data class Artist(
     val id: String,
     val name: String,
     val imageUrl: String? = null,
+    val monthlyListeners: String = "0",
     val placeholderColors: List<Color> = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26))
 )
 
@@ -30,7 +31,9 @@ data class Track(
     val durationMs: Long = 0,
     val imageUrl: String? = null,
     val placeholderColors: List<Color> = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26)),
-    val lyrics: String? = null
+    val lyrics: String? = null,
+    val isFavorite: Boolean = false,
+    val isDownloaded: Boolean = false
 )
 
 data class Playlist(

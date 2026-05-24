@@ -2,6 +2,7 @@ package com.example.echo_panda_mobile.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.echo_panda_mobile.data.model.Playlist
 import com.example.echo_panda_mobile.data.model.Track
 import com.example.echo_panda_mobile.data.repository.MusicRepository
 import com.example.echo_panda_mobile.data.repository.MusicResult
@@ -16,7 +17,9 @@ data class PlayerUiState(
     val track: Track? = null,
     val errorMessage: String? = null,
     val isPlaying: Boolean = false,
-    val progress: Float = 0.3f // Mock progress
+    val progress: Float = 0.3f, // Mock progress
+    val showPlaylistDialog: Boolean = false,
+    val userPlaylists: List<Playlist> = emptyList()
 )
 
 class PlayerViewModel(
@@ -49,5 +52,56 @@ class PlayerViewModel(
 
     fun updateProgress(value: Float) {
         _uiState.update { it.copy(progress = value) }
+    }
+
+    fun toggleFavorite() {
+        val currentTrack = _uiState.value.track ?: return
+        viewModelScope.launch {
+            // Optimistic update
+            _uiState.update { it.copy(track = currentTrack.copy(isFavorite = !currentTrack.isFavorite)) }
+            
+            // Call repository
+            val result = musicRepository.toggleFavorite(currentTrack.id)
+            if (result is MusicResult.Error) {
+                // Rollback if error
+                _uiState.update { it.copy(track = currentTrack) }
+            }
+        }
+    }
+
+    fun downloadTrack() {
+        val currentTrack = _uiState.value.track ?: return
+        if (currentTrack.isDownloaded) return
+        
+        viewModelScope.launch {
+            val result = musicRepository.downloadTrack(currentTrack.id)
+            if (result is MusicResult.Success) {
+                _uiState.update { it.copy(track = it.track?.copy(isDownloaded = true)) }
+            }
+        }
+    }
+
+    fun openPlaylistDialog() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(showPlaylistDialog = true) }
+            val playlists = musicRepository.getRecentPlaylists()
+            if (playlists is MusicResult.Success) {
+                _uiState.update { it.copy(userPlaylists = playlists.data) }
+            }
+        }
+    }
+
+    fun closePlaylistDialog() {
+        _uiState.update { it.copy(showPlaylistDialog = false) }
+    }
+
+    fun addToPlaylist(playlistId: String) {
+        val currentTrack = _uiState.value.track ?: return
+        viewModelScope.launch {
+            val result = musicRepository.addToPlaylist(currentTrack.id, playlistId)
+            if (result is MusicResult.Success) {
+                closePlaylistDialog()
+            }
+        }
     }
 }

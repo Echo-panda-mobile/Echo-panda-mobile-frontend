@@ -10,9 +10,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,7 +29,8 @@ import com.example.echo_panda_mobile.presentation.components.*
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.theme.LocalAppLanguage
 import com.example.echo_panda_mobile.presentation.theme.LocalIsDarkTheme
-import com.example.echo_panda_mobile.presentation.viewmodel.AlbumViewModel
+import com.example.echo_panda_mobile.presentation.viewsmodel.AlbumViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun AlbumScreen(
@@ -43,6 +43,8 @@ fun AlbumScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val isDark = LocalIsDarkTheme.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     
     val bgStart = if (isDark) EchoPandaColors.BgDarkStart else EchoPandaColors.BgLightStart
     val bgEnd = if (isDark) EchoPandaColors.BgDarkEnd else EchoPandaColors.BgLightEnd
@@ -55,9 +57,12 @@ fun AlbumScreen(
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = Color.Transparent,
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 AlbumTopBar(
                     query = state.searchQuery,
+                    isSearchActive = state.isSearchActive,
+                    onToggleSearch = { viewModel.toggleSearch() },
                     onChange = viewModel::onSearchQueryChange,
                     onSearch = { onSearch(state.searchQuery) },
                     onVoiceSearch = onVoiceSearch
@@ -67,7 +72,7 @@ fun AlbumScreen(
         ) { padding ->
             if (state.isLoading) {
                 Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
                 }
             } else {
                 Column(
@@ -77,56 +82,105 @@ fun AlbumScreen(
                         .verticalScroll(rememberScrollState())
                 ) {
                     // ── Filter Chips ──────────────────────────────────────────
-                    AlbumFilterChips()
+                    AlbumFilterChips(
+                        selected = state.selectedCategory,
+                        onSelect = { viewModel.setCategory(it) }
+                    )
 
-                    // ── Featured Hero Section ──────────────────────────────────
-                    if (state.topAlbums.isNotEmpty()) {
-                        FeaturedAlbumHero(
-                            album = state.topAlbums.first(),
-                            onClick = { onNavigateToDetail(state.topAlbums.first().id) }
+                    if (state.isSearchActive || state.selectedCategory != "All") {
+                        // ── Filtered/Search Results ──────────────────────────
+                        SectionHeader(
+                            fullTitle = if (state.isSearchActive) "Search Results" else "${state.selectedCategory} Albums",
+                            onViewAll = null
                         )
-                    }
-
-                    Spacer(Modifier.height(24.dp))
-
-                    // ── Top Picks (Grid Style) ─────────────────────────────────
-                    SectionHeader(fullTitle = "Top Picks", onViewAll = {})
-                    Spacer(Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        state.topAlbums.drop(1).take(2).forEach { album ->
-                            AlbumCard(
-                                album = album, 
-                                modifier = Modifier.weight(1f), 
-                                width = Dp.Unspecified,
-                                onClick = { onNavigateToDetail(album.id) }
+                        Spacer(Modifier.height(16.dp))
+                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            state.filteredAlbums.forEach { album ->
+                                AlbumListRow(
+                                    album = album,
+                                    onClick = { onNavigateToDetail(album.id) },
+                                    onAddToFavorites = {
+                                        scope.launch { snackbarHostState.showSnackbar("Added ${album.title} to Favorites") }
+                                    },
+                                    onAddToPlaylist = {
+                                        scope.launch { snackbarHostState.showSnackbar("Added ${album.title} to Playlist") }
+                                    }
+                                )
+                                HorizontalDivider(color = Color.White.copy(alpha = 0.05f), thickness = 0.5.dp)
+                            }
+                            if (state.filteredAlbums.isEmpty()) {
+                                Text(
+                                    "No albums found",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                        }
+                    } else {
+                        // ── Default View ─────────────────────────────────────
+                        
+                        // ── Featured Hero Section ──────────────────────────────────
+                        if (state.topAlbums.isNotEmpty()) {
+                            FeaturedAlbumHero(
+                                album = state.topAlbums.first(),
+                                onClick = { onNavigateToDetail(state.topAlbums.first().id) }
                             )
                         }
+
+                        Spacer(Modifier.height(24.dp))
+
+                        // ── Top Picks (Grid Style) ─────────────────────────────────
+                        SectionHeader(
+                            fullTitle = "Top Picks", 
+                            onViewAll = { viewModel.setCategory("Trending") }
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            state.topAlbums.drop(1).take(2).forEach { album ->
+                                AlbumCard(
+                                    album = album, 
+                                    modifier = Modifier.weight(1f), 
+                                    width = Dp.Unspecified,
+                                    onClick = { onNavigateToDetail(album.id) }
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(32.dp))
+
+                        // ── All Albums (List Style) ────────────────────────────────
+                        SectionHeader(fullTitle = "All Albums", onViewAll = null)
+                        Spacer(Modifier.height(8.dp))
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        ) {
+                            (state.newAlbums + state.popularAlbums).distinctBy { it.id }.forEach { album ->
+                                AlbumListRow(
+                                    album = album,
+                                    onClick = { onNavigateToDetail(album.id) },
+                                    onAddToFavorites = {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Added ${album.title} to Favorites")
+                                        }
+                                    },
+                                    onAddToPlaylist = {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Added ${album.title} to Playlist")
+                                        }
+                                    }
+                                )
+                                HorizontalDivider(color = Color.White.copy(alpha = 0.05f), thickness = 0.5.dp)
+                            }
+                        }
                     }
 
-                    Spacer(Modifier.height(32.dp))
-
-                    // ── All Albums (List Style) ────────────────────────────────
-                    SectionHeader(fullTitle = "All Albums", onViewAll = null)
-                    Spacer(Modifier.height(8.dp))
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    ) {
-                        state.newAlbums.forEach { album ->
-                            AlbumListRow(album = album, onClick = { onNavigateToDetail(album.id) })
-                            HorizontalDivider(color = Color.White.copy(alpha = 0.05f), thickness = 0.5.dp)
-                        }
-                        state.popularAlbums.forEach { album ->
-                            AlbumListRow(album = album, onClick = { onNavigateToDetail(album.id) })
-                            HorizontalDivider(color = Color.White.copy(alpha = 0.05f), thickness = 0.5.dp)
-                        }
-                    }
-
-                    Spacer(Modifier.height(32.dp))
+                    Spacer(Modifier.height(100.dp))
                 }
             }
         }
@@ -134,9 +188,11 @@ fun AlbumScreen(
 }
 
 @Composable
-private fun AlbumFilterChips() {
+private fun AlbumFilterChips(
+    selected: String,
+    onSelect: (String) -> Unit
+) {
     val filters = listOf("All", "Trending", "Newest", "Pop", "Rock", "Hip-Hop")
-    var selected by remember { mutableStateOf("All") }
     
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -145,9 +201,9 @@ private fun AlbumFilterChips() {
         items(filters) { filter ->
             val isSelected = selected == filter
             Surface(
-                modifier = Modifier.clickable { selected = filter },
+                modifier = Modifier.clickable { onSelect(filter) },
                 shape = RoundedCornerShape(20.dp),
-                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.08f),
+                color = if (isSelected) EchoPandaColors.AccentBlue else Color.White.copy(alpha = 0.08f),
                 border = if (isSelected) null else BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
             ) {
                 Text(
@@ -176,7 +232,6 @@ private fun FeaturedAlbumHero(
             .background(Brush.linearGradient(album.placeholderColors))
             .clickable { onClick() }
     ) {
-        // Gradient overlay for text readability
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -192,7 +247,7 @@ private fun FeaturedAlbumHero(
             Column {
                 Text(
                     text = "FEATURED ALBUM",
-                    color = MaterialTheme.colorScheme.primary,
+                    color = EchoPandaColors.AccentBlue,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 1.sp
@@ -210,7 +265,7 @@ private fun FeaturedAlbumHero(
                 )
                 Spacer(Modifier.height(12.dp))
                 Button(
-                    onClick = { /* TODO */ },
+                    onClick = onClick,
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                     modifier = Modifier.height(32.dp),
@@ -226,58 +281,105 @@ private fun FeaturedAlbumHero(
 @Composable
 private fun AlbumTopBar(
     query: String, 
+    isSearchActive: Boolean,
+    onToggleSearch: () -> Unit,
     onChange: (String) -> Unit,
     onSearch: () -> Unit = {},
     onVoiceSearch: () -> Unit = {}
 ) {
     val language = LocalAppLanguage.current
-    Surface(
-        color = Color.Transparent,
-        tonalElevation = 0.dp
-    ) {
-        Box(
+    
+    if (isSearchActive) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                Icons.Default.Search,
-                contentDescription = "Search",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .size(26.dp)
-                    .align(Alignment.CenterStart)
-                    .clickable { onSearch() }
+            IconButton(onClick = onToggleSearch) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+            }
+            TextField(
+                value = query,
+                onValueChange = onChange,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Search albums...") },
+                colors = TextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent
+                ),
+                singleLine = true
             )
+            IconButton(onClick = onSearch) {
+                Icon(Icons.Default.Search, contentDescription = "Search", tint = EchoPandaColors.AccentBlue)
+            }
+        }
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onToggleSearch) {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = "Search",
+                    tint = EchoPandaColors.AccentBlue,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
             
-            // Text center
             Text(
                 AppStrings.getString("albums", language),
-                color = MaterialTheme.colorScheme.onBackground,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.Center)
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
             )
 
-            Row(modifier = Modifier.align(Alignment.CenterEnd)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.Mic,
                     contentDescription = "Voice Search",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .size(26.dp)
-                        .clickable { onVoiceSearch() }
+                    tint = EchoPandaColors.AccentBlue,
+                    modifier = Modifier.size(26.dp).clickable { onVoiceSearch() }
                 )
                 Spacer(Modifier.width(16.dp))
-                Icon(
-                    Icons.Default.Menu,
-                    contentDescription = "Menu",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .size(26.dp)
-                        .clickable { }
-                )
+                
+                var showMenu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(
+                            Icons.Default.Menu,
+                            contentDescription = "Menu",
+                            tint = EchoPandaColors.AccentBlue,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier.background(EchoPandaColors.BgCardDark)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Sort by Name", color = Color.White) },
+                            onClick = { showMenu = false }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Sort by Artist", color = Color.White) },
+                            onClick = { showMenu = false }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Settings", color = Color.White) },
+                            onClick = { showMenu = false }
+                        )
+                    }
+                }
             }
         }
     }

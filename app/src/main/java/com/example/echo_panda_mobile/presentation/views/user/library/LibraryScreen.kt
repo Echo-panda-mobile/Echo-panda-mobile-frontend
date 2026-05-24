@@ -35,6 +35,8 @@ fun LibraryScreen(
     selectedNav: Int = 3,
     onNavSelect: (Int) -> Unit = {},
     onNavigateToFavorites: () -> Unit = {},
+    onNavigateToArtist: (String) -> Unit = {},
+    onNavigateToAlbum: (String) -> Unit = {},
     viewModel: LibraryViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -43,7 +45,10 @@ fun LibraryScreen(
         modifier = Modifier.fillMaxSize(),
         containerColor = Color(0xFF05070D),
         topBar = {
-            LibraryTopBar()
+            LibraryTopBar(
+                searchQuery = state.searchQuery,
+                onSearchQueryChange = viewModel::onSearchQueryChange
+            )
         },
         bottomBar = { EchoPandaBottomBar(selectedNav, onNavSelect) }
     ) { padding ->
@@ -66,12 +71,19 @@ fun LibraryScreen(
                     icon = Icons.Default.Add,
                     text = "Add New Playlist",
                     gradient = Brush.verticalGradient(listOf(Color(0xFF00D9FF), Color(0xFF00A3C2))),
-                    onClick = { /* TODO */ }
+                    onClick = { viewModel.toggleCreatePlaylistDialog(true) }
+                )
+                Spacer(Modifier.height(16.dp))
+                LibraryActionButton(
+                    icon = Icons.Default.Favorite,
+                    text = "Add Favorite Artist",
+                    gradient = Brush.verticalGradient(listOf(Color(0xFFFF2D55), Color(0xFFC2185B))),
+                    onClick = { viewModel.toggleFollowArtistDialog(true) }
                 )
                 Spacer(Modifier.height(16.dp))
                 LibraryActionButton(
                     icon = Icons.Default.FavoriteBorder,
-                    text = "Your Liked Songs",
+                    text = "Your Liked Songs (${state.likedSongsCount})",
                     gradient = Brush.verticalGradient(listOf(Color(0xFF00D9FF), Color(0xFF00A3C2))),
                     onClick = onNavigateToFavorites
                 )
@@ -99,45 +111,122 @@ fun LibraryScreen(
             }
 
             items(state.filteredItems) { item ->
-                LibraryListItem(item = item)
+                LibraryListItem(
+                    item = item,
+                    onClick = {
+                        when (item) {
+                            is LibraryItem.ArtistItem -> onNavigateToArtist(item.artist.id)
+                            is LibraryItem.PlaylistItem -> { /* TODO: Navigate to Playlist */ }
+                            is LibraryItem.AlbumItem -> onNavigateToAlbum(item.album.id)
+                        }
+                    }
+                )
                 Spacer(Modifier.height(16.dp))
             }
-            
             item {
                 Spacer(Modifier.height(32.dp))
             }
+        }
+
+        if (state.isCreatePlaylistOpen) {
+            AlertDialog(
+                onDismissRequest = { viewModel.toggleCreatePlaylistDialog(false) },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.createPlaylist() }) {
+                        Text("Create")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.toggleCreatePlaylistDialog(false) }) {
+                        Text("Cancel")
+                    }
+                },
+                title = { Text("Create Playlist") },
+                text = {
+                    OutlinedTextField(
+                        value = state.newPlaylistName,
+                        onValueChange = viewModel::onNewPlaylistNameChange,
+                        placeholder = { Text("Playlist name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            )
+        }
+
+        if (state.isFollowArtistOpen) {
+            AlertDialog(
+                onDismissRequest = { viewModel.toggleFollowArtistDialog(false) },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.followArtist() }) {
+                        Text("Add")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.toggleFollowArtistDialog(false) }) {
+                        Text("Cancel")
+                    }
+                },
+                title = { Text("Add Favorite Artist") },
+                text = {
+                    OutlinedTextField(
+                        value = state.newArtistName,
+                        onValueChange = viewModel::onNewArtistNameChange,
+                        placeholder = { Text("Artist name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            )
         }
     }
 }
 
 @Composable
-private fun LibraryTopBar() {
-    Row(
+private fun LibraryTopBar(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit
+) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(16.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Default.MusicNote,
-                contentDescription = null,
-                tint = EchoPandaColors.AccentBlue,
-                modifier = Modifier.size(32.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = "Your Library",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = EchoPandaColors.AccentBlue
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = EchoPandaColors.AccentBlue,
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = "Your Library",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = EchoPandaColors.AccentBlue
+                )
+            }
         }
-        IconButton(onClick = { /* TODO */ }) {
-            Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
-        }
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            placeholder = { Text("Search songs, artists, playlists") },
+            singleLine = true,
+            leadingIcon = {
+                Icon(Icons.Default.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.7f))
+            }
+        )
     }
 }
 
@@ -146,7 +235,7 @@ fun FilterChipsRow(
     selectedFilter: String,
     onFilterSelect: (String) -> Unit
 ) {
-    val filters = listOf("Recently", "Playlists", "Artists", "Albums")
+    val filters = listOf("All", "Recently", "Playlists", "Artists", "Albums")
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxWidth()
@@ -158,7 +247,7 @@ fun FilterChipsRow(
                     .clip(CircleShape)
                     .border(
                         width = 1.dp,
-                        color = if (isSelected) EchoPandaColors.AccentBlue else Color.White.copy(alpha = 0.5f),
+                        color = if (isSelected) EchoPandaColors.AccentBlue else Color.White.copy(alpha = 0.3f),
                         shape = CircleShape
                     )
                     .clickable { onFilterSelect(filter) },

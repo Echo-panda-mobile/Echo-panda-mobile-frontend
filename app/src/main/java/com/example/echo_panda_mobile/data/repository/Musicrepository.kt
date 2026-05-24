@@ -34,12 +34,12 @@ class MusicRepository {
         delay(500)
         return MusicResult.Success(
             listOf(
-                Artist("1", "Eminiem",     placeholderColors = listOf(Color(0xFF1A1A2A), Color(0xFF0A0A12))),
-                Artist("2", "Lana Del Ray",placeholderColors = listOf(Color(0xFF2A1A1A), Color(0xFF120A0A))),
-                Artist("3", "Adele",       placeholderColors = listOf(Color(0xFF3A2A1A), Color(0xFF1A1208))),
-                Artist("4", "Harry Styles",placeholderColors = listOf(Color(0xFF1A2A2A), Color(0xFF0A1212))),
-                Artist("5", "Drake",       placeholderColors = listOf(Color(0xFF2A2A1A), Color(0xFF12120A))),
-                Artist("6", "Imagine Dr.", placeholderColors = listOf(Color(0xFF1A2A1A), Color(0xFF0A120A))),
+                Artist("1", "Eminiem",     monthlyListeners = "65.4M", placeholderColors = listOf(Color(0xFF1A1A2A), Color(0xFF0A0A12))),
+                Artist("2", "Lana Del Ray",monthlyListeners = "55.1M", placeholderColors = listOf(Color(0xFF2A1A1A), Color(0xFF120A0A))),
+                Artist("3", "Adele",       monthlyListeners = "48.2M", placeholderColors = listOf(Color(0xFF3A2A1A), Color(0xFF1A1208))),
+                Artist("4", "Harry Styles",monthlyListeners = "42.9M", placeholderColors = listOf(Color(0xFF1A2A2A), Color(0xFF0A1212))),
+                Artist("5", "Drake",       monthlyListeners = "78.1M", placeholderColors = listOf(Color(0xFF2A2A1A), Color(0xFF12120A))),
+                Artist("6", "Imagine Dr.", monthlyListeners = "35.6M", placeholderColors = listOf(Color(0xFF1A2A1A), Color(0xFF0A120A))),
             )
         )
     }
@@ -252,7 +252,7 @@ class MusicRepository {
                 Would you capture it, or just let it slip?
                 
                 Yo, his palms are sweaty, knees weak, arms are heavy
-                There's vomit on his sweater already, mom's spaghetti
+                There's vomit on his sweater already, mom' spaghetti
                 He's nervous, but on the surface he looks calm and ready
                 To drop bombs, but he keeps on forgettin'
             """.trimIndent()
@@ -276,5 +276,23 @@ class MusicRepository {
         return MusicResult.Success(
             track.copy(lyrics = dynamicLyrics)
         )
+    }
+
+    suspend fun toggleFavorite(trackId: String): MusicResult<Boolean> {
+        delay(300)
+        // In a real app, this would update Firestore
+        return MusicResult.Success(true)
+    }
+
+    suspend fun downloadTrack(trackId: String): MusicResult<Boolean> {
+        delay(1000)
+        // In a real app, this would trigger WorkManager for download
+        return MusicResult.Success(true)
+    }
+
+    suspend fun addToPlaylist(trackId: String, playlistId: String): MusicResult<Boolean> {
+        delay(500)
+        // In a real app, this would add trackId to the playlist's tracks field in Firestore
+        return MusicResult.Success(true)
     }
 }

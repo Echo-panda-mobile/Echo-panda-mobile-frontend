@@ -18,7 +18,9 @@ data class DiscoverUiState(
     val newReleases: List<Track>             = emptyList(),
     val popularArtists: List<Artist>         = emptyList(),
     val browseCategories: List<BrowseCategory> = emptyList(),
+    val searchResults: List<Album>           = emptyList(), // For album search
     val searchQuery: String                  = "",
+    val isSearchActive: Boolean              = false,
     val errorMessage: String?                = null
 )
 
@@ -28,6 +30,10 @@ class DiscoverViewModel(
 
     private val _uiState = MutableStateFlow(DiscoverUiState())
     val uiState: StateFlow<DiscoverUiState> = _uiState.asStateFlow()
+
+    private var allGenres: List<Genre> = emptyList()
+    private var allMoods: List<MoodPlaylist> = emptyList()
+    private var allReleases: List<Track> = emptyList()
 
     init { loadAll() }
 
@@ -41,17 +47,17 @@ class DiscoverViewModel(
             val artistsDef   = async { repository.getPopularArtists() }
             val browseDef    = async { repository.getBrowseCategories() }
 
-            val genres   = (genresDef.await()   as? MusicResult.Success)?.data ?: emptyList()
-            val moods    = (moodsDef.await()    as? MusicResult.Success)?.data ?: emptyList()
-            val releases = (releasesDef.await() as? MusicResult.Success)?.data ?: emptyList()
+            allGenres   = (genresDef.await()   as? MusicResult.Success)?.data ?: emptyList()
+            allMoods    = (moodsDef.await()    as? MusicResult.Success)?.data ?: emptyList()
+            allReleases = (releasesDef.await() as? MusicResult.Success)?.data ?: emptyList()
             val artists  = (artistsDef.await()  as? MusicResult.Success)?.data ?: emptyList()
             val browse   = (browseDef.await()   as? MusicResult.Success)?.data ?: emptyList()
 
             _uiState.value = _uiState.value.copy(
                 isLoading        = false,
-                genres           = genres,
-                moodPlaylists    = moods,
-                newReleases      = releases,
+                genres           = allGenres,
+                moodPlaylists    = allMoods,
+                newReleases      = allReleases,
                 popularArtists   = artists,
                 browseCategories = browse
             )
@@ -60,6 +66,43 @@ class DiscoverViewModel(
 
     fun onSearchQueryChange(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
+        if (query.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                genres = allGenres,
+                moodPlaylists = allMoods,
+                newReleases = allReleases,
+                searchResults = emptyList()
+            )
+        } else {
+            val lowerQuery = query.lowercase()
+            _uiState.value = _uiState.value.copy(
+                genres = allGenres.filter { it.name.lowercase().contains(lowerQuery) },
+                moodPlaylists = allMoods.filter { it.name.lowercase().contains(lowerQuery) },
+                newReleases = allReleases.filter { it.title.lowercase().contains(lowerQuery) || it.artist.lowercase().contains(lowerQuery) }
+            )
+            // Simulate album search
+            viewModelScope.launch {
+                val albumsResult = repository.getTopAlbums()
+                if (albumsResult is MusicResult.Success) {
+                    _uiState.value = _uiState.value.copy(
+                        searchResults = albumsResult.data.filter { 
+                            it.title.lowercase().contains(lowerQuery) || it.artist.lowercase().contains(lowerQuery) 
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    fun toggleSearch() {
+        val nextActive = !_uiState.value.isSearchActive
+        _uiState.value = _uiState.value.copy(
+            isSearchActive = nextActive,
+            searchQuery = if (!nextActive) "" else _uiState.value.searchQuery
+        )
+        if (!nextActive) {
+            onSearchQueryChange("")
+        }
     }
 
     fun refresh() = loadAll()

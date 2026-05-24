@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -63,7 +64,11 @@ fun FavoritesScreen(
             modifier = Modifier.fillMaxSize(),
             containerColor = Color.Transparent,
             topBar = {
-                FavoritesTopBar(onBack = onBack)
+                FavoritesTopBar(
+                    onBack = onBack,
+                    searchQuery = state.searchQuery,
+                    onSearchQueryChange = viewModel::onSearchQueryChange
+                )
             },
             bottomBar = {
                 EchoPandaBottomBar(selectedIndex = selectedNav, onSelect = onNavSelect)
@@ -111,27 +116,48 @@ fun FavoritesScreen(
 }
 
 @Composable
-private fun FavoritesTopBar(onBack: () -> Unit) {
-    Row(
+private fun FavoritesTopBar(
+    onBack: () -> Unit,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit
+) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 8.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 8.dp, vertical = 12.dp)
     ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+            }
+            Text(
+                text = "Liked Songs",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(onClick = { /* TODO */ }) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.White)
+            }
         }
-        Text(
-            text = "Liked Songs",
-            color = Color.White,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            placeholder = { Text("Search liked songs") },
+            leadingIcon = {
+                Icon(Icons.Default.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.7f))
+            },
+            singleLine = true
         )
-        IconButton(onClick = { /* TODO */ }) {
-            Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.White)
-        }
     }
 }
 

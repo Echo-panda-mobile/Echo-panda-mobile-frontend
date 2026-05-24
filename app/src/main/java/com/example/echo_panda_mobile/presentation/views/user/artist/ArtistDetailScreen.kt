@@ -1,6 +1,7 @@
 package com.example.echo_panda_mobile.presentation.views.user.artist
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -9,6 +10,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,8 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,6 +30,7 @@ import com.example.echo_panda_mobile.data.model.*
 import com.example.echo_panda_mobile.presentation.components.*
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.viewsmodel.ArtistDetailViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun ArtistDetailScreen(
@@ -34,10 +38,13 @@ fun ArtistDetailScreen(
     onBack: () -> Unit,
     onNavigateToAlbum: (String) -> Unit,
     onNavigateToPlayer: (String) -> Unit,
+    onNavigateToDashboard: () -> Unit = {},
     viewModel: ArtistDetailViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(artistId) {
         viewModel.loadArtist(artistId)
@@ -62,42 +69,50 @@ fun ArtistDetailScreen(
                     .fillMaxSize()
                     .verticalScroll(scrollState)
             ) {
-                // ─── Header with Parallax-ish Effect ───────────────────────────
+                // ─── Header ────────────────────────────────────────────────────
                 ArtistHeader(
                     artist = artist,
                     headerColor = headerColor,
                     onBack = onBack
                 )
 
-                // ─── Popular Section ───────────────────────────────────────────
-                Spacer(modifier = Modifier.height(16.dp))
+                // ─── Actions & Popular ─────────────────────────────────────────
                 PopularSection(
-                    tracks = state.popularTracks,
-                    onTrackClick = onNavigateToPlayer
+                    state = state,
+                    onToggleFollow = { viewModel.toggleFollow() },
+                    onTrackClick = onNavigateToPlayer,
+                    onAddToFavorites = { track ->
+                        viewModel.addToFavorites(track)
+                        scope.launch { snackbarHostState.showSnackbar("Added ${track.title} to Liked Songs") }
+                    },
+                    onAddToPlaylist = { track ->
+                        // Simplified: assuming we have a main playlist
+                        viewModel.addToPlaylist(track, "p1")
+                        scope.launch { snackbarHostState.showSnackbar("Added ${track.title} to Playlist") }
+                    },
+                    onDashboardClick = onNavigateToDashboard
                 )
 
                 // ─── Albums Section ────────────────────────────────────────────
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(32.dp))
                 ArtistAlbumsSection(
                     albums = state.albums,
                     onAlbumClick = onNavigateToAlbum
                 )
 
-                // ─── Singles & EPs Section ─────────────────────────────────────
-                Spacer(modifier = Modifier.height(24.dp))
-                ArtistSinglesSection(
-                    singles = state.singles,
-                    onTrackClick = onNavigateToPlayer
-                )
-
                 Spacer(modifier = Modifier.height(120.dp))
             }
 
-            // ─── Top Sticky Actions (Floating back button and Play button) ───
+            // ─── Sticky Top Bar ──────────────────────────────────────────────
             ArtistStickyHeaderActions(
                 artistName = artist.name,
                 scrollOffset = scrollState.value,
                 onBack = onBack
+            )
+            
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 90.dp)
             )
         }
     }
@@ -112,9 +127,9 @@ private fun ArtistHeader(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp)
+            .height(340.dp)
     ) {
-        // Background Gradient
+        // Background with image-like gradient
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -122,27 +137,28 @@ private fun ArtistHeader(
                     Brush.verticalGradient(
                         colors = listOf(headerColor, Color(0xFF05070D)),
                         startY = 0f,
-                        endY = 1000f
+                        endY = 1200f
                     )
                 )
         )
 
-        // Artist Name and Listeners
+        // Artist Name and listeners
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(16.dp)
+                .padding(24.dp)
         ) {
             Text(
                 text = artist.name,
                 color = Color.White,
                 fontSize = 48.sp,
                 fontWeight = FontWeight.Black,
-                letterSpacing = (-1.5).sp
+                letterSpacing = (-1.5).sp,
+                lineHeight = 52.sp
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "55.1M monthly listeners", // Hardcoded per user image style
+                text = "${artist.monthlyListeners} monthly listeners",
                 color = Color.White.copy(alpha = 0.7f),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium
@@ -153,54 +169,78 @@ private fun ArtistHeader(
 
 @Composable
 private fun PopularSection(
-    tracks: List<Track>,
-    onTrackClick: (String) -> Unit
+    state: com.example.echo_panda_mobile.presentation.viewsmodel.ArtistDetailUiState,
+    onToggleFollow: () -> Unit,
+    onTrackClick: (String) -> Unit,
+    onAddToFavorites: (Track) -> Unit,
+    onAddToPlaylist: (Track) -> Unit,
+    onDashboardClick: () -> Unit
 ) {
+    val isArtistRole = state.currentUser?.role?.lowercase() == "artist"
+    val isOwnProfile = isArtistRole && state.currentUser?.name != null && state.currentUser.name == state.artist?.name
+
     Column(
         modifier = Modifier.padding(horizontal = 16.dp)
     ) {
+        // Control Bar
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Button(
-                onClick = { /* Follow */ },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Transparent,
-                    contentColor = Color.White
-                ),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
-                shape = RoundedCornerShape(20.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                modifier = Modifier.height(32.dp)
-            ) {
-                Text("Following", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            if (isOwnProfile) {
+                Button(
+                    onClick = onDashboardClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = EchoPandaColors.AccentBlue),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.height(36.dp)
+                ) {
+                    Icon(Icons.Default.Dashboard, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Dashboard", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Surface(
+                    modifier = Modifier
+                        .clickable { onToggleFollow() }
+                        .clip(RoundedCornerShape(20.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(20.dp)),
+                    color = if (state.isFollowing) Color.White.copy(alpha = 0.1f) else Color.Transparent
+                ) {
+                    Text(
+                        text = if (state.isFollowing) "Following" else "Follow",
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.width(16.dp))
             
-            IconButton(onClick = { /* More */ }) {
+            IconButton(onClick = { /* More Options */ }) {
                 Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White.copy(alpha = 0.6f))
             }
             
             Spacer(modifier = Modifier.weight(1f))
             
             IconButton(onClick = { /* Shuffle */ }) {
-                Icon(Icons.Default.Shuffle, contentDescription = null, tint = EchoPandaColors.AccentBlue)
+                Icon(Icons.Default.Shuffle, contentDescription = null, tint = EchoPandaColors.AccentBlue, modifier = Modifier.size(24.dp))
             }
             
-            FloatingActionButton(
-                onClick = { /* Play */ },
-                containerColor = EchoPandaColors.AccentBlue,
-                contentColor = Color.Black,
-                shape = CircleShape,
-                modifier = Modifier.size(56.dp)
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(EchoPandaColors.AccentBlue)
+                    .clickable { /* Play Top Tracks */ },
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = "Play All", modifier = Modifier.size(32.dp))
+                Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.Black, modifier = Modifier.size(32.dp))
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         Text(
             text = "Popular",
@@ -209,64 +249,90 @@ private fun PopularSection(
             fontWeight = FontWeight.Bold
         )
         
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        tracks.take(5).forEachIndexed { index, track ->
-            PopularTrackRow(
+        state.popularTracks.forEachIndexed { index, track ->
+            PopularTrackItem(
                 index = index + 1,
                 track = track,
-                onClick = { onTrackClick(track.id) }
+                onClick = { onTrackClick(track.id) },
+                onFavorite = { onAddToFavorites(track) },
+                onPlaylist = { onAddToPlaylist(track) }
             )
         }
     }
 }
 
 @Composable
-private fun PopularTrackRow(
+private fun PopularTrackItem(
     index: Int,
     track: Track,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onFavorite: () -> Unit,
+    onPlaylist: () -> Unit
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(vertical = 8.dp),
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = index.toString(),
-            color = Color.White.copy(alpha = 0.5f),
+            color = Color.White.copy(alpha = 0.4f),
             fontSize = 14.sp,
-            modifier = Modifier.width(24.dp)
+            modifier = Modifier.width(32.dp),
+            textAlign = TextAlign.Center
         )
         
         SquareArtCard(
             colors = track.placeholderColors,
-            size = 48.dp,
+            size = 52.dp,
             cornerRadius = 4.dp
         )
         
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(16.dp))
         
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = track.title,
                 color = Color.White,
                 fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "273,225,108", // Mock stream count per user image
+                text = "273,225,108", // Mock stream count
                 color = Color.White.copy(alpha = 0.5f),
                 fontSize = 12.sp
             )
         }
         
-        IconButton(onClick = { /* More */ }) {
-            Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White.copy(alpha = 0.5f))
+        Box {
+            IconButton(onClick = { showMenu = true }) {
+                Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White.copy(alpha = 0.4f))
+            }
+            
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false },
+                modifier = Modifier.background(EchoPandaColors.BgCardDark)
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Add to Favorites", color = Color.White) },
+                    onClick = { onFavorite(); showMenu = false },
+                    leadingIcon = { Icon(Icons.Default.Favorite, null, tint = EchoPandaColors.AccentBlue) }
+                )
+                DropdownMenuItem(
+                    text = { Text("Add to Playlist", color = Color.White) },
+                    onClick = { onPlaylist(); showMenu = false },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, null, tint = EchoPandaColors.AccentBlue) }
+                )
+            }
         }
     }
 }
@@ -281,7 +347,7 @@ private fun ArtistAlbumsSection(
             fullTitle = "Albums",
             onViewAll = { }
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         Row(
             modifier = Modifier
                 .horizontalScroll(rememberScrollState())
@@ -299,42 +365,12 @@ private fun ArtistAlbumsSection(
 }
 
 @Composable
-private fun ArtistSinglesSection(
-    singles: List<Track>,
-    onTrackClick: (String) -> Unit
-) {
-    Column {
-        SectionHeader(
-            fullTitle = "Singles & EPs",
-            onViewAll = { }
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            singles.forEach { track ->
-                LabeledArtCard(
-                    title = track.title,
-                    subLabel = "Single",
-                    colors = track.placeholderColors,
-                    onClick = { onTrackClick(track.id) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun ArtistStickyHeaderActions(
     artistName: String,
     scrollOffset: Int,
     onBack: () -> Unit
 ) {
-    // Basic sticky behavior based on scroll offset
-    val alpha = (scrollOffset / 400f).coerceIn(0f, 1f)
+    val alpha = (scrollOffset / 300f).coerceIn(0f, 1f)
     
     Surface(
         color = Color(0xFF05070D).copy(alpha = alpha),
@@ -344,12 +380,17 @@ private fun ArtistStickyHeaderActions(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .height(56.dp)
-                .padding(horizontal = 4.dp),
+                .height(64.dp)
+                .padding(horizontal = 8.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
             }
             
             if (alpha > 0.8f) {
