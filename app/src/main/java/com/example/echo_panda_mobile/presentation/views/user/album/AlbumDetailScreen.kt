@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.echo_panda_mobile.data.repository.LibraryRepository
 import com.example.echo_panda_mobile.presentation.components.EchoPandaBottomBar
 import com.example.echo_panda_mobile.presentation.components.SongRow
 import com.example.echo_panda_mobile.presentation.components.SquareArtCard
@@ -99,11 +100,18 @@ fun AlbumDetailScreen(
                         SongRow(
                             index = index,
                             track = track,
-                            isPlaying = index == 0, 
-                            onClick = { 
-                                // Set this as the global playing track
+                            isPlaying = index == 0,
+                            onClick = {
                                 globalPlayerViewModel.playTrack(track)
-                                onNavigateToPlayer(track.id) 
+                                onNavigateToPlayer(track.id)
+                            },
+                            onAddToFavorites = {
+                                LibraryRepository.addTrackToFavorites(track)
+                            },
+                            onAddToPlaylist = {
+                                val playlistId = LibraryRepository.playlists.value.firstOrNull()?.id
+                                    ?: LibraryRepository.createPlaylist("My Playlist").id
+                                LibraryRepository.addTrackToPlaylist(track, playlistId)
                             }
                         )
                     }

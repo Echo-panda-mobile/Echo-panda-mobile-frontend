@@ -4,11 +4,13 @@ package com.example.echo_panda_mobile.data.model
 
 data class DashboardStats(
     val monthlyRevenue: Double = 12450.0,
-    val revenueGrowth: Double = 18.0,  // percentage
+    val revenueGrowth: Double = 18.0,
     val streams: String = "2.5M",
     val streamsGrowth: Double = 12.0,
     val listeners: String = "185K",
     val listenersGrowth: Double = 8.0,
+    val followers: String = "12.5K",
+    val followersGrowth: Double = 5.0,
     val publishedSongs: Int = 24
 )
 

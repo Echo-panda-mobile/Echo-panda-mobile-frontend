@@ -38,6 +38,8 @@ fun AdminTagAlbumsScreen(
     onBack: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var newTagName by remember { mutableStateOf("") }
     
     // Mock data for albums in this tag
     val mockAlbums = listOf(
@@ -88,6 +90,97 @@ fun AdminTagAlbumsScreen(
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Search Bar with Add Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    placeholder = { Text("Search albums...", color = TextMuted, fontSize = 14.sp) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            tint = TextMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    singleLine = true
+                )
+
+                IconButton(
+                    onClick = { showCreateDialog = true },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(Color(0xFF8E24AA), Color(0xFFFF4081))
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Create Tag", tint = Color.White)
+                }
+            }
+
+            if (showCreateDialog) {
+                AlertDialog(
+                    onDismissRequest = { showCreateDialog = false },
+                    containerColor = CardBg,
+                    title = { Text("Create New Tag", color = Color.White) },
+                    text = {
+                        OutlinedTextField(
+                            value = newTagName,
+                            onValueChange = { newTagName = it },
+                            label = { Text("Tag Name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = AccentPurple,
+                                unfocusedBorderColor = TextMuted,
+                                focusedLabelColor = AccentPurple,
+                                unfocusedLabelColor = TextMuted
+                            )
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                // Handle creation logic here
+                                showCreateDialog = false
+                                newTagName = ""
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
+                        ) {
+                            Text("Create", color = Color.White)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showCreateDialog = false }) {
+                            Text("Cancel", color = Color.White)
+                        }
+                    }
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 

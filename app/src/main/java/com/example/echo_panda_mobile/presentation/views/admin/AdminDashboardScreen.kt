@@ -28,7 +28,8 @@ private val AccentCyan = Color(0xFF00E5FF)
 fun AdminDashboardScreen(
     selectedNav: Int,
     onNavSelect: (Int) -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onProfileClick: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
@@ -55,10 +56,9 @@ fun AdminDashboardScreen(
             topBar = {
                 com.example.echo_panda_mobile.presentation.components.AdminTopBar(
                     searchQuery = searchQuery,
-                    onSearchQueryChange = { searchQuery = it }
-                ) {
-                    /* Handle Profile Click */
-                }
+                    onSearchQueryChange = { searchQuery = it },
+                    onProfileClick = onProfileClick
+                )
             },
             bottomBar = {
                 com.example.echo_panda_mobile.presentation.components.AdminBottomBar(

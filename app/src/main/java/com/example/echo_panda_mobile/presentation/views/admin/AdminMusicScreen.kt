@@ -38,6 +38,7 @@ fun AdminMusicScreen(
     onNavSelect: (Int) -> Unit,
     onNavigateToSongDetail: (String) -> Unit,
     onNavigateToAlbumDetail: (String) -> Unit,
+    onProfileClick: () -> Unit,
     onBack: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -49,7 +50,7 @@ fun AdminMusicScreen(
             AdminTopBar(
                 searchQuery = searchQuery,
                 onSearchQueryChange = { searchQuery = it },
-                onProfileClick = { }
+                onProfileClick = onProfileClick
             )
         },
         bottomBar = {

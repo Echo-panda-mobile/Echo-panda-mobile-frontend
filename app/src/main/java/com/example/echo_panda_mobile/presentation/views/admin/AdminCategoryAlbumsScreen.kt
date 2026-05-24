@@ -35,6 +35,10 @@ fun AdminCategoryAlbumsScreen(
     categoryId: String,
     onBack: () -> Unit
 ) {
+    var searchQuery by remember { mutableStateOf("") }
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var newCategoryName by remember { mutableStateOf("") }
+    
     // Mock data for albums in this category
     val mockAlbums = listOf(
         AdminAlbumRecord("Happier Than Ever", "Billie Eilish", "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_p_Q5F5W4zX2N8E4_6Xz7R6U4z_5y_8z9w&s"),
@@ -84,6 +88,97 @@ fun AdminCategoryAlbumsScreen(
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Search Bar with Add Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    placeholder = { Text("Search albums...", color = TextMuted, fontSize = 14.sp) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            tint = TextMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    singleLine = true
+                )
+
+                IconButton(
+                    onClick = { showCreateDialog = true },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(
+                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                colors = listOf(Color(0xFF8E24AA), Color(0xFFFF4081))
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Create Category", tint = Color.White)
+                }
+            }
+
+            if (showCreateDialog) {
+                AlertDialog(
+                    onDismissRequest = { showCreateDialog = false },
+                    containerColor = CardBg,
+                    title = { Text("Create New Category", color = Color.White) },
+                    text = {
+                        OutlinedTextField(
+                            value = newCategoryName,
+                            onValueChange = { newCategoryName = it },
+                            label = { Text("Category Name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = AccentPurple,
+                                unfocusedBorderColor = TextMuted,
+                                focusedLabelColor = AccentPurple,
+                                unfocusedLabelColor = TextMuted
+                            )
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                // Handle creation logic here
+                                showCreateDialog = false
+                                newCategoryName = ""
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
+                        ) {
+                            Text("Create", color = Color.White)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showCreateDialog = false }) {
+                            Text("Cancel", color = Color.White)
+                        }
+                    }
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 

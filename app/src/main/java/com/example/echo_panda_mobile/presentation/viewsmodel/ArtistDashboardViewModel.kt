@@ -18,7 +18,8 @@ import kotlinx.coroutines.launch
  * Supports both mock data (for UI testing) and real API calls
  */
 class ArtistDashboardViewModel(
-    private val dashboardRepository: DashboardRepository = DashboardRepository()
+    private val dashboardRepository: DashboardRepository = DashboardRepository(),
+    private val authRepository: com.example.echo_panda_mobile.data.repository.AuthRepository = com.example.echo_panda_mobile.data.repository.AuthRepository()
 ) : ViewModel() {
 
     // ─── State Definitions ─────────────────────────────────────────────────────
@@ -39,17 +40,37 @@ class ArtistDashboardViewModel(
     private val _useMockData = MutableStateFlow(true)
     val useMockData: StateFlow<Boolean> = _useMockData.asStateFlow()
 
+    init {
+        loadDashboard()
+    }
+
     // ─── Public Functions ─────────────────────────────────────────────────────
 
     /**
-     * Load dashboard data for the given user
+     * Load dashboard data. Automatically fetches current user if not provided.
      */
-    fun loadDashboard(user: User) {
+    fun loadDashboard(user: User? = null) {
         viewModelScope.launch {
             _uiState.value = DashboardUiState.Loading
 
+            val currentUser = user ?: authRepository.getCurrentUserProfile()
+            
+            if (currentUser == null && !_useMockData.value) {
+                _uiState.value = DashboardUiState.Error("Artist profile not found.")
+                return@launch
+            }
+
+            // If we have no user but are using mock data, create a dummy artist
+            val effectiveUser = currentUser ?: User(
+                id = 0,
+                name = "Artist",
+                email = "artist@echopanda.com",
+                role = "artist",
+                token = ""
+            )
+
             val result = dashboardRepository.getArtistDashboard(
-                user = user,
+                user = effectiveUser,
                 useMockData = _useMockData.value
             )
 

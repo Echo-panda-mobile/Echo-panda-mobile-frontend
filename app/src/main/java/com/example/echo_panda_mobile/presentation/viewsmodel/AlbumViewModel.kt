@@ -1,4 +1,4 @@
-package com.example.echo_panda_mobile.presentation.viewmodel
+package com.example.echo_panda_mobile.presentation.viewsmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -17,8 +17,11 @@ data class AlbumUiState(
     val topAlbums: List<Album> = emptyList(),
     val newAlbums: List<Album> = emptyList(),
     val popularAlbums: List<Album> = emptyList(),
+    val filteredAlbums: List<Album> = emptyList(),
+    val selectedCategory: String = "All",
     val errorMessage: String? = null,
-    val searchQuery: String = ""
+    val searchQuery: String = "",
+    val isSearchActive: Boolean = false
 )
 
 class AlbumViewModel(
@@ -45,17 +48,50 @@ class AlbumViewModel(
             val popularResult = popularDef.await()
             
             _uiState.update { state ->
+                val top = (topResult as? MusicResult.Success)?.data ?: emptyList()
+                val new = (newResult as? MusicResult.Success)?.data ?: emptyList()
+                val popular = (popularResult as? MusicResult.Success)?.data ?: emptyList()
                 state.copy(
                     isLoading = false,
-                    topAlbums = (topResult as? MusicResult.Success)?.data ?: emptyList(),
-                    newAlbums = (newResult as? MusicResult.Success)?.data ?: emptyList(),
-                    popularAlbums = (popularResult as? MusicResult.Success)?.data ?: emptyList()
+                    topAlbums = top,
+                    newAlbums = new,
+                    popularAlbums = popular,
+                    filteredAlbums = popular // Default to popular for "All"
                 )
             }
         }
     }
 
     fun onSearchQueryChange(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
+        _uiState.update { state ->
+            val filtered = if (query.isBlank()) {
+                state.popularAlbums
+            } else {
+                (state.topAlbums + state.newAlbums + state.popularAlbums)
+                    .distinctBy { it.id }
+                    .filter { 
+                        it.title.contains(query, ignoreCase = true) || 
+                        it.artist.contains(query, ignoreCase = true) 
+                    }
+            }
+            state.copy(searchQuery = query, filteredAlbums = filtered)
+        }
+    }
+
+    fun setCategory(category: String) {
+        _uiState.update { state ->
+            val filtered = when (category) {
+                "Trending" -> state.topAlbums
+                "Newest" -> state.newAlbums
+                "Pop", "Rock", "Hip-Hop" -> state.popularAlbums // Simulated
+                else -> state.popularAlbums
+            }
+            state.copy(selectedCategory = category, filteredAlbums = filtered)
+        }
+    }
+
+    fun toggleSearch() {
+        _uiState.update { it.copy(isSearchActive = !it.isSearchActive, searchQuery = "") }
+        if (!_uiState.value.isSearchActive) onSearchQueryChange("")
     }
 }

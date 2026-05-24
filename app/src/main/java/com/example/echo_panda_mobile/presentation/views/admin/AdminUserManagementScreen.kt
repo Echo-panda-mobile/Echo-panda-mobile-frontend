@@ -45,7 +45,8 @@ fun AdminUserManagementScreen(
     selectedNav: Int,
     onNavSelect: (Int) -> Unit,
     onNavigateToDetail: (String, String) -> Unit,
-    onNavigateToAddArtist: () -> Unit
+    onNavigateToAddArtist: () -> Unit,
+    onProfileClick: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf("Users") }
@@ -71,7 +72,7 @@ fun AdminUserManagementScreen(
             AdminTopBar(
                 searchQuery = searchQuery,
                 onSearchQueryChange = { searchQuery = it },
-                onProfileClick = { }
+                onProfileClick = onProfileClick
             )
         },
         bottomBar = {

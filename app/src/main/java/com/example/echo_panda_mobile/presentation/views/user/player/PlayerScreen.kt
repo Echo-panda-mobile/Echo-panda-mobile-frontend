@@ -1,9 +1,12 @@
 package com.example.echo_panda_mobile.presentation.views.user.player
 
 import java.util.Locale
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,12 +22,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.echo_panda_mobile.presentation.components.SquareArtCard
 import com.example.echo_panda_mobile.presentation.viewmodel.PlayerViewModel
+import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 
 @Composable
 fun PlayerScreen(
@@ -33,12 +38,36 @@ fun PlayerScreen(
     viewModel: PlayerViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(trackId) {
         viewModel.loadTrack(trackId)
     }
 
     val track = state.track
+
+    if (state.showPlaylistDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.closePlaylistDialog() },
+            containerColor = EchoPandaColors.BgCardDark,
+            title = { Text("Add to Playlist", color = Color.White) },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                    items(state.userPlaylists) { playlist ->
+                        Text(
+                            text = playlist.title,
+                            color = Color.White,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.addToPlaylist(playlist.id) }
+                                .padding(vertical = 12.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -47,7 +76,7 @@ fun PlayerScreen(
     ) {
         if (state.isLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
             }
         } else if (track != null) {
             Column(
@@ -83,10 +112,10 @@ fun PlayerScreen(
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.Cyan, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = EchoPandaColors.AccentBlue, modifier = Modifier.size(16.dp))
                         }
                     }
-                    IconButton(onClick = { /* TODO */ }) {
+                    IconButton(onClick = { /* More options */ }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "More", tint = Color.White)
                     }
                 }
@@ -123,11 +152,22 @@ fun PlayerScreen(
                             fontSize = 18.sp
                         )
                     }
-                    IconButton(onClick = { /* TODO */ }) {
+                    IconButton(onClick = {
+                        val shareIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, "Listen to ${track.title} by ${track.artist} on Echo Panda!")
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Share Track"))
+                    }) {
                         Icon(Icons.Outlined.Share, contentDescription = "Share", tint = Color.White)
                     }
-                    IconButton(onClick = { /* TODO */ }) {
-                        Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Favorite", tint = Color.Cyan)
+                    IconButton(onClick = { viewModel.toggleFavorite() }) {
+                        Icon(
+                            if (track.isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = EchoPandaColors.AccentBlue
+                        )
                     }
                 }
 
@@ -139,7 +179,7 @@ fun PlayerScreen(
                     onValueChange = { viewModel.updateProgress(it) },
                     colors = SliderDefaults.colors(
                         thumbColor = Color.White,
-                        activeTrackColor = Color.Cyan,
+                        activeTrackColor = EchoPandaColors.AccentBlue,
                         inactiveTrackColor = Color.White.copy(alpha = 0.2f)
                     )
                 )
@@ -160,17 +200,17 @@ fun PlayerScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { /* TODO */ }) {
+                    IconButton(onClick = { /* Shuffle */ }) {
                         Icon(Icons.Default.Shuffle, contentDescription = "Shuffle", tint = Color.White.copy(alpha = 0.5f))
                     }
-                    IconButton(onClick = { /* TODO */ }) {
+                    IconButton(onClick = { /* Previous */ }) {
                         Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(36.dp))
                     }
                     Box(
                         modifier = Modifier
                             .size(72.dp)
                             .clip(CircleShape)
-                            .background(Color.Cyan)
+                            .background(EchoPandaColors.AccentBlue)
                             .clickable { viewModel.togglePlayPause() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -181,10 +221,10 @@ fun PlayerScreen(
                             modifier = Modifier.size(40.dp)
                         )
                     }
-                    IconButton(onClick = { /* TODO */ }) {
+                    IconButton(onClick = { /* Next */ }) {
                         Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(36.dp))
                     }
-                    IconButton(onClick = { /* TODO */ }) {
+                    IconButton(onClick = { /* Visualizer */ }) {
                         Icon(Icons.Default.BarChart, contentDescription = "Visualizer", tint = Color.White.copy(alpha = 0.5f))
                     }
                 }
@@ -196,11 +236,15 @@ fun PlayerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(onClick = { /* TODO */ }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.White.copy(alpha = 0.5f))
+                    IconButton(onClick = { viewModel.openPlaylistDialog() }) {
+                        Icon(Icons.Default.Add, contentDescription = "Add to Playlist", tint = Color.White.copy(alpha = 0.5f))
                     }
-                    IconButton(onClick = { /* TODO */ }) {
-                        Icon(Icons.Default.Download, contentDescription = "Download", tint = Color.White.copy(alpha = 0.5f))
+                    IconButton(onClick = { viewModel.downloadTrack() }) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = "Download",
+                            tint = if (track.isDownloaded) EchoPandaColors.AccentBlue else Color.White.copy(alpha = 0.5f)
+                        )
                     }
                 }
 
@@ -222,7 +266,7 @@ fun PlayerScreen(
                         .background(
                             Brush.verticalGradient(
                                 listOf(
-                                    track.placeholderColors.firstOrNull()?.copy(alpha = 0.5f) ?: Color.Cyan.copy(alpha = 0.3f),
+                                    track.placeholderColors.firstOrNull()?.copy(alpha = 0.5f) ?: EchoPandaColors.AccentBlue.copy(alpha = 0.3f),
                                     Color.Transparent
                                 )
                             )

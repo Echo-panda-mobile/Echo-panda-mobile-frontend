@@ -513,10 +513,11 @@ class AuthRepository {
         val firebaseUser = firebaseAuth.currentUser ?: return null
         val email        = firebaseUser.email ?: ""
         val doc          = firestore.collection("users").document(firebaseUser.uid).get().await()
+        val name         = doc.getString("name") ?: firebaseUser.displayName ?: "User"
         val role         = doc.getString("role")?.lowercase() ?: "user"
         return User(
             id    = firebaseUser.uid.hashCode(),
-            name  = firebaseUser.displayName ?: "User",
+            name  = name,
             email = email,
             role  = role,
             token = ""

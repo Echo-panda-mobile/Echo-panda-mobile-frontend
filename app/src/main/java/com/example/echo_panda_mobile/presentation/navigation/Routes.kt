@@ -30,6 +30,7 @@ object Routes {
     const val ARTIST_DASHBOARD = "artist/dashboard"
     const val ARTIST_MY_MUSIC  = "artist/my_music"
     const val ARTIST_UPLOAD    = "artist/upload"
+    const val ARTIST_ANALYTICS = "artist/analytics"
     const val ARTIST_PROFILE   = "artist/profile"
     const val ARTIST_VIEW      = "artist/view/{artistId}"
 
@@ -47,6 +48,7 @@ object Routes {
     const val ADMIN_TAG_ALBUMS         = "admin/tag_albums/{tagId}"
     const val ADMIN_CATEGORY_DETAIL    = "admin/category_detail/{categoryId}"
     const val ADMIN_CATEGORY_ALBUMS    = "admin/category_albums/{categoryId}"
+    const val ADMIN_PROFILE           = "admin/profile"
 
     /**
      * Returns the GRAPH route for the role — safe to use as NavHost startDestination

@@ -47,13 +47,17 @@ class HomeViewModel(
                 }
 
                 // Load music data in parallel
-                val recentDef   = async { musicRepository.getRecentPlaylists() }
-                val artistsDef  = async { musicRepository.getPopularArtists() }
-                val albumsDef   = async { musicRepository.getTopAlbums() }
+                val recentDef     = async { musicRepository.getRecentPlaylists() }
+                val artistsDef    = async { musicRepository.getPopularArtists() }
+                val albumsDef     = async { musicRepository.getTopAlbums() }
+                val featuredDef   = async { musicRepository.getFeaturedArtist() }
+                val recentListenDef = async { musicRepository.getRecentListening() }
                 
-                val recent    = (recentDef.await()   as? MusicResult.Success)?.data  ?: emptyList()
-                val artists   = (artistsDef.await()  as? MusicResult.Success)?.data  ?: emptyList()
-                val albums    = (albumsDef.await()   as? MusicResult.Success)?.data  ?: emptyList()
+                val recent        = (recentDef.await()       as? MusicResult.Success)?.data ?: emptyList()
+                val artists       = (artistsDef.await()      as? MusicResult.Success)?.data ?: emptyList()
+                val albums        = (albumsDef.await()       as? MusicResult.Success)?.data ?: emptyList()
+                val featured      = (featuredDef.await()     as? MusicResult.Success)?.data
+                val recentListen  = (recentListenDef.await() as? MusicResult.Success)?.data ?: emptyList()
 
                 _uiState.update { 
                     it.copy(
@@ -61,7 +65,9 @@ class HomeViewModel(
                         userName         = user?.name ?: "User",
                         recentPlaylists  = recent,
                         popularArtists   = artists,
-                        topAlbums        = albums
+                        topAlbums        = albums,
+                        featuredArtist   = featured,
+                        recentListening  = recentListen
                     )
                 }
             } catch (e: Exception) {

@@ -41,6 +41,7 @@ fun AdminLibraryScreen(
     onNavigateToTagAlbums: (String) -> Unit = {},
     onNavigateToCategoryDetail: (String) -> Unit = {},
     onNavigateToCategoryAlbums: (String) -> Unit = {},
+    onProfileClick: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -52,7 +53,7 @@ fun AdminLibraryScreen(
             AdminTopBar(
                 searchQuery = searchQuery,
                 onSearchQueryChange = { searchQuery = it },
-                onProfileClick = { }
+                onProfileClick = onProfileClick
             )
         },
         bottomBar = {
@@ -110,6 +111,8 @@ fun AdminLibraryScreen(
 @Composable
 fun CategoryLibrarySection(onNavigateToCategoryDetail: (String) -> Unit, onNavigateToCategoryAlbums: (String) -> Unit) {
     var listSearchQuery by remember { mutableStateOf("") }
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var newCategoryName by remember { mutableStateOf("") }
     
     val mockCategories = listOf(
         AdminCategoryRecord("1", "Pop", true, 1),
@@ -148,22 +151,92 @@ fun CategoryLibrarySection(onNavigateToCategoryDetail: (String) -> Unit, onNavig
         Spacer(modifier = Modifier.height(24.dp))
 
         // Search Bar for Categories
-        TextField(
-            value = listSearchQuery,
-            onValueChange = { listSearchQuery = it },
-            modifier = Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(12.dp)),
-            placeholder = { Text("Search categories...", color = TextMuted, fontSize = 14.sp) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.White.copy(alpha = 0.05f),
-                unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
-            ),
-            singleLine = true
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            TextField(
+                value = listSearchQuery,
+                onValueChange = { listSearchQuery = it },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                placeholder = { Text("Search categories...", color = TextMuted, fontSize = 14.sp) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        tint = TextMuted,
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.White.copy(alpha = 0.05f),
+                    unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
+                singleLine = true
+            )
+
+            IconButton(
+                onClick = { showCreateDialog = true },
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(Color(0xFF8E24AA), Color(0xFFFF4081))
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add Category", tint = Color.White)
+            }
+        }
+
+        if (showCreateDialog) {
+            AlertDialog(
+                onDismissRequest = { showCreateDialog = false },
+                containerColor = CardBg,
+                title = { Text("Create New Category", color = Color.White) },
+                text = {
+                    OutlinedTextField(
+                        value = newCategoryName,
+                        onValueChange = { newCategoryName = it },
+                        label = { Text("Category Name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = AccentPurple,
+                            unfocusedBorderColor = TextMuted,
+                            focusedLabelColor = AccentPurple,
+                            unfocusedLabelColor = TextMuted
+                        )
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showCreateDialog = false
+                            newCategoryName = ""
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
+                    ) {
+                        Text("Create", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCreateDialog = false }) {
+                        Text("Cancel", color = Color.White)
+                    }
+                }
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -280,6 +353,8 @@ fun CategoryRowItem(category: AdminCategoryRecord, onNavigateToCategoryDetail: (
 @Composable
 fun CollectionTagsSection(onNavigateToTagDetail: (String) -> Unit, onNavigateToTagAlbums: (String) -> Unit) {
     var listSearchQuery by remember { mutableStateOf("") }
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var newTagName by remember { mutableStateOf("") }
     
     val mockTags = listOf(
         CollectionTag("1", "korean song", "Active", "No description", 1, true),
@@ -319,51 +394,97 @@ fun CollectionTagsSection(onNavigateToTagDetail: (String) -> Unit, onNavigateToT
                     )
                 }
             }
-            
-            Button(
-                onClick = { /* Handle Create Tag */ },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                contentPadding = PaddingValues(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .background(
-                            Brush.horizontalGradient(
-                                colors = listOf(Color(0xFF8E24AA), Color(0xFFFF4081))
-                            )
-                        )
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Create Tag", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    }
-                }
-            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
         // Search Bar for Tags
-        TextField(
-            value = listSearchQuery,
-            onValueChange = { listSearchQuery = it },
-            modifier = Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(12.dp)),
-            placeholder = { Text("Search tags...", color = TextMuted, fontSize = 14.sp) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.White.copy(alpha = 0.05f),
-                unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
-            ),
-            singleLine = true
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            TextField(
+                value = listSearchQuery,
+                onValueChange = { listSearchQuery = it },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                placeholder = { Text("Search tags...", color = TextMuted, fontSize = 14.sp) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        tint = TextMuted,
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.White.copy(alpha = 0.05f),
+                    unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
+                singleLine = true
+            )
+
+            IconButton(
+                onClick = { showCreateDialog = true },
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(Color(0xFF8E24AA), Color(0xFFFF4081))
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Create Tag", tint = Color.White)
+            }
+        }
+
+        if (showCreateDialog) {
+            AlertDialog(
+                onDismissRequest = { showCreateDialog = false },
+                containerColor = CardBg,
+                title = { Text("Create New Tag", color = Color.White) },
+                text = {
+                    OutlinedTextField(
+                        value = newTagName,
+                        onValueChange = { newTagName = it },
+                        label = { Text("Tag Name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = AccentPurple,
+                            unfocusedBorderColor = TextMuted,
+                            focusedLabelColor = AccentPurple,
+                            unfocusedLabelColor = TextMuted
+                        )
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showCreateDialog = false
+                            newTagName = ""
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
+                    ) {
+                        Text("Create", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCreateDialog = false }) {
+                        Text("Cancel", color = Color.White)
+                    }
+                }
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 

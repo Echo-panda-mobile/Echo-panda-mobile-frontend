@@ -22,12 +22,14 @@ import com.example.echo_panda_mobile.presentation.views.auth.LoginScreen
 import com.example.echo_panda_mobile.presentation.views.auth.SignUpScreen
 import com.example.echo_panda_mobile.presentation.views.intro.EchoPandaOnboardingView
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.launch
 
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
+    val scope = rememberCoroutineScope()
 
     val globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
     val playerState by globalPlayerViewModel.playerState.collectAsState()
@@ -56,21 +58,24 @@ fun AppNavigation() {
     LaunchedEffect(currentUser) {
         startRoute = null  // show spinner while resolving
 
-        val destination = if (currentUser == null) {
-            userRole = null
-            Routes.LOGIN
+        val prefs = navController.context
+            .getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+
+        // Temporarily forcing it to false so you see the onboarding on your next run!
+        // You can remove this line once you've tested it.
+        prefs.edit().putBoolean("has_seen_intro", false).apply()
+
+        val hasSeenIntroGlobal = prefs.getBoolean("has_seen_intro", false)
+
+        val destination = if (!hasSeenIntroGlobal) {
+            Routes.INTRO
         } else {
-            val prefs = navController.context
-                .getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-            val hasSeenIntro = prefs.getBoolean("has_seen_intro_${currentUser!!.uid}", false)
-
-            // ALWAYS fetch profile to ensure userRole state is populated for bottom nav logic
-            val profile = authRepo.getCurrentUserProfile()
-            userRole = profile?.role
-
-            if (!hasSeenIntro) {
-                Routes.INTRO
+            // If intro already seen, proceed with normal auth flow.
+            if (currentUser == null) {
+                Routes.LOGIN
             } else {
+                // Persistent session check: fetch profile once to determine correct Home/Dashboard
+                val profile = authRepo.getCurrentUserProfile()
                 Routes.getHomeRoute(profile?.role?.uppercase())
             }
         }
@@ -95,11 +100,11 @@ fun AppNavigation() {
         } else {
             Routes.bottomNavRoute(index)
         }
-        
+
         navController.navigate(route) {
             // Use findStartDestination().id to pop back to the role-based graph root
-            popUpTo(navController.graph.findStartDestination().id) { 
-                saveState = true 
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
             }
             launchSingleTop = true
             restoreState = true
@@ -161,21 +166,29 @@ fun AppNavigation() {
             composable(Routes.INTRO) {
                 EchoPandaOnboardingView(
                     onFinished = {
-                        currentUser?.uid?.let { uid ->
-                            navController.context
-                                .getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-                                .edit()
-                                .putBoolean("has_seen_intro_$uid", true)
-                                .apply()
-                        }
-                        // Navigate to whatever the role-based home is
-                        // startRoute at this point holds INTRO, so re-derive home
-                        val home = startRoute
-                            ?.takeIf { it != Routes.INTRO }
-                            ?: Routes.USER_HOME
-                        navController.navigate(home) {
-                            popUpTo(Routes.INTRO) { inclusive = true }
-                            launchSingleTop = true
+                        // Mark onboarding as seen globally so next app open skips intro
+                        navController.context
+                            .getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                            .edit()
+                            .putBoolean("has_seen_intro", true)
+                            .apply()
+
+                        // Determine the correct destination after onboarding
+                        if (currentUser == null) {
+                            navController.navigate(Routes.LOGIN) {
+                                popUpTo(Routes.INTRO) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        } else {
+                            // Re-calculate the home route based on user role
+                            scope.launch {
+                                val profile = authRepo.getCurrentUserProfile()
+                                val nextRoute = Routes.getHomeRoute(profile?.role?.uppercase())
+                                navController.navigate(nextRoute) {
+                                    popUpTo(Routes.INTRO) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            }
                         }
                     }
                 )

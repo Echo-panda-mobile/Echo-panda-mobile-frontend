@@ -20,6 +20,7 @@ import com.example.echo_panda_mobile.presentation.views.admin.AdminCategoryDetai
 import com.example.echo_panda_mobile.presentation.views.admin.AdminDashboardScreen
 import com.example.echo_panda_mobile.presentation.views.admin.AdminLibraryScreen
 import com.example.echo_panda_mobile.presentation.views.admin.AdminMusicScreen
+import com.example.echo_panda_mobile.presentation.views.admin.AdminProfileScreen
 import com.example.echo_panda_mobile.presentation.views.admin.AdminSongDetailScreen
 import com.example.echo_panda_mobile.presentation.views.admin.AdminTagAlbumsScreen
 import com.example.echo_panda_mobile.presentation.views.admin.AdminTagDetailScreen
@@ -36,7 +37,6 @@ fun NavGraphBuilder.adminNavGraph(
         route = "admin_graph"
     ) {
         composable(Routes.ADMIN_DASHBOARD) {
-            // remember = one instance per composable lifetime, not per recomposition
             val authRepo = remember { AuthRepository() }
 
             AdminDashboardScreen(
@@ -47,6 +47,9 @@ fun NavGraphBuilder.adminNavGraph(
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }
+                },
+                onProfileClick = {
+                    navController.navigate(Routes.ADMIN_PROFILE)
                 }
             )
         }
@@ -64,6 +67,9 @@ fun NavGraphBuilder.adminNavGraph(
                 },
                 onNavigateToAddArtist = {
                     navController.navigate(Routes.ADMIN_ADD_ARTIST)
+                },
+                onProfileClick = {
+                    navController.navigate(Routes.ADMIN_PROFILE)
                 }
             )
         }
@@ -111,6 +117,9 @@ fun NavGraphBuilder.adminNavGraph(
                     // Assuming you will create AdminAlbumDetailScreen later
                     navController.navigate(Routes.ADMIN_ALBUM_DETAIL.replace("{albumId}", albumId))
                 },
+                onProfileClick = {
+                    navController.navigate(Routes.ADMIN_PROFILE)
+                },
                 onBack = { navController.popBackStack() }
             )
         }
@@ -130,6 +139,9 @@ fun NavGraphBuilder.adminNavGraph(
                 },
                 onNavigateToCategoryAlbums = { categoryId ->
                     navController.navigate(Routes.ADMIN_CATEGORY_ALBUMS.replace("{categoryId}", categoryId))
+                },
+                onProfileClick = {
+                    navController.navigate(Routes.ADMIN_PROFILE)
                 },
                 onBack = { navController.popBackStack() }
             )
@@ -166,6 +178,19 @@ fun NavGraphBuilder.adminNavGraph(
             AdminCategoryAlbumsScreen(
                 categoryId = categoryId,
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.ADMIN_PROFILE) {
+            val authRepo = remember { AuthRepository() }
+            AdminProfileScreen(
+                onBack = { navController.popBackStack() },
+                onLogout = {
+                    authRepo.logout()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             )
         }
 

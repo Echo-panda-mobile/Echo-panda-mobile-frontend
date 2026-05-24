@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.User
 import com.example.echo_panda_mobile.data.repository.AuthRepository
+import com.example.echo_panda_mobile.data.repository.AuthResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,6 +50,17 @@ class UserProfileViewModel(
                     isLoading = false,
                     errorMessage = e.message ?: "Failed to load profile"
                 )
+            }
+        }
+    }
+
+    fun updateProfile(name: String, email: String) {
+        viewModelScope.launch {
+            val result = authRepository.updateUserProfile(name, email)
+            if (result is AuthResult.Success) {
+                loadUserProfile()
+            } else if (result is AuthResult.Error) {
+                _uiState.value = _uiState.value.copy(errorMessage = result.message)
             }
         }
     }

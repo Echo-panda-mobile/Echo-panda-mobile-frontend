@@ -47,6 +47,9 @@ fun NavGraphBuilder.userNavGraph(
                 onNavSelect = onNavSelect,
                 onNavigateToArtist = { artistId ->
                     navController.navigate(Routes.ARTIST_VIEW.replace("{artistId}", artistId))
+                },
+                onNavigateToAlbum = { albumId ->
+                    navController.navigate(Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId))
                 }
             )
         }
@@ -57,6 +60,12 @@ fun NavGraphBuilder.userNavGraph(
                 onNavSelect = onNavSelect,
                 onNavigateToFavorites = {
                     navController.navigate(Routes.USER_FAVORITES)
+                },
+                onNavigateToArtist = { artistId ->
+                    navController.navigate(Routes.ARTIST_VIEW.replace("{artistId}", artistId))
+                },
+                onNavigateToAlbum = { albumId ->
+                    navController.navigate(Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId))
                 }
             )
         }
@@ -132,6 +141,9 @@ fun NavGraphBuilder.userNavGraph(
                 },
                 onNavigateToPlayer = { trackId ->
                     navController.navigate(Routes.USER_PLAYER.replace("{trackId}", trackId))
+                },
+                onNavigateToDashboard = {
+                    navController.navigate(Routes.ARTIST_GRAPH)
                 }
             )
         }
