@@ -10,7 +10,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,15 +30,14 @@ fun AdminTagDetailScreen(
     tagId: String,
     onBack: () -> Unit
 ) {
-    // Mock data for tag detail
-    val tag = CollectionTag(
-        id = tagId,
-        name = "korean song",
-        status = "Active",
-        description = "This collection contains all popular and trending Korean music tracks.",
-        order = 1,
-        isActive = true
-    )
+    // State for editing mode
+    var isEditing by remember { mutableStateOf(false) }
+    
+    // Values that can be edited
+    var editedName by remember { mutableStateOf("korean song") }
+    var editedOrderId by remember { mutableStateOf(tagId) }
+    var editedDescription by remember { mutableStateOf("This collection contains all popular and trending Korean music tracks.") }
+    var isActive by remember { mutableStateOf(true) }
 
     Scaffold(
         topBar = {
@@ -83,21 +82,86 @@ fun AdminTagDetailScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Text(tag.name, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Text("Collection Tag ID: ${tag.id}", color = TextMuted, fontSize = 14.sp)
+            if (isEditing) {
+                TextField(
+                    value = editedName,
+                    onValueChange = { editedName = it },
+                    label = { Text("Tag Name") },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                Text(editedName, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            if (isEditing) {
+                TextField(
+                    value = editedOrderId,
+                    onValueChange = { editedOrderId = it },
+                    label = { Text("Order ID") },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                Text("Order ID: $editedOrderId", color = TextMuted, fontSize = 14.sp)
+            }
 
             Spacer(modifier = Modifier.height(40.dp))
 
             // Info items
-            DetailItem("Display Name", tag.name, Icons.AutoMirrored.Filled.Label)
-            DetailItem("Description", tag.description, Icons.Default.Description)
-            DetailItem("Display Order", tag.order.toString(), Icons.Default.Sort)
-            DetailItem(
-                label = "Status",
-                value = tag.status,
-                icon = if (tag.isActive) Icons.Default.CheckCircle else Icons.Default.Block,
-                color = if (tag.isActive) Color(0xFF00C853) else Color(0xFFFF5252)
-            )
+            if (isEditing) {
+                TextField(
+                    value = editedDescription,
+                    onValueChange = { editedDescription = it },
+                    label = { Text("Description") },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
+                    singleLine = false
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Tag Visibility", color = Color.White)
+                    Switch(
+                        checked = isActive,
+                        onCheckedChange = { isActive = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Color(0xFF00C853)
+                        )
+                    )
+                }
+            } else {
+                DetailItem("Display Name", editedName, Icons.AutoMirrored.Filled.Label)
+                DetailItem("Description", editedDescription, Icons.Default.Description)
+                DetailItem("Order ID", editedOrderId, Icons.Default.Numbers)
+                DetailItem(
+                    label = "Status",
+                    value = if (isActive) "Active" else "Inactive",
+                    icon = if (isActive) Icons.Default.CheckCircle else Icons.Default.Block,
+                    color = if (isActive) Color(0xFF00C853) else Color(0xFFFF5252)
+                )
+            }
 
             Spacer(modifier = Modifier.height(48.dp))
 
@@ -107,26 +171,50 @@ fun AdminTagDetailScreen(
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Button(
-                    onClick = { /* Handle Edit */ },
+                    onClick = { 
+                        if (isEditing) {
+                            // Handle Save Logic here
+                            isEditing = false
+                        } else {
+                            isEditing = true
+                        }
+                    },
                     modifier = Modifier.weight(1f).height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isEditing) Color(0xFF00C853) else Color(0xFF1E88E5)
+                    ),
                     shape = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(
+                        if (isEditing) Icons.Default.Save else Icons.Default.Edit, 
+                        contentDescription = null, 
+                        modifier = Modifier.size(18.dp)
+                    )
                     Spacer(Modifier.width(8.dp))
-                    Text("Edit Tag", fontWeight = FontWeight.Bold)
+                    Text(if (isEditing) "Save Changes" else "Edit Tag", fontWeight = FontWeight.Bold)
                 }
                 
-                Button(
-                    onClick = { /* Handle Delete */ },
-                    modifier = Modifier.weight(1f).height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252).copy(alpha = 0.1f)),
-                    shape = RoundedCornerShape(16.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF5252))
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFFF5252), modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Delete", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+                if (isEditing) {
+                    Button(
+                        onClick = { isEditing = false },
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("Cancel", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Button(
+                        onClick = { /* Handle Delete */ },
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252).copy(alpha = 0.1f)),
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF5252))
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFFF5252), modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Delete", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+                    }
                 }
             }
             

@@ -112,11 +112,11 @@ fun CategoryLibrarySection(onNavigateToCategoryDetail: (String) -> Unit, onNavig
     var listSearchQuery by remember { mutableStateOf("") }
     
     val mockCategories = listOf(
-        AdminCategoryRecord("1", "Pop", true),
-        AdminCategoryRecord("2", "Rock", true),
-        AdminCategoryRecord("3", "Jazz", false),
-        AdminCategoryRecord("4", "Classical", true),
-        AdminCategoryRecord("5", "Lo-fi", true)
+        AdminCategoryRecord("1", "Pop", true, 1),
+        AdminCategoryRecord("2", "Rock", true, 2),
+        AdminCategoryRecord("3", "Jazz", false, 3),
+        AdminCategoryRecord("4", "Classical", true, 4),
+        AdminCategoryRecord("5", "Lo-fi", true, 5)
     )
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -486,4 +486,4 @@ data class CollectionTag(
     val isActive: Boolean
 )
 
-data class AdminCategoryRecord(val id: String, val name: String, val isActive: Boolean)
+data class AdminCategoryRecord(val id: String, val name: String, val isActive: Boolean, val order: Int)
