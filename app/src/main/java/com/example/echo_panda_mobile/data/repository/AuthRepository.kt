@@ -107,8 +107,9 @@ class AuthRepository {
 
     // ─────────────────────────────────────────────────────────────────────────
     // Firebase Auth login — regular users only
-    // Does NOT touch admins or artists collection
-    // Only creates a Firestore doc if one doesn't exist yet (new Google/email user)
+    // login() already filtered out admins and artists before calling this,
+    // but we add a final guard here so a misconfigured account can never
+    // accidentally create a duplicate doc in the users collection.
     // ─────────────────────────────────────────────────────────────────────────
     private suspend fun loginFirebaseUser(
         email    : String,
@@ -125,13 +126,18 @@ class AuthRepository {
             val name        = userDoc.getString("name")  ?: firebaseUser.displayName ?: "User"
             val storedEmail = userDoc.getString("email") ?: firebaseUser.email ?: email
 
-            // Role comes exclusively from the "users" Firestore doc.
-            // Never fall back to "admin" or "artist" here — those are handled above.
+            // Role comes exclusively from the existing Firestore doc.
+            // Default is "user" — never "admin" or "artist" via this path.
             val role = userDoc.getString("role")?.lowercase() ?: "user"
 
-            // Only create the Firestore doc if it genuinely doesn't exist yet
+            // Final guard: if this email belongs to admins/artists, do NOT
+            // create a users doc — just return the role from the correct collection.
             if (!userDoc.exists()) {
-                saveUserProfile(firebaseUser.uid, name, storedEmail, role)
+                val isPrivileged = findDocumentByEmail("admins", email) != null
+                        || findDocumentByEmail("artists", email) != null
+                if (!isPrivileged) {
+                    saveUserProfile(firebaseUser.uid, name, storedEmail, role)
+                }
             }
 
             AuthResult.Success(
@@ -154,7 +160,8 @@ class AuthRepository {
 
     // ─────────────────────────────────────────────────────────────────────────
     // Google Sign-In
-    // Same rule: role comes from Firestore "users" doc, never guessed
+    // MUST check admins → artists BEFORE touching the users collection,
+    // otherwise a Google-linked admin/artist gets a duplicate "user" doc.
     // ─────────────────────────────────────────────────────────────────────────
     suspend fun signInWithGoogle(idToken: String): AuthResult<AuthResponse> {
         return try {
@@ -165,12 +172,54 @@ class AuthRepository {
             val firebaseUser = result.user
                 ?: return AuthResult.Error("Google sign-in failed. User data not available.")
 
-            val token      = firebaseUser.getIdToken(false).await().token ?: "firebase-token"
-            val email      = firebaseUser.email ?: ""
-            val profileDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
+            val token = firebaseUser.getIdToken(false).await().token ?: "firebase-token"
+            val email = firebaseUser.email ?: ""
 
-            val name = profileDoc.getString("name") ?: firebaseUser.displayName ?: "User"
-            val role = profileDoc.getString("role")?.lowercase() ?: "user"
+            // ── Guard: check privileged collections first ─────────────────────
+            // If this Google email belongs to an admin or artist, return their
+            // Firestore role and NEVER write anything to the users collection.
+            if (email.isNotBlank()) {
+                val adminDoc = findDocumentByEmail("admins", email)
+                if (adminDoc != null) {
+                    val name = adminDoc.getString("name") ?: firebaseUser.displayName ?: "Admin"
+                    return AuthResult.Success(
+                        AuthResponse(
+                            user = User(
+                                id    = adminDoc.id.hashCode(),
+                                name  = name,
+                                email = email,
+                                role  = "admin",
+                                token = token
+                            ),
+                            token   = token,
+                            message = "Admin Google sign-in successful."
+                        )
+                    )
+                }
+
+                val artistDoc = findDocumentByEmail("artists", email)
+                if (artistDoc != null) {
+                    val name = artistDoc.getString("name") ?: firebaseUser.displayName ?: "Artist"
+                    return AuthResult.Success(
+                        AuthResponse(
+                            user = User(
+                                id    = artistDoc.id.hashCode(),
+                                name  = name,
+                                email = email,
+                                role  = "artist",
+                                token = token
+                            ),
+                            token   = token,
+                            message = "Artist Google sign-in successful."
+                        )
+                    )
+                }
+            }
+
+            // ── Regular user — safe to read/write users collection ────────────
+            val profileDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
+            val name       = profileDoc.getString("name") ?: firebaseUser.displayName ?: "User"
+            val role       = profileDoc.getString("role")?.lowercase() ?: "user"
 
             if (!profileDoc.exists()) {
                 saveGoogleUserProfile(firebaseUser.uid, name, email, role)
@@ -309,28 +358,47 @@ class AuthRepository {
 
     /**
      * Generic email lookup across any Firestore collection.
-     * Tries an exact indexed query first, then a case-insensitive scan fallback.
+     *
+     * CRITICAL: This runs BEFORE the user is authenticated with Firebase Auth.
+     * Firestore Security Rules MUST allow unauthenticated reads on "admins"
+     * and "artists", otherwise this silently returns null and the user falls
+     * through to loginFirebaseUser() which creates a duplicate users doc
+     * with role:"user".
+     *
+     * Required Firestore rules for admins + artists:
+     *   allow read: if true;
+     *   allow write: if false;
      */
     private suspend fun findDocumentByEmail(
         collection : String,
         email      : String
-    ): DocumentSnapshot? = runCatching {
+    ): DocumentSnapshot? {
         val normalizedEmail = email.trim().lowercase()
+        return try {
+            val exactMatch = firestore.collection(collection)
+                .whereEqualTo("email", email.trim())
+                .limit(1)
+                .get()
+                .await()
+                .documents
+                .firstOrNull()
 
-        val exactMatch = firestore.collection(collection)
-            .whereEqualTo("email", email.trim())
-            .limit(1)
-            .get()
-            .await()
-            .documents
-            .firstOrNull()
-
-        exactMatch ?: firestore.collection(collection)
-            .get()
-            .await()
-            .documents
-            .firstOrNull { it.getString("email")?.trim()?.lowercase() == normalizedEmail }
-    }.getOrNull()
+            exactMatch ?: firestore.collection(collection)
+                .get()
+                .await()
+                .documents
+                .firstOrNull { it.getString("email")?.trim()?.lowercase() == normalizedEmail }
+        } catch (e: Exception) {
+            // If logcat shows PERMISSION_DENIED here — your Firestore rules are blocking
+            // the email lookup before auth. Fix: allow read: if true on admins + artists.
+            android.util.Log.e(
+                "AuthRepository",
+                "findDocumentByEmail($collection) failed — " +
+                        "likely PERMISSION_DENIED before auth. Error: ${e.message}"
+            )
+            null
+        }
+    }
 
     private suspend fun saveUserProfile(
         userId : String,

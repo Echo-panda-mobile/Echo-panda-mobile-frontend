@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +37,13 @@ enum class BottomNavTab(val key: String, val icon: ImageVector, val index: Int) 
     DISCOVER("discover", Icons.Default.Explore,  1),
     ALBUMS("albums", Icons.Default.Album,         2),
     LIBRARY("library", Icons.Default.LibraryMusic, 3),
+}
+
+enum class AdminBottomNavTab(val label: String, val icon: ImageVector, val index: Int, val color: Color) {
+    HOME("Home",       Icons.Default.Home,       0, Color(0xFF00E5FF)),
+    USERS("Users",     Icons.Default.Person,     1, Color(0xFFFF00FF)),
+    MUSIC("Music",     Icons.Default.MusicNote,  2, Color(0xFF00E5FF)),
+    LIBRARY("Library", Icons.AutoMirrored.Filled.Label,      3, Color(0xFF00E5FF)),
 }
 
 @Composable
@@ -75,6 +84,121 @@ fun EchoPandaBottomBar(selectedIndex: Int, onSelect: (Int) -> Unit) {
                     indicatorColor      = Color.Transparent
                 )
             )
+        }
+    }
+}
+
+@Composable
+fun AdminBottomBar(selectedIndex: Int, onSelect: (Int) -> Unit) {
+    NavigationBar(
+        containerColor = Color(0xFF05070D),
+        tonalElevation = 0.dp,
+        modifier = Modifier.clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+    ) {
+        AdminBottomNavTab.entries.forEach { tab ->
+            val isSelected = selectedIndex == tab.index
+            val tabColor = tab.color
+            
+            NavigationBarItem(
+                selected = isSelected,
+                onClick  = { onSelect(tab.index) },
+                icon = { 
+                    Icon(
+                        imageVector = tab.icon, 
+                        contentDescription = tab.label,
+                        modifier = Modifier.size(26.dp)
+                    ) 
+                },
+                label = { 
+                    Text(
+                        text = tab.label, 
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    ) 
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor   = tabColor,
+                    selectedTextColor   = tabColor,
+                    unselectedIconColor = tabColor.copy(alpha = 0.6f), // Keep it colorful but slightly faded
+                    unselectedTextColor = tabColor.copy(alpha = 0.6f),
+                    indicatorColor      = Color.Transparent
+                )
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AdminTopBar(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onProfileClick: () -> Unit
+) {
+    Surface(
+        color = Color(0xFF05070D),
+        tonalElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Search Bar
+            TextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(24.dp)),
+                placeholder = { 
+                    Text(
+                        "Search...", 
+                        color = Color.White.copy(alpha = 0.4f),
+                        fontSize = 14.sp
+                    ) 
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFF161C24),
+                    unfocusedContainerColor = Color(0xFF161C24),
+                    disabledContainerColor = Color(0xFF161C24),
+                    cursorColor = Color(0xFF00E5FF),
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp)
+            )
+
+            // Profile Icon
+            IconButton(
+                onClick = onProfileClick,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.05f))
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = "Profile",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
     }
 }

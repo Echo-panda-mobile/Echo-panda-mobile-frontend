@@ -36,7 +36,17 @@ object Routes {
     // ── Admin destinations (inside admin_graph) ───────────────────────────────
     const val ADMIN_DASHBOARD          = "admin/dashboard"
     const val ADMIN_USER_MANAGEMENT    = "admin/users"
+    const val ADMIN_ADD_ARTIST         = "admin/add_artist"
+    const val ADMIN_USER_DETAIL        = "admin/user_detail/{userId}/{role}"
+    const val ADMIN_SONG_DETAIL        = "admin/song_detail/{songId}"
+    const val ADMIN_ALBUM_DETAIL       = "admin/album_detail/{albumId}"
     const val ADMIN_CONTENT_MODERATION = "admin/content"
+    const val ADMIN_MUSIC             = "admin/music"
+    const val ADMIN_LIBRARY           = "admin/library"
+    const val ADMIN_TAG_DETAIL         = "admin/tag_detail/{tagId}"
+    const val ADMIN_TAG_ALBUMS         = "admin/tag_albums/{tagId}"
+    const val ADMIN_CATEGORY_DETAIL    = "admin/category_detail/{categoryId}"
+    const val ADMIN_CATEGORY_ALBUMS    = "admin/category_albums/{categoryId}"
 
     /**
      * Returns the GRAPH route for the role — safe to use as NavHost startDestination
@@ -57,6 +67,14 @@ object Routes {
         else -> USER_HOME
     }
 
+    fun adminBottomNavRoute(index: Int) = when (index) {
+        0    -> ADMIN_DASHBOARD
+        1    -> ADMIN_USER_MANAGEMENT
+        2    -> ADMIN_MUSIC
+        3    -> ADMIN_LIBRARY
+        else -> ADMIN_DASHBOARD
+    }
+
     fun bottomNavIndex(route: String?) = when {
         route == null                          -> 0
         route.startsWith(USER_HOME)            -> 0
@@ -66,6 +84,11 @@ object Routes {
         route.startsWith(USER_LIBRARY)         -> 3
         route.startsWith(USER_FAVORITES)       -> 3
         route.startsWith("artist/view")        -> 1
+        // Admin routes
+        route.startsWith(ADMIN_DASHBOARD)       -> 0
+        route.startsWith(ADMIN_USER_MANAGEMENT) -> 1
+        route.startsWith(ADMIN_MUSIC)           -> 2
+        route.startsWith(ADMIN_LIBRARY)         -> 3
         else                                   -> 0
     }
 }

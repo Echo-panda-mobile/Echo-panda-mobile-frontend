@@ -42,6 +42,7 @@ fun AppNavigation() {
     // null  = still resolving (show spinner)
     // non-null = ready, hand off to NavHost
     var startRoute by remember { mutableStateOf<String?>(null) }
+    var userRole by remember { mutableStateOf<String?>(null) }
 
     // Keep currentUser in sync with Firebase (handles logout from other screens)
     DisposableEffect(auth) {
@@ -56,17 +57,20 @@ fun AppNavigation() {
         startRoute = null  // show spinner while resolving
 
         val destination = if (currentUser == null) {
+            userRole = null
             Routes.LOGIN
         } else {
             val prefs = navController.context
                 .getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
             val hasSeenIntro = prefs.getBoolean("has_seen_intro_${currentUser!!.uid}", false)
 
+            // ALWAYS fetch profile to ensure userRole state is populated for bottom nav logic
+            val profile = authRepo.getCurrentUserProfile()
+            userRole = profile?.role
+
             if (!hasSeenIntro) {
                 Routes.INTRO
             } else {
-                // AuthRepository already knows how to fetch role (users + artists collections)
-                val profile = authRepo.getCurrentUserProfile()
                 Routes.getHomeRoute(profile?.role?.uppercase())
             }
         }
@@ -85,8 +89,18 @@ fun AppNavigation() {
     // ── Bottom nav helpers ────────────────────────────────────────────────────
     val selectedNav = Routes.bottomNavIndex(currentRoute)
     val onNavSelect: (Int) -> Unit = { index ->
-        navController.navigate(Routes.bottomNavRoute(index)) {
-            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+        val isAdminRoute = currentRoute?.startsWith("admin/") == true
+        val route = if (isAdminRoute || userRole?.uppercase() == "ADMIN") {
+            Routes.adminBottomNavRoute(index)
+        } else {
+            Routes.bottomNavRoute(index)
+        }
+        
+        navController.navigate(route) {
+            // Use findStartDestination().id to pop back to the role-based graph root
+            popUpTo(navController.graph.findStartDestination().id) { 
+                saveState = true 
+            }
             launchSingleTop = true
             restoreState = true
         }
@@ -141,7 +155,7 @@ fun AppNavigation() {
             // ── Role-based graphs ─────────────────────────────────────────────
             userNavGraph(navController, selectedNav, onNavSelect)
             artistNavGraph(navController)
-            adminNavGraph(navController)
+            adminNavGraph(navController, selectedNav, onNavSelect)
 
             // ── Onboarding ────────────────────────────────────────────────────
             composable(Routes.INTRO) {
