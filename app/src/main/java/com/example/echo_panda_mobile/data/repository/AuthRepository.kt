@@ -4,6 +4,7 @@ import com.example.echo_panda_mobile.data.model.AuthResponse
 import com.example.echo_panda_mobile.data.model.LoginRequest
 import com.example.echo_panda_mobile.data.model.RegisterRequest
 import com.example.echo_panda_mobile.data.model.User
+import androidx.core.net.toUri
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
@@ -97,7 +98,8 @@ class AuthRepository {
                     name  = name,
                     email = email,
                     role  = role,
-                    token = token
+                    token = token,
+                    photoUrl = document.getString("photoUrl")
                 ),
                 token   = token,
                 message = "$errorPrefix login successful."
@@ -125,6 +127,7 @@ class AuthRepository {
 
             val name        = userDoc.getString("name")  ?: firebaseUser.displayName ?: "User"
             val storedEmail = userDoc.getString("email") ?: firebaseUser.email ?: email
+            val photoUrl    = userDoc.getString("photoUrl") ?: firebaseUser.photoUrl?.toString()
 
             // Role comes exclusively from the existing Firestore doc.
             // Default is "user" — never "admin" or "artist" via this path.
@@ -133,11 +136,15 @@ class AuthRepository {
             // Final guard: if this email belongs to admins/artists, do NOT
             // create a users doc — just return the role from the correct collection.
             if (!userDoc.exists()) {
+<<<<<<< HEAD
                 val isPrivileged = findDocumentByEmail("admins", email) != null
                         || findDocumentByEmail("artists", email) != null
                 if (!isPrivileged) {
                     saveUserProfile(firebaseUser.uid, name, storedEmail, role)
                 }
+=======
+                saveUserProfile(firebaseUser.uid, name, storedEmail, role, photoUrl)
+>>>>>>> 2c9febc (login and sign up with google)
             }
 
             AuthResult.Success(
@@ -147,7 +154,8 @@ class AuthRepository {
                         name  = name,
                         email = storedEmail,
                         role  = role,
-                        token = token
+                        token = token,
+                        photoUrl = photoUrl
                     ),
                     token   = token,
                     message = "Login successful."
@@ -240,13 +248,14 @@ class AuthRepository {
             // Normal user flow
             val profileDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
             val name = profileDoc.getString("name") ?: firebaseUser.displayName ?: "User"
+            val photoUrl = profileDoc.getString("photoUrl") ?: firebaseUser.photoUrl?.toString()
             
             // Force role to "user" for all Google accounts
             val role = "user"
 >>>>>>> d33b944 (Initial commit)
 
             if (!profileDoc.exists()) {
-                saveGoogleUserProfile(firebaseUser.uid, name, email, role)
+                saveGoogleUserProfile(firebaseUser.uid, name, email, role, photoUrl)
             } else if (profileDoc.getString("role") != "user") {
                 // Update existing user doc if it somehow has a different role (optional safety)
                 firestore.collection("users").document(firebaseUser.uid)
@@ -260,7 +269,8 @@ class AuthRepository {
                         name  = name,
                         email = email,
                         role  = role,
-                        token = token
+                        token = token,
+                        photoUrl = photoUrl
                     ),
                     token   = token,
                     message = "Google sign-in successful."
@@ -314,7 +324,8 @@ class AuthRepository {
                         name  = request.name,
                         email = request.email,
                         role  = "user",
-                        token = token
+                        token = token,
+                        photoUrl = null
                     ),
                     token   = token,
                     message = "Account created successfully. Please verify your email."
@@ -349,7 +360,8 @@ class AuthRepository {
                     name  = adminDoc.getString("name") ?: "Admin",
                     email = email,
                     role  = "admin",
-                    token = ""
+                    token = "",
+                    photoUrl = adminDoc.getString("photoUrl")
                 )
             }
 
@@ -360,7 +372,8 @@ class AuthRepository {
                     name  = artistDoc.getString("name") ?: "Artist",
                     email = email,
                     role  = "artist",
-                    token = ""
+                    token = "",
+                    photoUrl = artistDoc.getString("photoUrl")
                 )
             }
         }
@@ -370,13 +383,15 @@ class AuthRepository {
         val userDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
         val name    = userDoc.getString("name")  ?: firebaseUser.displayName ?: "User"
         val role    = userDoc.getString("role")?.lowercase() ?: "user"
+        val photoUrl = userDoc.getString("photoUrl") ?: firebaseUser.photoUrl?.toString()
 
         return User(
             id    = firebaseUser.uid.hashCode(),
             name  = name,
             email = email,
             role  = role,
-            token = ""
+            token = "",
+            photoUrl = photoUrl
         )
     }
 
@@ -432,36 +447,38 @@ class AuthRepository {
         userId : String,
         name   : String,
         email  : String,
-        role   : String
+        role   : String,
+        photoUrl : String? = null
     ) {
-        firestore.collection("users").document(userId).set(
-            mapOf(
-                "name"      to name,
-                "email"     to email,
-                "role"      to role,
-                "provider"  to "password",
-                "createdAt" to System.currentTimeMillis()
-            )
-        ).await()
+        val data = mutableMapOf(
+            "name"      to name,
+            "email"     to email,
+            "role"      to role,
+            "provider"  to "password",
+            "createdAt" to System.currentTimeMillis()
+        )
+        photoUrl?.let { data["photoUrl"] = it }
+        firestore.collection("users").document(userId).set(data).await()
     }
 
     private suspend fun saveGoogleUserProfile(
         userId : String,
         name   : String,
         email  : String,
-        role   : String
+        role   : String,
+        photoUrl: String? = null
     ) {
-        firestore.collection("users").document(userId).set(
-            mapOf(
-                "name"         to name,
-                "email"        to email,
-                "role"         to role,
-                "provider"     to "google",
-                "registeredAt" to System.currentTimeMillis(),
-                "lastLogin"    to System.currentTimeMillis(),
-                "status"       to "active"
-            )
-        ).await()
+        val data = mutableMapOf(
+            "name"         to name,
+            "email"        to email,
+            "role"         to role,
+            "provider"     to "google",
+            "registeredAt" to System.currentTimeMillis(),
+            "lastLogin"    to System.currentTimeMillis(),
+            "status"       to "active"
+        )
+        photoUrl?.let { data["photoUrl"] = it }
+        firestore.collection("users").document(userId).set(data).await()
     }
 
     private fun mapFirebaseAuthError(e: Exception): String = when {
@@ -498,9 +515,10 @@ class AuthRepository {
     }
 
     suspend fun updateUserProfile(
-        name  : String,
-        email : String,
-        role  : String? = null
+        name     : String,
+        email    : String,
+        role     : String? = null,
+        photoUrl : String? = null
     ): AuthResult<Unit> {
         val firebaseUser = firebaseAuth.currentUser
             ?: return AuthResult.Error("User not signed in.")
@@ -508,9 +526,14 @@ class AuthRepository {
             val normalizedName  = name.trim()
             val normalizedEmail = email.trim().ifBlank { firebaseUser.email.orEmpty() }
 
-            val profileUpdates = com.google.firebase.auth.UserProfileChangeRequest.Builder()
+            val profileUpdatesBuilder = com.google.firebase.auth.UserProfileChangeRequest.Builder()
                 .setDisplayName(normalizedName)
-                .build()
+            
+            photoUrl?.let { 
+                profileUpdatesBuilder.setPhotoUri(it.toUri())
+            }
+            
+            val profileUpdates = profileUpdatesBuilder.build()
             firebaseUser.updateProfile(profileUpdates).await()
 
             if (normalizedEmail.isNotBlank() && normalizedEmail != firebaseUser.email) {
@@ -520,6 +543,7 @@ class AuthRepository {
             val data = mutableMapOf<String, Any>("name" to normalizedName)
             if (normalizedEmail.isNotBlank()) data["email"] = normalizedEmail
             role?.takeIf { it.isNotBlank() }?.let { data["role"] = it }
+            photoUrl?.let { data["photoUrl"] = it }
 
             firestore.collection("users").document(firebaseUser.uid)
                 .set(data, SetOptions.merge()).await()
@@ -543,12 +567,14 @@ class AuthRepository {
         val doc          = firestore.collection("users").document(firebaseUser.uid).get().await()
         val name         = doc.getString("name") ?: firebaseUser.displayName ?: "User"
         val role         = doc.getString("role")?.lowercase() ?: "user"
+        val photoUrl     = doc.getString("photoUrl") ?: firebaseUser.photoUrl?.toString()
         return User(
             id    = firebaseUser.uid.hashCode(),
             name  = name,
             email = email,
             role  = role,
-            token = ""
+            token = "",
+            photoUrl = photoUrl
         )
     }
 

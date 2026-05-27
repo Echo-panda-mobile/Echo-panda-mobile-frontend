@@ -2,6 +2,8 @@
 
 package com.example.echo_panda_mobile.presentation.views.user.profile
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,11 +21,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.echo_panda_mobile.presentation.viewsmodel.UserProfileViewModel
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.google.firebase.auth.FirebaseAuth
@@ -38,6 +44,14 @@ fun UserProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            viewModel.updateProfileImage(it.toString())
+        }
+    }
 
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showEditProfileDialog by remember { mutableStateOf(false) }
@@ -169,19 +183,49 @@ fun UserProfileScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Profile Image
-                Box(
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF0F2537)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        modifier = Modifier.size(70.dp),
-                        tint = EchoPandaColors.AccentBlue
-                    )
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    Box(
+                        modifier = Modifier
+                            .size(120.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF0F2537)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (uiState.user?.photoUrl != null) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(uiState.user?.photoUrl)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "Profile Picture",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(70.dp),
+                                tint = EchoPandaColors.AccentBlue
+                            )
+                        }
+                    }
+                    
+                    // Edit Profile Picture Icon
+                    IconButton(
+                        onClick = { photoPickerLauncher.launch("image/*") },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(EchoPandaColors.AccentBlue)
+                    ) {
+                        Icon(
+                            Icons.Default.CameraAlt,
+                            contentDescription = "Change Profile Picture",
+                            tint = Color.Black,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

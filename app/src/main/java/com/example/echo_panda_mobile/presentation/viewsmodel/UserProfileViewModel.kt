@@ -64,4 +64,23 @@ class UserProfileViewModel(
             }
         }
     }
+
+    fun updateProfileImage(photoUrl: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            val result = authRepository.updateUserProfile(
+                name = uiState.value.user?.name ?: "",
+                email = uiState.value.user?.email ?: "",
+                photoUrl = photoUrl
+            )
+            if (result is AuthResult.Success) {
+                loadUserProfile()
+            } else if (result is AuthResult.Error) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = result.message
+                )
+            }
+        }
+    }
 }

@@ -23,6 +23,7 @@ data class HomeUiState(
     val recentListening: List<Playlist>    = emptyList(),
     val featuredArtist: FeaturedArtist?    = null,
     val userName: String                   = "User",
+    val userPhotoUrl: String?              = null,
     val errorMessage: String?              = null
 )
 
@@ -63,6 +64,7 @@ class HomeViewModel(
                     it.copy(
                         isLoading        = false,
                         userName         = user?.name ?: "User",
+                        userPhotoUrl     = user?.photoUrl,
                         recentPlaylists  = recent,
                         popularArtists   = artists,
                         topAlbums        = albums,

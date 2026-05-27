@@ -5,7 +5,8 @@ data class User(
     val name: String,
     val email: String,
     val role: String,       // "user" | "artist"
-    val token: String
+    val token: String,
+    val photoUrl: String? = null
 )
 
 data class LoginRequest(

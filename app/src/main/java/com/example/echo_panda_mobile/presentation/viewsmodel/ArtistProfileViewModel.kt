@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.User
 import com.example.echo_panda_mobile.data.repository.AuthRepository
+import com.example.echo_panda_mobile.data.repository.AuthResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,6 +41,26 @@ class ArtistProfileViewModel(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     errorMessage = e.message ?: "Failed to load profile"
+                )
+            }
+        }
+    }
+
+    fun updateProfileImage(photoUrl: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            val result = authRepository.updateUserProfile(
+                name = uiState.value.user?.name ?: "",
+                email = uiState.value.user?.email ?: "",
+                role = "artist",
+                photoUrl = photoUrl
+            )
+            if (result is AuthResult.Success) {
+                loadProfile()
+            } else if (result is AuthResult.Error) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = result.message
                 )
             }
         }

@@ -16,10 +16,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.echo_panda_mobile.presentation.components.*
 import com.example.echo_panda_mobile.presentation.viewmodel.HomeViewModel
 import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
@@ -49,6 +53,7 @@ fun HomeScreen(
             topBar = {
                 HomeTopBar(
                     userName = state.userName,
+                    userPhotoUrl = state.userPhotoUrl,
                     onProfileClick = onNavigateToProfile
                 )
             },
@@ -211,7 +216,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeTopBar(userName: String, onProfileClick: () -> Unit) {
+private fun HomeTopBar(userName: String, userPhotoUrl: String?, onProfileClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -229,12 +234,24 @@ private fun HomeTopBar(userName: String, onProfileClick: () -> Unit) {
                     .clickable { onProfileClick() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.Default.Person, 
-                    contentDescription = "Profile",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
-                )
+                if (userPhotoUrl != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(userPhotoUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "Profile",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = "Profile",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
             }
             Spacer(Modifier.width(16.dp))
             Column {
