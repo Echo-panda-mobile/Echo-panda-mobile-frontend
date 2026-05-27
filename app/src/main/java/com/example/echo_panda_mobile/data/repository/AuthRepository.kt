@@ -136,15 +136,11 @@ class AuthRepository {
             // Final guard: if this email belongs to admins/artists, do NOT
             // create a users doc — just return the role from the correct collection.
             if (!userDoc.exists()) {
-<<<<<<< HEAD
                 val isPrivileged = findDocumentByEmail("admins", email) != null
                         || findDocumentByEmail("artists", email) != null
                 if (!isPrivileged) {
-                    saveUserProfile(firebaseUser.uid, name, storedEmail, role)
+                    saveUserProfile(firebaseUser.uid, name, storedEmail, role, photoUrl)
                 }
-=======
-                saveUserProfile(firebaseUser.uid, name, storedEmail, role, photoUrl)
->>>>>>> 2c9febc (login and sign up with google)
             }
 
             AuthResult.Success(
@@ -180,9 +176,9 @@ class AuthRepository {
             val firebaseUser = result.user
                 ?: return AuthResult.Error("Google sign-in failed. User data not available.")
 
-<<<<<<< HEAD
             val token = firebaseUser.getIdToken(false).await().token ?: "firebase-token"
             val email = firebaseUser.email ?: ""
+            val photoUrl = firebaseUser.photoUrl?.toString()
 
             // ── Guard: check privileged collections first ─────────────────────
             // If this Google email belongs to an admin or artist, return their
@@ -191,6 +187,7 @@ class AuthRepository {
                 val adminDoc = findDocumentByEmail("admins", email)
                 if (adminDoc != null) {
                     val name = adminDoc.getString("name") ?: firebaseUser.displayName ?: "Admin"
+                    val pUrl = adminDoc.getString("photoUrl") ?: photoUrl
                     return AuthResult.Success(
                         AuthResponse(
                             user = User(
@@ -198,7 +195,8 @@ class AuthRepository {
                                 name  = name,
                                 email = email,
                                 role  = "admin",
-                                token = token
+                                token = token,
+                                photoUrl = pUrl
                             ),
                             token   = token,
                             message = "Admin Google sign-in successful."
@@ -209,6 +207,7 @@ class AuthRepository {
                 val artistDoc = findDocumentByEmail("artists", email)
                 if (artistDoc != null) {
                     val name = artistDoc.getString("name") ?: firebaseUser.displayName ?: "Artist"
+                    val pUrl = artistDoc.getString("photoUrl") ?: photoUrl
                     return AuthResult.Success(
                         AuthResponse(
                             user = User(
@@ -216,7 +215,8 @@ class AuthRepository {
                                 name  = name,
                                 email = email,
                                 role  = "artist",
-                                token = token
+                                token = token,
+                                photoUrl = pUrl
                             ),
                             token   = token,
                             message = "Artist Google sign-in successful."
@@ -229,33 +229,10 @@ class AuthRepository {
             val profileDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
             val name       = profileDoc.getString("name") ?: firebaseUser.displayName ?: "User"
             val role       = profileDoc.getString("role")?.lowercase() ?: "user"
-=======
-            val token      = firebaseUser.getIdToken(false).await().token ?: "firebase-token"
-            val email      = firebaseUser.email ?: ""
-
-            // ── Role Enforcement: Google is for "user" role only ──
-            // Prevent conflicts if this email is already an Admin or Artist
-            val adminDoc = findDocumentByEmail("admins", email)
-            if (adminDoc != null) {
-                return AuthResult.Error("This email is registered as an Admin. Please use email/password login.")
-            }
-
-            val artistDoc = findDocumentByEmail("artists", email)
-            if (artistDoc != null) {
-                return AuthResult.Error("This email is registered as an Artist. Please use email/password login.")
-            }
-
-            // Normal user flow
-            val profileDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
-            val name = profileDoc.getString("name") ?: firebaseUser.displayName ?: "User"
-            val photoUrl = profileDoc.getString("photoUrl") ?: firebaseUser.photoUrl?.toString()
-            
-            // Force role to "user" for all Google accounts
-            val role = "user"
->>>>>>> d33b944 (Initial commit)
+            val finalPhotoUrl = profileDoc.getString("photoUrl") ?: photoUrl
 
             if (!profileDoc.exists()) {
-                saveGoogleUserProfile(firebaseUser.uid, name, email, role, photoUrl)
+                saveGoogleUserProfile(firebaseUser.uid, name, email, role, finalPhotoUrl)
             } else if (profileDoc.getString("role") != "user") {
                 // Update existing user doc if it somehow has a different role (optional safety)
                 firestore.collection("users").document(firebaseUser.uid)
@@ -270,7 +247,7 @@ class AuthRepository {
                         email = email,
                         role  = role,
                         token = token,
-                        photoUrl = photoUrl
+                        photoUrl = finalPhotoUrl
                     ),
                     token   = token,
                     message = "Google sign-in successful."
@@ -528,11 +505,11 @@ class AuthRepository {
 
             val profileUpdatesBuilder = com.google.firebase.auth.UserProfileChangeRequest.Builder()
                 .setDisplayName(normalizedName)
-            
-            photoUrl?.let { 
+
+            photoUrl?.let {
                 profileUpdatesBuilder.setPhotoUri(it.toUri())
             }
-            
+
             val profileUpdates = profileUpdatesBuilder.build()
             firebaseUser.updateProfile(profileUpdates).await()
 

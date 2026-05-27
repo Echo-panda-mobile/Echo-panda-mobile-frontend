@@ -61,10 +61,6 @@ fun AppNavigation() {
         val prefs = navController.context
             .getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
 
-        // Temporarily forcing it to false so you see the onboarding on your next run!
-        // You can remove this line once you've tested it.
-        prefs.edit().putBoolean("has_seen_intro", false).apply()
-
         val hasSeenIntroGlobal = prefs.getBoolean("has_seen_intro", false)
 
         val destination = if (!hasSeenIntroGlobal) {

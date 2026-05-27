@@ -31,12 +31,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.echo_panda_mobile.R
+import com.example.echo_panda_mobile.data.repository.FirebaseAuthManager
 import com.example.echo_panda_mobile.presentation.views.globalComponent.AuthInputField
 import com.example.echo_panda_mobile.presentation.views.globalComponent.PandaBrandLogo
+import com.example.echo_panda_mobile.presentation.navigation.Routes
+import com.example.echo_panda_mobile.presentation.viewsmodel.AuthState
+import com.example.echo_panda_mobile.presentation.viewsmodel.AuthViewModel
+import com.example.echo_panda_mobile.presentation.viewsmodel.AuthViewModelFactory
 import com.example.echo_panda_mobile.presentation.viewsmodel.LoginViewModel
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
+import kotlinx.coroutines.launch
 
 // ─── HARDCODED DESIGN SYSTEM COLORS ──────────────────────────────────────────────────
 private val IntroBg = Color(0xFF03070B)
@@ -52,59 +55,47 @@ fun LoginScreen(
     onAuthenticateSuccess: (String) -> Unit,
     onNavigateToSignUp: () -> Unit,
     onNavigateToForgotPassword: () -> Unit,
-    viewModel: LoginViewModel = viewModel()
+    loginViewModel: LoginViewModel = viewModel(),
+    authViewModel: AuthViewModel = viewModel(factory = AuthViewModelFactory(LocalContext.current))
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by loginViewModel.uiState.collectAsState()
+    val authState by authViewModel.authState.collectAsState()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val authManager = remember { FirebaseAuthManager(context) }
     var passwordVisible by remember { mutableStateOf(false) }
     var hasAttemptedSubmit by remember { mutableStateOf(false) }
 
-    val googleSignInOptions = remember {
-        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(context.getString(R.string.default_web_client_id))
-            .requestEmail()
-            .build()
-    }
-
-    val googleSignInClient = remember {
-        GoogleSignIn.getClient(context, googleSignInOptions)
-    }
+    val isAnyLoading = uiState.isLoading || authState is AuthState.Loading
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode != Activity.RESULT_OK || result.data == null) {
-            viewModel.onGoogleSignInFailed("Google sign-in was cancelled or failed to return data.")
-            return@rememberLauncherForActivityResult
-        }
-
-        try {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            val account = task.getResult(ApiException::class.java)
-            val idToken = account?.idToken
-            if (!idToken.isNullOrBlank()) {
-                viewModel.onGoogleSignIn(idToken)
-            } else {
-                viewModel.onGoogleSignInFailed("Google sign-in failed: No ID token found.")
-            }
-        } catch (e: ApiException) {
-            val msg = when (e.statusCode) {
-                7 -> "Network error. Please check your connection."
-                10 -> "Configuration error (SHA-1/Package Name). Contact support."
-                12500 -> "Sign-in failed. Ensure Google Play Services are up to date."
-                12501 -> "Sign-in cancelled."
-                else -> "Google sign-in error: ${e.message}"
-            }
-            viewModel.onGoogleSignInFailed(msg)
-        } catch (e: Exception) {
-            viewModel.onGoogleSignInFailed("Google sign-in failed: ${e.localizedMessage ?: "Unknown error."}")
+        if (result.resultCode == Activity.RESULT_OK) {
+            // Use AuthViewModel to handle the full flow
+            authViewModel.signInWithGoogle(result.data)
+        } else {
+            loginViewModel.onGoogleSignInFailed("Google sign-in was cancelled or failed.")
         }
     }
 
     LaunchedEffect(uiState.navigateTo) {
         uiState.navigateTo?.let {
             onAuthenticateSuccess(it)
-            viewModel.onNavigationHandled()
+            loginViewModel.onNavigationHandled()
+        }
+    }
+
+    LaunchedEffect(authState) {
+        when (authState) {
+            is AuthState.Success -> {
+                val role = (authState as AuthState.Success).role
+                onAuthenticateSuccess(Routes.getHomeRoute(role))
+            }
+            is AuthState.Error -> {
+                loginViewModel.onGoogleSignInFailed((authState as AuthState.Error).message)
+            }
+            else -> {}
         }
     }
 
@@ -199,7 +190,7 @@ fun LoginScreen(
                 AuthInputField(
                     value = uiState.email,
                     onValueChange = {
-                        viewModel.onEmailChange(it)
+                        loginViewModel.onEmailChange(it)
                         hasAttemptedSubmit = false
                     },
                     placeholder = "Email"
@@ -220,7 +211,7 @@ fun LoginScreen(
                 AuthInputField(
                     value = uiState.password,
                     onValueChange = {
-                        viewModel.onPasswordChange(it)
+                        loginViewModel.onPasswordChange(it)
                         hasAttemptedSubmit = false
                     },
                     placeholder = "Password",
@@ -291,13 +282,13 @@ fun LoginScreen(
 
             // ─── 1. GOOGLE SINGLE SIGN-IN PILL BUTTON (Placed on top per design) ───
             SocialButton(
-                text = if (uiState.isLoading) "Signing in…" else "Sign in with Google",
+                text = if (authState is AuthState.Loading) "Signing in…" else "Sign in with Google",
                 bgColor = SocialBtnBg,
                 textColor = TextPrimary,
                 onClick = {
-                    if (!uiState.isLoading) {
+                    if (!isAnyLoading) {
                         hasAttemptedSubmit = true
-                        launcher.launch(googleSignInClient.signInIntent)
+                        launcher.launch(authManager.getGoogleSignInClient().signInIntent)
                     }
                 }
             )
@@ -308,7 +299,7 @@ fun LoginScreen(
             Button(
                 onClick = {
                     hasAttemptedSubmit = true
-                    viewModel.onLoginClick()
+                    loginViewModel.onLoginClick()
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -318,7 +309,7 @@ fun LoginScreen(
                     containerColor = AccentCyan,
                     contentColor = IntroBg
                 ),
-                enabled = !uiState.isLoading,
+                enabled = !isAnyLoading,
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
             ) {
                 if (uiState.isLoading) {
