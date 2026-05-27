@@ -172,6 +172,7 @@ class AuthRepository {
             val firebaseUser = result.user
                 ?: return AuthResult.Error("Google sign-in failed. User data not available.")
 
+<<<<<<< HEAD
             val token = firebaseUser.getIdToken(false).await().token ?: "firebase-token"
             val email = firebaseUser.email ?: ""
 
@@ -220,9 +221,36 @@ class AuthRepository {
             val profileDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
             val name       = profileDoc.getString("name") ?: firebaseUser.displayName ?: "User"
             val role       = profileDoc.getString("role")?.lowercase() ?: "user"
+=======
+            val token      = firebaseUser.getIdToken(false).await().token ?: "firebase-token"
+            val email      = firebaseUser.email ?: ""
+
+            // ── Role Enforcement: Google is for "user" role only ──
+            // Prevent conflicts if this email is already an Admin or Artist
+            val adminDoc = findDocumentByEmail("admins", email)
+            if (adminDoc != null) {
+                return AuthResult.Error("This email is registered as an Admin. Please use email/password login.")
+            }
+
+            val artistDoc = findDocumentByEmail("artists", email)
+            if (artistDoc != null) {
+                return AuthResult.Error("This email is registered as an Artist. Please use email/password login.")
+            }
+
+            // Normal user flow
+            val profileDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
+            val name = profileDoc.getString("name") ?: firebaseUser.displayName ?: "User"
+            
+            // Force role to "user" for all Google accounts
+            val role = "user"
+>>>>>>> d33b944 (Initial commit)
 
             if (!profileDoc.exists()) {
                 saveGoogleUserProfile(firebaseUser.uid, name, email, role)
+            } else if (profileDoc.getString("role") != "user") {
+                // Update existing user doc if it somehow has a different role (optional safety)
+                firestore.collection("users").document(firebaseUser.uid)
+                    .update("role", "user").await()
             }
 
             AuthResult.Success(

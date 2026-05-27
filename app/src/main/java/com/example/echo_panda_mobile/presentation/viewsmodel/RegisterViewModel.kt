@@ -113,11 +113,8 @@ class RegisterViewModel(
             when (result) {
                 is AuthResult.Success<*> -> {
                     val authResponse = result.data as? AuthResponse
-                    val destination = when (authResponse?.user?.role?.uppercase()) {
-                        "ARTIST" -> Routes.ARTIST_DASHBOARD
-                        "ADMIN"  -> Routes.ADMIN_DASHBOARD
-                        else     -> Routes.USER_HOME
-                    }
+                    // Use the centralized route resolver for consistency
+                    val destination = Routes.getHomeRoute(authResponse?.user?.role)
                     _uiState.value = _uiState.value.copy(
                         isLoading  = false,
                         navigateTo = destination
@@ -132,6 +129,10 @@ class RegisterViewModel(
                 else -> Unit
             }
         }
+    }
+
+    fun onGoogleSignInFailed(message: String) {
+        _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = message)
     }
 
     fun onNavigationHandled() {

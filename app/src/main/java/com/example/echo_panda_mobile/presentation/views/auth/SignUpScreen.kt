@@ -59,27 +59,45 @@ fun SignUpScreen(
     val scrollState = rememberScrollState()
     val context = LocalContext.current
 
-    val googleSignInOptions = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-        .requestIdToken(context.getString(R.string.default_web_client_id))
-        .requestEmail()
-        .build()
+    val googleSignInOptions = remember {
+        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(context.getString(R.string.default_web_client_id))
+            .requestEmail()
+            .build()
+    }
 
-    val googleSignInClient = GoogleSignIn.getClient(context, googleSignInOptions)
+    val googleSignInClient = remember {
+        GoogleSignIn.getClient(context, googleSignInOptions)
+    }
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            try {
-                val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-                val account = task.getResult(ApiException::class.java)
-                val idToken = account?.idToken
-                if (!idToken.isNullOrBlank()) {
-                    viewModel.onGoogleSignIn(idToken)
-                }
-            } catch (_: ApiException) {
-                // Ignore cancelled or failed Google sign-in
+        if (result.resultCode != Activity.RESULT_OK || result.data == null) {
+            viewModel.onGoogleSignInFailed("Google sign-in was cancelled or failed to return data.")
+            return@rememberLauncherForActivityResult
+        }
+
+        try {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account?.idToken
+            if (!idToken.isNullOrBlank()) {
+                viewModel.onGoogleSignIn(idToken)
+            } else {
+                viewModel.onGoogleSignInFailed("Google sign-in failed: No ID token found.")
             }
+        } catch (e: ApiException) {
+            val msg = when (e.statusCode) {
+                7 -> "Network error. Please check your connection."
+                10 -> "Configuration error (SHA-1/Package Name). Contact support."
+                12500 -> "Sign-in failed. Ensure Google Play Services are up to date."
+                12501 -> "Sign-in cancelled."
+                else -> "Google sign-in error: ${e.message}"
+            }
+            viewModel.onGoogleSignInFailed(msg)
+        } catch (e: Exception) {
+            viewModel.onGoogleSignInFailed("Google sign-in failed: ${e.localizedMessage ?: "Unknown error."}")
         }
     }
 
