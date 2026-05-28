@@ -112,5 +112,22 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun toggleFavorite(track: Track) {
+        viewModelScope.launch {
+            val result = repository.toggleFavorite(track.id)
+            if (result is MusicResult.Success) {
+                // Update local state to reflect change immediately
+                _uiState.value = _uiState.value.copy(
+                    newReleases = _uiState.value.newReleases.map { 
+                        if (it.id == track.id) it.copy(isFavorite = !it.isFavorite) else it 
+                    },
+                    mostPlayedSongs = _uiState.value.mostPlayedSongs.map { 
+                        if (it.id == track.id) it.copy(isFavorite = !it.isFavorite) else it 
+                    }
+                )
+            }
+        }
+    }
+
     fun refresh() = loadAll()
 }

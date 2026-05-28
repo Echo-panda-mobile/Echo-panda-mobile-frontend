@@ -2,9 +2,7 @@ package com.example.echo_panda_mobile.data.remote
 
 import com.google.gson.annotations.SerializedName
 import retrofit2.Response
-import retrofit2.http.GET
-import retrofit2.http.Path
-import retrofit2.http.Query
+import retrofit2.http.*
 
 // ─── Base Response Wrapper ──────────────────────────────────────────────────
 
@@ -29,7 +27,39 @@ data class ArtistDto(
 )
 
 data class ArtistImageUrlResponse(
-    @SerializedName("url") val url: String
+    @SerializedName("url") val url: String? = null,
+    @SerializedName("signed_url") val signedUrl: String? = null,
+    @SerializedName("artist_id") val artistId: Int? = null,
+    @SerializedName("expires_in_seconds") val expiresInSeconds: Int? = null
+)
+
+data class SongCoverUrlResponse(
+    @SerializedName("url") val url: String? = null,
+    @SerializedName("signed_url") val signedUrl: String? = null,
+    @SerializedName("expires_in_seconds") val expiresInSeconds: Int? = null
+)
+
+data class CheckFavoriteRequest(
+    @SerializedName("song_id") val songId: Int
+)
+
+data class CheckFavoriteResponse(
+    @SerializedName("is_favorited") val isFavorite: Boolean
+)
+
+data class ListenHistoryRequest(
+    @SerializedName("song_id") val songId: Int,
+    @SerializedName("duration_listened") val durationListened: Int? = null,
+    @SerializedName("completed") val completed: Boolean? = null
+)
+
+data class StreamTicketResponse(
+    @SerializedName("song_id") val songId: Int? = null,
+    @SerializedName("quality") val quality: String? = null,
+    @SerializedName("expires_in_seconds") val expiresInSeconds: Int? = null,
+    @SerializedName("signed_url") val signedUrl: String? = null,
+    @SerializedName("stream_url") val streamUrl: String? = null,
+    @SerializedName("url") val url: String? = null
 )
 
 // ─── Album DTOs ───────────────────────────────────────────────────────────────
@@ -46,13 +76,14 @@ data class AlbumDto(
 // ─── Song DTOs ────────────────────────────────────────────────────────────────
 
 data class SongDto(
-    @SerializedName("id") val id: String,
+    @SerializedName("id") val id: Int,
     @SerializedName("title") val title: String,
-    @SerializedName("artist") val artist: String?,
+    @SerializedName("artist_name") val artistName: String?,
     @SerializedName("duration") val durationSeconds: Int,
     @SerializedName("track_number") val trackNumber: Int,
     @SerializedName("album_id") val albumId: Int?,
-    @SerializedName("cover_url") val coverUrl: String? = null
+    @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("album") val album: AlbumDto? = null
 )
 
 // ─── Service Interface ────────────────────────────────────────────────────────
@@ -94,6 +125,36 @@ interface MusicApiService {
     suspend fun getSongDetail(
         @Path("id") songId: String
     ): Response<SongDto>
+
+    @GET("songs/{id}/cover-url")
+    suspend fun getSongCoverUrl(
+        @Path("id") songId: String
+    ): Response<SongCoverUrlResponse>
+
+    @GET("albums/{id}/cover-url")
+    suspend fun getAlbumCoverUrl(
+        @Path("id") albumId: String
+    ): Response<SongCoverUrlResponse>
+
+    @GET("songs/{id}/signed-url")
+    suspend fun getStreamTicket(
+        @Path("id") songId: String
+    ): Response<StreamTicketResponse>
+
+    @POST("favorites/songs")
+    suspend fun toggleFavorite(
+        @Body request: CheckFavoriteRequest
+    ): Response<Unit>
+
+    @POST("favorites/songs/check")
+    suspend fun checkIsFavorite(
+        @Body request: CheckFavoriteRequest
+    ): Response<CheckFavoriteResponse>
+
+    @POST("listen-history")
+    suspend fun addToListenHistory(
+        @Body request: ListenHistoryRequest
+    ): Response<Unit>
 
     @GET("stats/most-played-albums")
     suspend fun getMostPlayedAlbums(

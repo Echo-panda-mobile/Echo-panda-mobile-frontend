@@ -102,6 +102,15 @@ fun ArtistDetailScreen(
                     onAlbumClick = onNavigateToAlbum
                 )
 
+                // ─── Singles Section ───────────────────────────────────────────
+                if (state.singles.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(32.dp))
+                    ArtistSinglesSection(
+                        singles = state.singles,
+                        onTrackClick = onNavigateToPlayer
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(120.dp))
             }
 
@@ -366,6 +375,8 @@ private fun ArtistAlbumsSection(
     albums: List<Album>,
     onAlbumClick: (String) -> Unit
 ) {
+    if (albums.isEmpty()) return
+    
     Column {
         SectionHeader(
             fullTitle = "Albums",
@@ -382,6 +393,37 @@ private fun ArtistAlbumsSection(
                 AlbumCard(
                     album = album,
                     onClick = { onAlbumClick(album.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtistSinglesSection(
+    singles: List<Track>,
+    onTrackClick: (String) -> Unit
+) {
+    Column {
+        SectionHeader(
+            fullTitle = "Singles & EPs",
+            onViewAll = { }
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            singles.forEach { track ->
+                LabeledArtCard(
+                    title = track.title,
+                    subLabel = "Single",
+                    colors = track.placeholderColors,
+                    imageUrl = track.imageUrl,
+                    size = 140.dp,
+                    onClick = { onTrackClick(track.id) }
                 )
             }
         }

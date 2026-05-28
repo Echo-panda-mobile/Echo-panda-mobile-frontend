@@ -6,13 +6,24 @@ import okhttp3.Response
 
 class AuthInterceptor(private val tokenStorage: TokenStorage) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val token = tokenStorage.getToken()
-        val request = chain.request().newBuilder()
+        val request = chain.request()
+        val url = request.url.toString()
         
-        if (!token.isNullOrBlank()) {
-            request.addHeader("Authorization", "Bearer $token")
+        // CRITICAL: If the URL is an AWS S3 Pre-Signed URL, we MUST NOT send the 
+        // app's Authorization header. S3 URLs are self-contained.
+        val isS3 = url.contains("amazonaws.com")
+        
+        val newRequestBuilder = request.newBuilder()
+        
+        if (isS3) {
+            newRequestBuilder.removeHeader("Authorization")
+        } else {
+            val token = tokenStorage.getToken()
+            if (!token.isNullOrBlank()) {
+                newRequestBuilder.header("Authorization", "Bearer $token")
+            }
         }
         
-        return chain.proceed(request.build())
+        return chain.proceed(newRequestBuilder.build())
     }
 }

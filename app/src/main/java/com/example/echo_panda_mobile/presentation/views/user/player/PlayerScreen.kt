@@ -28,7 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.echo_panda_mobile.presentation.components.SquareArtCard
-import com.example.echo_panda_mobile.presentation.viewmodel.PlayerViewModel
+import com.example.echo_panda_mobile.presentation.viewsmodel.PlayerViewModel
+import com.example.echo_panda_mobile.presentation.components.ErrorState
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 
 @Composable
@@ -75,9 +76,16 @@ fun PlayerScreen(
             .background(Color(0xFF05070D))
     ) {
         if (state.isLoading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
+                Spacer(Modifier.height(8.dp))
+                Text("Loading track $trackId...", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
             }
+        } else if (state.errorMessage != null) {
+            ErrorState(
+                message = state.errorMessage!!,
+                onRetry = { viewModel.loadTrack(trackId) }
+            )
         } else if (track != null) {
             Column(
                 modifier = Modifier
@@ -99,7 +107,7 @@ fun PlayerScreen(
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "PLAYING FROM PLAYLIST:",
+                            text = "PLAYING FROM ALBUM:",
                             color = Color.White.copy(alpha = 0.5f),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -107,7 +115,7 @@ fun PlayerScreen(
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "Lofi Loft",
+                                text = track.album ?: "Unknown Album",
                                 color = Color.White,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
@@ -125,6 +133,7 @@ fun PlayerScreen(
                 // Large Artwork
                 SquareArtCard(
                     colors = track.placeholderColors,
+                    imageUrl = track.imageUrl,
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
@@ -187,9 +196,9 @@ fun PlayerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    val currentMs = (state.progress * track.durationMs).toLong()
-                    Text(text = formatTime(currentMs), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
-                    Text(text = formatTime(track.durationMs), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                    Text(text = formatTime(state.currentPositionMs), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                    val totalDuration = if (state.durationMs > 0) state.durationMs else track.durationMs
+                    Text(text = formatTime(totalDuration), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
                 }
 
                 Spacer(Modifier.height(16.dp))

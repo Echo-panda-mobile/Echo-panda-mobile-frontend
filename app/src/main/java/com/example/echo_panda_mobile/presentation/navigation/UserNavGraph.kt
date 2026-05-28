@@ -50,6 +50,9 @@ fun NavGraphBuilder.userNavGraph(
                 },
                 onNavigateToAlbum = { albumId ->
                     navController.navigate(Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId))
+                },
+                onNavigateToSong = { trackId ->
+                    navController.navigate(Routes.USER_PLAYER.replace("{trackId}", trackId))
                 }
             )
         }

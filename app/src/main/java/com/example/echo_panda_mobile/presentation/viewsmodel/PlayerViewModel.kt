@@ -1,15 +1,18 @@
-package com.example.echo_panda_mobile.presentation.viewmodel
+package com.example.echo_panda_mobile.presentation.viewsmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.Playlist
 import com.example.echo_panda_mobile.data.model.Track
+import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.repository.MusicRepository
 import com.example.echo_panda_mobile.data.repository.MusicResult
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import com.example.echo_panda_mobile.data.repository.TokenStorage
+import com.example.echo_panda_mobile.player.MusicPlayerManager
+import androidx.media3.common.util.UnstableApi
+import kotlin.OptIn
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 data class PlayerUiState(
@@ -17,41 +20,125 @@ data class PlayerUiState(
     val track: Track? = null,
     val errorMessage: String? = null,
     val isPlaying: Boolean = false,
-    val progress: Float = 0.3f, // Mock progress
+    val progress: Float = 0f,
     val showPlaylistDialog: Boolean = false,
-    val userPlaylists: List<Playlist> = emptyList()
+    val userPlaylists: List<Playlist> = emptyList(),
+    val streamUrl: String? = null,
+    val streamExpiresAt: Long = 0,
+    val currentPositionMs: Long = 0,
+    val durationMs: Long = 0
 )
 
-class PlayerViewModel(
-    private val musicRepository: MusicRepository = MusicRepository()
-) : ViewModel() {
+@OptIn(UnstableApi::class)
+class PlayerViewModel(application: Application) : AndroidViewModel(application) {
+    private val tokenStorage = TokenStorage(application)
+    private val musicRepository = MusicRepository(RetrofitClient.getMusicService(tokenStorage))
+    private val playerManager = MusicPlayerManager.getInstance(application)
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
-    fun loadTrack(trackId: String) {
+    init {
+        // Observe player manager state
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            when (val result = musicRepository.getTrackById(trackId)) {
-                is MusicResult.Success -> {
-                    _uiState.update { it.copy(isLoading = false, track = result.data) }
+            combine(
+                playerManager.isPlaying,
+                playerManager.currentPosition,
+                playerManager.duration
+            ) { playing, position, duration ->
+                Triple(playing, position, duration)
+            }.collect { (playing, position, duration) ->
+                _uiState.update { it.copy(
+                    isPlaying = playing,
+                    currentPositionMs = position,
+                    durationMs = duration,
+                    progress = if (duration > 0) position.toFloat() / duration else 0f
+                ) }
+            }
+        }
+    }
+
+    fun loadTrack(trackId: String) {
+        android.util.Log.d("PlayerViewModel", "loadTrack called with ID: $trackId")
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            
+            // 1. Get track metadata
+            android.util.Log.d("PlayerViewModel", "Fetching metadata for $trackId")
+            val trackResult = musicRepository.getTrackById(trackId)
+            android.util.Log.d("PlayerViewModel", "Metadata result: $trackResult")
+            if (trackResult is MusicResult.Success) {
+                val track = trackResult.data
+                _uiState.update { it.copy(track = track) }
+                
+                // 2. Get stream ticket
+                val ticketResult = musicRepository.getStreamTicket(trackId)
+                if (ticketResult is MusicResult.Success) {
+                    val ticket = ticketResult.data
+                    val audioUrl = ticket.signedUrl ?: ticket.streamUrl ?: ticket.url
+                    
+                    if (audioUrl != null) {
+                        _uiState.update { it.copy(
+                            streamUrl = audioUrl,
+                            streamExpiresAt = System.currentTimeMillis() + ((ticket.expiresInSeconds ?: 300) * 1000)
+                        ) }
+                        
+                        // Start playing automatically
+                        playerManager.play(audioUrl, track.title, track.artist)
+                        
+                        // 3. Add to listen history
+                        musicRepository.addToListenHistory(trackId)
+                    } else {
+                        _uiState.update { it.copy(errorMessage = "Stream URL not found in response") }
+                    }
+                } else if (ticketResult is MusicResult.Error) {
+                    _uiState.update { it.copy(errorMessage = ticketResult.message) }
                 }
-                is MusicResult.Error -> {
-                    _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
-                }
-                else -> {
-                    _uiState.update { it.copy(isLoading = false) }
-                }
+                
+                _uiState.update { it.copy(isLoading = false) }
+            } else if (trackResult is MusicResult.Error) {
+                _uiState.update { it.copy(isLoading = false, errorMessage = trackResult.message) }
             }
         }
     }
 
     fun togglePlayPause() {
-        _uiState.update { it.copy(isPlaying = !it.isPlaying) }
+        val track = _uiState.value.track ?: return
+        
+        viewModelScope.launch {
+            // Check if we need a new stream ticket or if we haven't started playing yet
+            val isExpired = _uiState.value.streamUrl == null || 
+                           System.currentTimeMillis() > (_uiState.value.streamExpiresAt - 10000)
+            
+            if (isExpired) {
+                val result = musicRepository.getStreamTicket(track.id)
+                if (result is MusicResult.Success) {
+                    val ticket = result.data
+                    val audioUrl = ticket.signedUrl ?: ticket.streamUrl ?: ticket.url
+                    if (audioUrl != null) {
+                        _uiState.update { it.copy(
+                            streamUrl = audioUrl,
+                            streamExpiresAt = System.currentTimeMillis() + ((ticket.expiresInSeconds ?: 300) * 1000)
+                        ) }
+                        playerManager.play(audioUrl, track.title, track.artist)
+                    } else {
+                        _uiState.update { it.copy(errorMessage = "Stream URL not found") }
+                    }
+                } else {
+                    _uiState.update { it.copy(errorMessage = "Could not refresh stream ticket") }
+                }
+            } else {
+                playerManager.togglePlayPause()
+            }
+        }
     }
 
     fun updateProgress(value: Float) {
-        _uiState.update { it.copy(progress = value) }
+        val duration = _uiState.value.durationMs
+        if (duration > 0) {
+            val seekPos = (value * duration).toLong()
+            playerManager.seekTo(seekPos)
+        }
     }
 
     fun toggleFavorite() {

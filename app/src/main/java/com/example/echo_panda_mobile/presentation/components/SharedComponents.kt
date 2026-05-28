@@ -265,6 +265,7 @@ fun ArtPlaceholder(
     modifier: Modifier = Modifier,
     overlayText: String? = null
 ) {
+    android.util.Log.d("ArtPlaceholder", "Rendering with URL: $imageUrl")
     Box(
         modifier = modifier.background(
             Brush.linearGradient(
@@ -278,7 +279,13 @@ fun ArtPlaceholder(
                 model = imageUrl,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                onSuccess = {
+                    android.util.Log.d("ArtPlaceholder", "Successfully loaded image: $imageUrl")
+                },
+                onError = { state ->
+                    android.util.Log.e("ArtPlaceholder", "Failed to load image: $imageUrl. Error: ${state.result.throwable}")
+                }
             )
         }
         
@@ -362,7 +369,8 @@ fun AlbumCard(album: Album, modifier: Modifier = Modifier, width: Dp = 110.dp, o
             colors = album.placeholderColors,
             imageUrl = album.imageUrl,
             modifier = Modifier.fillMaxWidth(),
-            size = width
+            size = width,
+            onClick = onClick // Pass click through
         )
         Spacer(Modifier.height(8.dp))
         Text(text = album.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -422,6 +430,121 @@ fun SongRow(index: Int, track: Track, isPlaying: Boolean = false, onClick: () ->
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }, modifier = Modifier.background(EchoPandaColors.BgCardDark)) {
                 if (onAddToFavorites != null) DropdownMenuItem(text = { Text("Add to Favorites", color = Color.White) }, onClick = { onAddToFavorites(); showMenu = false })
                 if (onAddToPlaylist != null) DropdownMenuItem(text = { Text("Add to Playlist", color = Color.White) }, onClick = { onAddToPlaylist(); showMenu = false })
+            }
+        }
+    }
+}
+
+@Composable
+fun SongCardHorizontal(
+    track: Track,
+    isPlaying: Boolean = false,
+    onClick: () -> Unit = {},
+    onFavoriteClick: () -> Unit = {},
+    onAddToPlaylistClick: () -> Unit = {}
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 8.dp, horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Status Icon (Play/Pause)
+        Icon(
+            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(18.dp)
+        )
+        
+        Spacer(Modifier.width(12.dp))
+        
+        // Artwork
+        SquareArtCard(
+            colors = track.placeholderColors,
+            imageUrl = track.imageUrl,
+            size = 52.dp,
+            cornerRadius = 8.dp,
+            onClick = onClick // Pass the click through to the image as well
+        )
+        
+        Spacer(Modifier.width(16.dp))
+        
+        // Info
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = track.title,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = track.artist,
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        
+        // Duration
+        val mins = (track.durationMs / 1000) / 60
+        val secs = (track.durationMs / 1000) % 60
+        Text(
+            text = String.format(java.util.Locale.getDefault(), "%d:%02d", mins, secs),
+            color = Color.White.copy(alpha = 0.4f),
+            fontSize = 13.sp,
+            modifier = Modifier.padding(horizontal = 12.dp)
+        )
+        
+        // Menu
+        Box {
+            IconButton(onClick = { showMenu = true }) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.4f)
+                )
+            }
+            
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false },
+                modifier = Modifier.background(EchoPandaColors.BgCardDark)
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Favorite", color = Color.White) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (track.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = null,
+                            tint = if (track.isFavorite) Color.Red else Color.Gray
+                        )
+                    },
+                    onClick = {
+                        onFavoriteClick()
+                        showMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Add to Playlist", color = Color.White) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
+                            contentDescription = null,
+                            tint = Color.Gray
+                        )
+                    },
+                    onClick = {
+                        onAddToPlaylistClick()
+                        showMenu = false
+                    }
+                )
             }
         }
     }
@@ -510,8 +633,20 @@ fun RecentPlaylistCard(playlist: Playlist, modifier: Modifier = Modifier, onClic
 }
 
 @Composable
-fun FeaturedArtistCard(featured: FeaturedArtist, onListenNow: () -> Unit = {}, onFollow: () -> Unit = {}) {
-    Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = Color(0xFF1A1512), shape = RoundedCornerShape(20.dp)) {
+fun FeaturedArtistCard(
+    featured: FeaturedArtist,
+    onListenNow: () -> Unit = {},
+    onFollow: () -> Unit = {},
+    onClick: () -> Unit = {}
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clickable { onClick() },
+        color = Color(0xFF1A1512),
+        shape = RoundedCornerShape(20.dp)
+    ) {
         Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1.2f)) {
                 Text(text = featured.artist.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)

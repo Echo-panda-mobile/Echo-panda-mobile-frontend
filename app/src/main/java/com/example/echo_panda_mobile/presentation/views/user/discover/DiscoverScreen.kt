@@ -31,6 +31,7 @@ fun DiscoverScreen(
     onNavSelect: (Int) -> Unit = {},
     onNavigateToArtist: (String) -> Unit = {},
     onNavigateToAlbum: (String) -> Unit = {},
+    onNavigateToSong: (String) -> Unit = {},
     viewModel: DiscoverViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -153,23 +154,19 @@ fun DiscoverScreen(
                             highlightColor = EchoPandaColors.AccentBlue,
                             onViewAll = {}
                         )
-                        Spacer(Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        Spacer(Modifier.height(8.dp))
+                        Column(
+                            modifier = Modifier.padding(bottom = 16.dp)
                         ) {
-                            state.newReleases.forEach { track ->
-                                LabeledArtCard(
-                                    title = track.title,
-                                    subLabel = track.artist,
-                                    colors = track.placeholderColors,
-                                    imageUrl = track.imageUrl
+                            state.newReleases.take(4).forEach { track ->
+                                SongCardHorizontal(
+                                    track = track,
+                                    onClick = { onNavigateToSong(track.id) },
+                                    onFavoriteClick = { viewModel.toggleFavorite(track) },
+                                    onAddToPlaylistClick = { /* TODO: show playlist picker */ }
                                 )
                             }
                         }
-                        Spacer(Modifier.height(32.dp))
                     }
 
                     // ── Popular Artists ───────────────────────────────────────────
@@ -205,19 +202,16 @@ fun DiscoverScreen(
                             highlightColor = EchoPandaColors.AccentBlue,
                             onViewAll = {}
                         )
-                        Spacer(Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        Spacer(Modifier.height(8.dp))
+                        Column(
+                            modifier = Modifier.padding(bottom = 16.dp)
                         ) {
-                            state.mostPlayedSongs.forEach { track ->
-                                LabeledArtCard(
-                                    title = track.title,
-                                    subLabel = track.artist,
-                                    colors = track.placeholderColors,
-                                    imageUrl = track.imageUrl
+                            state.mostPlayedSongs.take(4).forEach { track ->
+                                SongCardHorizontal(
+                                    track = track,
+                                    onClick = { onNavigateToSong(track.id) },
+                                    onFavoriteClick = { viewModel.toggleFavorite(track) },
+                                    onAddToPlaylistClick = { /* TODO: show playlist picker */ }
                                 )
                             }
                         }

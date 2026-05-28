@@ -167,7 +167,8 @@ fun HomeScreen(
                     state.featuredArtist?.let { featured ->
                         FeaturedArtistCard(
                             featured = featured,
-                            onListenNow = { onNavigateToArtist(featured.artist.id) }
+                            onListenNow = { onNavigateToArtist(featured.artist.id) },
+                            onClick = { onNavigateToArtist(featured.artist.id) }
                         )
                         Spacer(Modifier.height(32.dp))
                     }

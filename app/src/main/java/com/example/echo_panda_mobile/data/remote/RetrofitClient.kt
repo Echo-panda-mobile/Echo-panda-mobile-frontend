@@ -11,20 +11,22 @@ object RetrofitClient {
     private var authService: AuthApiService? = null
     private var musicService: MusicApiService? = null
 
-    private fun getRetrofit(tokenStorage: TokenStorage): Retrofit {
+    fun getOkHttpClient(tokenStorage: TokenStorage): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
 
-        val client = OkHttpClient.Builder()
+        return OkHttpClient.Builder()
             .addInterceptor(logging)
             .addInterceptor(AuthInterceptor(tokenStorage))
             .build()
+    }
 
+    private fun getRetrofit(tokenStorage: TokenStorage): Retrofit {
         return Retrofit.Builder()
             .baseUrl(BASE_URL)
             .addConverterFactory(GsonConverterFactory.create())
-            .client(client)
+            .client(getOkHttpClient(tokenStorage))
             .build()
     }
 
