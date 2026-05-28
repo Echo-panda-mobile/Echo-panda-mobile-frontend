@@ -3,6 +3,7 @@ package com.example.echo_panda_mobile.presentation.views.user.album
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -130,7 +131,7 @@ fun AlbumScreen(
 
                         Spacer(Modifier.height(24.dp))
 
-                        // ── Top Picks (Grid Style) ─────────────────────────────────
+                        // ── Top Picks (Horizontal Scroll) ─────────────────────────────────
                         SectionHeader(
                             fullTitle = "Top Picks", 
                             onViewAll = { viewModel.setCategory("Trending") }
@@ -139,14 +140,14 @@ fun AlbumScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
                                 .padding(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            state.topAlbums.drop(1).take(2).forEach { album ->
+                            // Exclude the featured one and show the rest of the most played albums
+                            state.topAlbums.drop(1).forEach { album ->
                                 AlbumCard(
-                                    album = album, 
-                                    modifier = Modifier.weight(1f), 
-                                    width = Dp.Unspecified,
+                                    album = album,
                                     onClick = { onNavigateToDetail(album.id) }
                                 )
                             }
@@ -160,7 +161,7 @@ fun AlbumScreen(
                         Column(
                             modifier = Modifier.padding(horizontal = 16.dp)
                         ) {
-                            (state.newAlbums + state.popularAlbums).distinctBy { it.id }.forEach { album ->
+                            state.popularAlbums.forEach { album ->
                                 AlbumListRow(
                                     album = album,
                                     onClick = { onNavigateToDetail(album.id) },

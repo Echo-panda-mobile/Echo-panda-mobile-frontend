@@ -1,10 +1,13 @@
 package com.example.echo_panda_mobile.presentation.viewsmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.Album
+import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.repository.MusicRepository
 import com.example.echo_panda_mobile.data.repository.MusicResult
+import com.example.echo_panda_mobile.data.repository.TokenStorage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,9 +27,9 @@ data class AlbumUiState(
     val isSearchActive: Boolean = false
 )
 
-class AlbumViewModel(
-    private val musicRepository: MusicRepository = MusicRepository()
-) : ViewModel() {
+class AlbumViewModel(application: Application) : AndroidViewModel(application) {
+    private val tokenStorage = TokenStorage(application)
+    private val musicRepository = MusicRepository(RetrofitClient.getMusicService(tokenStorage))
 
     private val _uiState = MutableStateFlow(AlbumUiState())
     val uiState: StateFlow<AlbumUiState> = _uiState.asStateFlow()

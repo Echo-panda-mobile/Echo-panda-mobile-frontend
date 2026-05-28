@@ -1,10 +1,13 @@
 package com.example.echo_panda_mobile.presentation.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.*
+import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.repository.MusicRepository
 import com.example.echo_panda_mobile.data.repository.MusicResult
+import com.example.echo_panda_mobile.data.repository.TokenStorage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +19,7 @@ data class DiscoverUiState(
     val genres: List<Genre>                  = emptyList(),
     val moodPlaylists: List<MoodPlaylist>     = emptyList(),
     val newReleases: List<Track>             = emptyList(),
+    val mostPlayedSongs: List<Track>         = emptyList(),
     val popularArtists: List<Artist>         = emptyList(),
     val browseCategories: List<BrowseCategory> = emptyList(),
     val searchResults: List<Album>           = emptyList(), // For album search
@@ -24,9 +28,9 @@ data class DiscoverUiState(
     val errorMessage: String?                = null
 )
 
-class DiscoverViewModel(
-    private val repository: MusicRepository = MusicRepository()
-) : ViewModel() {
+class DiscoverViewModel(application: Application) : AndroidViewModel(application) {
+    private val tokenStorage = TokenStorage(application)
+    private val repository = MusicRepository(RetrofitClient.getMusicService(tokenStorage))
 
     private val _uiState = MutableStateFlow(DiscoverUiState())
     val uiState: StateFlow<DiscoverUiState> = _uiState.asStateFlow()
@@ -44,12 +48,14 @@ class DiscoverViewModel(
             val genresDef    = async { repository.getGenres() }
             val moodsDef     = async { repository.getMoodPlaylists() }
             val releasesDef  = async { repository.getNewReleases() }
+            val mostPlayedDef = async { repository.getMostPlayedSongs() }
             val artistsDef   = async { repository.getPopularArtists() }
             val browseDef    = async { repository.getBrowseCategories() }
 
             allGenres   = (genresDef.await()   as? MusicResult.Success)?.data ?: emptyList()
             allMoods    = (moodsDef.await()    as? MusicResult.Success)?.data ?: emptyList()
             allReleases = (releasesDef.await() as? MusicResult.Success)?.data ?: emptyList()
+            val mostPlayed = (mostPlayedDef.await() as? MusicResult.Success)?.data ?: emptyList()
             val artists  = (artistsDef.await()  as? MusicResult.Success)?.data ?: emptyList()
             val browse   = (browseDef.await()   as? MusicResult.Success)?.data ?: emptyList()
 
@@ -58,6 +64,7 @@ class DiscoverViewModel(
                 genres           = allGenres,
                 moodPlaylists    = allMoods,
                 newReleases      = allReleases,
+                mostPlayedSongs  = mostPlayed,
                 popularArtists   = artists,
                 browseCategories = browse
             )

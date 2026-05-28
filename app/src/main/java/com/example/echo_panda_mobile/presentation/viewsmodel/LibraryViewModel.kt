@@ -31,7 +31,12 @@ sealed class LibraryItem {
     data class AlbumItem(val album: Album) : LibraryItem()
 }
 
-class LibraryViewModel : ViewModel() {
+class LibraryViewModel(application: android.app.Application) : androidx.lifecycle.AndroidViewModel(application) {
+    private val tokenStorage = com.example.echo_panda_mobile.data.repository.TokenStorage(application)
+    private val musicRepository = com.example.echo_panda_mobile.data.repository.MusicRepository(
+        com.example.echo_panda_mobile.data.remote.RetrofitClient.getMusicService(tokenStorage)
+    )
+
     private val _uiState = MutableStateFlow(LibraryState())
     val uiState: StateFlow<LibraryState> = _uiState.asStateFlow()
 
@@ -58,12 +63,29 @@ class LibraryViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 
-            val items = buildLibraryItems()
+            // 1. Get followed/local items
+            val localItems = buildLibraryItems()
+            
+            // 2. Supplement with some global data from API to make it look "full"
+            val globalArtists = (musicRepository.getPopularArtists() as? com.example.echo_panda_mobile.data.repository.MusicResult.Success)?.data ?: emptyList()
+            val globalAlbums = (musicRepository.getPopularAlbums() as? com.example.echo_panda_mobile.data.repository.MusicResult.Success)?.data ?: emptyList()
+
+            val allItems = (localItems + 
+                globalArtists.map { LibraryItem.ArtistItem(it) } + 
+                globalAlbums.map { LibraryItem.AlbumItem(it) }
+            ).distinctBy {
+                when (it) {
+                    is LibraryItem.ArtistItem -> "artist_${it.artist.id}"
+                    is LibraryItem.PlaylistItem -> "playlist_${it.playlist.id}"
+                    is LibraryItem.AlbumItem -> "album_${it.album.id}"
+                }
+            }
+
             _uiState.update {
                 it.copy(
                     isLoading = false,
-                    allItems = items,
-                    filteredItems = items
+                    allItems = allItems,
+                    filteredItems = applyFilter(it.selectedFilter, it.searchQuery, allItems)
                 )
             }
         }

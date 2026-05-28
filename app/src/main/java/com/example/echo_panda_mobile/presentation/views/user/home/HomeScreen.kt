@@ -192,6 +192,7 @@ fun HomeScreen(
                             state.recentListening.forEach { playlist ->
                                 SquareArtCard(
                                     colors = playlist.placeholderColors,
+                                    imageUrl = playlist.imageUrl,
                                     size = 160.dp,
                                     cornerRadius = 16.dp,
                                     onClick = { 

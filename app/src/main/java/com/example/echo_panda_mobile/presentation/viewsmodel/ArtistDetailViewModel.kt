@@ -1,12 +1,16 @@
 package com.example.echo_panda_mobile.presentation.viewsmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.*
+import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.LibraryRepository
 import com.example.echo_panda_mobile.data.repository.MusicRepository
 import com.example.echo_panda_mobile.data.repository.MusicResult
+import com.example.echo_panda_mobile.data.repository.TokenStorage
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,58 +28,51 @@ data class ArtistDetailUiState(
     val errorMessage: String? = null
 )
 
-class ArtistDetailViewModel(
-    private val musicRepository: MusicRepository = MusicRepository(),
-    private val authRepository: AuthRepository = AuthRepository()
-) : ViewModel() {
+class ArtistDetailViewModel(application: Application) : AndroidViewModel(application) {
+    private val tokenStorage = TokenStorage(application)
+    private val musicRepository = MusicRepository(RetrofitClient.getMusicService(tokenStorage))
+    private val authRepository = AuthRepository()
 
     private val _uiState = MutableStateFlow(ArtistDetailUiState())
     val uiState: StateFlow<ArtistDetailUiState> = _uiState.asStateFlow()
 
     fun loadArtist(artistId: String) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             
             val user = authRepository.getCurrentUser()
-            val artistsResult = musicRepository.getPopularArtists()
-            val albumsResult = musicRepository.getTopAlbums()
-            val singlesResult = musicRepository.getNewReleases()
-
-            if (artistsResult is MusicResult.Success) {
-                val artist = artistsResult.data.find { it.id == artistId } ?: artistsResult.data.first()
+            
+            // 1. Get artist detail directly from API
+            val artistResult = musicRepository.getArtistById(artistId)
+            
+            if (artistResult is MusicResult.Success) {
+                val artist = artistResult.data
                 
-                // Mocking tracks for the artist dynamically
-                val mockTracks = if (artist.name.lowercase().contains("jennie")) {
-                    listOf(
-                        Track("p1", "Dracula - JENNIE Remix", artist.name, placeholderColors = artist.placeholderColors),
-                        Track("p2", "One Of The Girls", artist.name, placeholderColors = artist.placeholderColors),
-                        Track("p3", "like JENNIE", artist.name, placeholderColors = artist.placeholderColors),
-                        Track("p4", "Mantra", artist.name, placeholderColors = artist.placeholderColors),
-                        Track("p5", "Solo", artist.name, placeholderColors = artist.placeholderColors)
-                    )
-                } else {
-                    listOf(
-                        Track("tr1", "Popular Song 1", artist.name, placeholderColors = artist.placeholderColors),
-                        Track("tr2", "Hit Single 2", artist.name, placeholderColors = artist.placeholderColors),
-                        Track("tr3", "Trending Track 3", artist.name, placeholderColors = artist.placeholderColors),
-                        Track("tr4", "Classic Album Cut 4", artist.name, placeholderColors = artist.placeholderColors),
-                        Track("tr5", "Fan Favorite 5", artist.name, placeholderColors = artist.placeholderColors)
-                    )
-                }
+                // 2. Load albums and songs for this artist in parallel
+                val albumsDef = async { musicRepository.getArtistAlbums(artist.name) }
+                val tracksDef = async { musicRepository.getArtistSongs(artist.name) }
+                
+                val albums = (albumsDef.await() as? MusicResult.Success)?.data ?: emptyList()
+                val tracks = (tracksDef.await() as? MusicResult.Success)?.data ?: emptyList()
 
                 _uiState.update { 
                     it.copy(
                         isLoading = false,
                         artist = artist,
-                        popularTracks = mockTracks,
-                        albums = if (albumsResult is MusicResult.Success) albumsResult.data else emptyList(),
-                        singles = if (singlesResult is MusicResult.Success) singlesResult.data else emptyList(),
+                        popularTracks = tracks,
+                        albums = albums,
+                        singles = tracks.filter { t -> t.album == null || t.album == "null" },
                         currentUser = user,
-                        isFollowing = LibraryRepository.followedArtists.value.any { it.id == artistId }
+                        isFollowing = LibraryRepository.followedArtists.value.any { followed -> followed.id == artistId }
                     )
                 }
             } else {
-                _uiState.update { it.copy(isLoading = false, errorMessage = "Failed to load artist") }
+                _uiState.update { 
+                    it.copy(
+                        isLoading = false, 
+                        errorMessage = (artistResult as? MusicResult.Error)?.message ?: "Failed to load artist"
+                    ) 
+                }
             }
         }
     }

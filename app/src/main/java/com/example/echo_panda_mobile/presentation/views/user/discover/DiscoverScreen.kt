@@ -100,9 +100,21 @@ fun DiscoverScreen(
                             onViewAll = {}
                         )
                         Spacer(Modifier.height(16.dp))
-                        HorizontalLabeledRow(
-                            items = state.genres.map { Triple(it.name, it.subLabel, it.placeholderColors) }
-                        )
+                        Row(
+                            modifier = Modifier
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            state.genres.forEach { genre ->
+                                LabeledArtCard(
+                                    title = genre.name,
+                                    subLabel = genre.subLabel,
+                                    colors = genre.placeholderColors,
+                                    imageUrl = genre.imageUrl
+                                )
+                            }
+                        }
                         Spacer(Modifier.height(32.dp))
                     }
 
@@ -115,9 +127,21 @@ fun DiscoverScreen(
                             onViewAll = {}
                         )
                         Spacer(Modifier.height(16.dp))
-                        HorizontalLabeledRow(
-                            items = state.moodPlaylists.map { Triple(it.name, it.subLabel, it.placeholderColors) }
-                        )
+                        Row(
+                            modifier = Modifier
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            state.moodPlaylists.forEach { playlist ->
+                                LabeledArtCard(
+                                    title = playlist.name,
+                                    subLabel = playlist.subLabel,
+                                    colors = playlist.placeholderColors,
+                                    imageUrl = playlist.imageUrl
+                                )
+                            }
+                        }
                         Spacer(Modifier.height(32.dp))
                     }
 
@@ -130,9 +154,21 @@ fun DiscoverScreen(
                             onViewAll = {}
                         )
                         Spacer(Modifier.height(16.dp))
-                        HorizontalLabeledRow(
-                            items = state.newReleases.map { Triple(it.title, it.artist, it.placeholderColors) }
-                        )
+                        Row(
+                            modifier = Modifier
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            state.newReleases.forEach { track ->
+                                LabeledArtCard(
+                                    title = track.title,
+                                    subLabel = track.artist,
+                                    colors = track.placeholderColors,
+                                    imageUrl = track.imageUrl
+                                )
+                            }
+                        }
                         Spacer(Modifier.height(32.dp))
                     }
 
@@ -155,6 +191,33 @@ fun DiscoverScreen(
                                 ArtistCircleCard(
                                     artist = artist,
                                     onClick = { onNavigateToArtist(artist.id) }
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(32.dp))
+                    }
+
+                    // ── Most Played Songs ──────────────────────────────────────────
+                    if (!state.isSearchActive && state.mostPlayedSongs.isNotEmpty()) {
+                        SectionHeader(
+                            fullTitle = "Most Played Songs",
+                            highlightPart = "Songs",
+                            highlightColor = EchoPandaColors.AccentBlue,
+                            onViewAll = {}
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            state.mostPlayedSongs.forEach { track ->
+                                LabeledArtCard(
+                                    title = track.title,
+                                    subLabel = track.artist,
+                                    colors = track.placeholderColors,
+                                    imageUrl = track.imageUrl
                                 )
                             }
                         }
@@ -244,20 +307,6 @@ private fun DiscoverTopBar(
                     modifier = Modifier.size(28.dp)
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun HorizontalLabeledRow(items: List<Triple<String, String, List<Color>>>) {
-    Row(
-        modifier = Modifier
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items.forEach { (title, sub, colors) ->
-            LabeledArtCard(title = title, subLabel = sub, colors = colors)
         }
     }
 }

@@ -48,14 +48,16 @@ data class Genre(
     val id: String,
     val name: String,
     val subLabel: String,
-    val placeholderColors: List<Color>
+    val placeholderColors: List<Color>,
+    val imageUrl: String? = null
 )
 
 data class MoodPlaylist(
     val id: String,
     val name: String,
     val subLabel: String,
-    val placeholderColors: List<Color>
+    val placeholderColors: List<Color>,
+    val imageUrl: String? = null
 )
 
 data class BrowseCategory(

@@ -8,26 +8,38 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
     private const val BASE_URL = "https://api.echopanda.me/api/"
-    private var apiService: AuthApiService? = null
+    private var authService: AuthApiService? = null
+    private var musicService: MusicApiService? = null
 
-    fun getInstance(tokenStorage: TokenStorage): AuthApiService {
-        return apiService ?: synchronized(this) {
-            val logging = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
-            }
+    private fun getRetrofit(tokenStorage: TokenStorage): Retrofit {
+        val logging = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
 
-            val client = OkHttpClient.Builder()
-                .addInterceptor(logging)
-                .addInterceptor(AuthInterceptor(tokenStorage))
-                .build()
+        val client = OkHttpClient.Builder()
+            .addInterceptor(logging)
+            .addInterceptor(AuthInterceptor(tokenStorage))
+            .build()
 
-            Retrofit.Builder()
-                .baseUrl(BASE_URL)
-                .addConverterFactory(GsonConverterFactory.create())
-                .client(client)
-                .build()
-                .create(AuthApiService::class.java)
-                .also { apiService = it }
+        return Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .client(client)
+            .build()
+    }
+
+    fun getAuthService(tokenStorage: TokenStorage): AuthApiService {
+        return authService ?: synchronized(this) {
+            getRetrofit(tokenStorage).create(AuthApiService::class.java).also { authService = it }
         }
     }
+
+    fun getMusicService(tokenStorage: TokenStorage): MusicApiService {
+        return musicService ?: synchronized(this) {
+            getRetrofit(tokenStorage).create(MusicApiService::class.java).also { musicService = it }
+        }
+    }
+
+    // Keep old method for compatibility if needed, but updated to use new naming
+    fun getInstance(tokenStorage: TokenStorage): AuthApiService = getAuthService(tokenStorage)
 }

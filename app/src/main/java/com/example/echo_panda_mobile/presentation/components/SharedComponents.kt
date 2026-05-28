@@ -28,6 +28,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.example.echo_panda_mobile.data.model.*
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.theme.LocalAppLanguage
@@ -257,25 +259,75 @@ fun SectionHeader(
 }
 
 @Composable
-fun ArtPlaceholder(colors: List<Color>, modifier: Modifier = Modifier, overlayText: String? = null) {
+fun ArtPlaceholder(
+    colors: List<Color>,
+    imageUrl: String? = null,
+    modifier: Modifier = Modifier,
+    overlayText: String? = null
+) {
     Box(
-        modifier = modifier.background(Brush.linearGradient(if (colors.size >= 2) colors else listOf(colors.first(), colors.first()))),
+        modifier = modifier.background(
+            Brush.linearGradient(
+                if (colors.size >= 2) colors else listOf(colors.firstOrNull() ?: Color(0xFF2C2C3A), colors.firstOrNull() ?: Color(0xFF1A1A26))
+            )
+        ),
         contentAlignment = Alignment.BottomStart
     ) {
+        if (!imageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+        
         Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)))))
+        
         if (overlayText != null) {
-            Text(text = overlayText, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(8.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-        } else {
-            Icon(Icons.Default.MusicNote, null, tint = Color.White.copy(alpha = 0.2f), modifier = Modifier.size(28.dp).align(Alignment.Center))
+            Text(
+                text = overlayText,
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(8.dp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        } else if (imageUrl.isNullOrBlank()) {
+            Icon(
+                Icons.Default.MusicNote,
+                null,
+                tint = Color.White.copy(alpha = 0.2f),
+                modifier = Modifier.size(28.dp).align(Alignment.Center)
+            )
         }
     }
 }
 
 @Composable
-fun SquareArtCard(colors: List<Color>, modifier: Modifier = Modifier, overlayText: String? = null, size: Dp = 110.dp, cornerRadius: Dp = 12.dp, onClick: () -> Unit = {}) {
+fun SquareArtCard(
+    colors: List<Color>,
+    imageUrl: String? = null,
+    modifier: Modifier = Modifier,
+    overlayText: String? = null,
+    size: Dp = 110.dp,
+    cornerRadius: Dp = 12.dp,
+    onClick: () -> Unit = {}
+) {
     val sizeMod = if (size != Dp.Unspecified) Modifier.size(size) else Modifier.fillMaxWidth().aspectRatio(1f)
-    Box(modifier = modifier.then(sizeMod).clip(RoundedCornerShape(cornerRadius)).clickable { onClick() }) {
-        ArtPlaceholder(colors = colors, overlayText = overlayText, modifier = Modifier.fillMaxSize())
+    Box(
+        modifier = modifier
+            .then(sizeMod)
+            .clip(RoundedCornerShape(cornerRadius))
+            .clickable { onClick() }
+    ) {
+        ArtPlaceholder(
+            colors = colors,
+            imageUrl = imageUrl,
+            overlayText = overlayText,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 
@@ -283,8 +335,19 @@ fun SquareArtCard(colors: List<Color>, modifier: Modifier = Modifier, overlayTex
 fun ArtistCircleCard(artist: Artist, modifier: Modifier = Modifier, size: Dp = 76.dp, onClick: () -> Unit = {}) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier.width(size).clickable { onClick() }) {
         Box(modifier = Modifier.size(size).clip(CircleShape)) {
-            ArtPlaceholder(colors = artist.placeholderColors, modifier = Modifier.fillMaxSize())
-            Icon(Icons.Default.Person, null, tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(size * 0.5f).align(Alignment.Center))
+            ArtPlaceholder(
+                colors = artist.placeholderColors,
+                imageUrl = artist.imageUrl,
+                modifier = Modifier.fillMaxSize()
+            )
+            if (artist.imageUrl.isNullOrBlank()) {
+                Icon(
+                    Icons.Default.Person,
+                    null,
+                    tint = Color.White.copy(alpha = 0.3f),
+                    modifier = Modifier.size(size * 0.5f).align(Alignment.Center)
+                )
+            }
         }
         Spacer(Modifier.height(6.dp))
         Text(text = artist.name, color = Color.White, fontSize = 12.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
@@ -295,7 +358,12 @@ fun ArtistCircleCard(artist: Artist, modifier: Modifier = Modifier, size: Dp = 7
 fun AlbumCard(album: Album, modifier: Modifier = Modifier, width: Dp = 110.dp, onClick: () -> Unit = {}) {
     val finalMod = if (width != Dp.Unspecified) modifier.width(width) else modifier
     Column(modifier = finalMod.clickable { onClick() }) {
-        SquareArtCard(colors = album.placeholderColors, modifier = Modifier.fillMaxWidth(), size = width)
+        SquareArtCard(
+            colors = album.placeholderColors,
+            imageUrl = album.imageUrl,
+            modifier = Modifier.fillMaxWidth(),
+            size = width
+        )
         Spacer(Modifier.height(8.dp))
         Text(text = album.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(text = album.artist, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -306,7 +374,12 @@ fun AlbumCard(album: Album, modifier: Modifier = Modifier, width: Dp = 110.dp, o
 fun AlbumListRow(album: Album, modifier: Modifier = Modifier, onClick: () -> Unit = {}, onAddToFavorites: (() -> Unit)? = null, onAddToPlaylist: (() -> Unit)? = null) {
     var showMenu by remember { mutableStateOf(false) }
     Row(modifier = modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        SquareArtCard(colors = album.placeholderColors, size = 64.dp, cornerRadius = 8.dp)
+        SquareArtCard(
+            colors = album.placeholderColors,
+            imageUrl = album.imageUrl,
+            size = 64.dp,
+            cornerRadius = 8.dp
+        )
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(text = album.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -330,7 +403,12 @@ fun SongRow(index: Int, track: Track, isPlaying: Boolean = false, onClick: () ->
             if (isPlaying) Icon(Icons.Default.Pause, null, tint = Color.White, modifier = Modifier.size(16.dp))
             else Text(text = (index + 1).toString(), color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
         }
-        SquareArtCard(colors = track.placeholderColors, size = 48.dp, cornerRadius = 4.dp)
+        SquareArtCard(
+            colors = track.placeholderColors,
+            imageUrl = track.imageUrl,
+            size = 48.dp,
+            cornerRadius = 4.dp
+        )
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(text = track.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
@@ -354,7 +432,12 @@ fun MiniPlayer(track: Track, isPlaying: Boolean, progress: Float, onTogglePlay: 
     Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF121212).copy(alpha = 0.95f)).clickable { onClick() }) {
         LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(2.dp), color = Color.White, trackColor = Color.White.copy(alpha = 0.2f))
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            SquareArtCard(colors = track.placeholderColors, size = 40.dp, cornerRadius = 4.dp)
+            SquareArtCard(
+                colors = track.placeholderColors,
+                imageUrl = track.imageUrl,
+                size = 40.dp,
+                cornerRadius = 4.dp
+            )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = track.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -368,10 +451,15 @@ fun MiniPlayer(track: Track, isPlaying: Boolean, progress: Float, onTogglePlay: 
 }
 
 @Composable
-fun LabeledArtCard(title: String, subLabel: String, colors: List<Color>, modifier: Modifier = Modifier, size: Dp = 110.dp, onClick: () -> Unit = {}) {
+fun LabeledArtCard(title: String, subLabel: String, colors: List<Color>, imageUrl: String? = null, modifier: Modifier = Modifier, size: Dp = 110.dp, onClick: () -> Unit = {}) {
     val finalMod = if (size != Dp.Unspecified) modifier.width(size) else modifier
     Column(modifier = finalMod.clickable { onClick() }) {
-        SquareArtCard(colors = colors, modifier = Modifier.fillMaxWidth(), size = size)
+        SquareArtCard(
+            colors = colors,
+            imageUrl = imageUrl,
+            modifier = Modifier.fillMaxWidth(),
+            size = size
+        )
         Spacer(Modifier.height(10.dp))
         Text(text = title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         Text(text = subLabel, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
@@ -393,11 +481,31 @@ fun ErrorState(message: String, onRetry: () -> Unit) {
 
 @Composable
 fun RecentPlaylistCard(playlist: Playlist, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
-    Row(modifier = modifier.height(56.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF121A26)).clickable { onClick() }, verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = modifier
+            .height(56.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF121A26))
+            .clickable { onClick() },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Box(modifier = Modifier.size(56.dp).background(Color(0xFF1E2736))) {
-            ArtPlaceholder(colors = playlist.placeholderColors, overlayText = playlist.labelOverlay, modifier = Modifier.fillMaxSize())
+            ArtPlaceholder(
+                colors = playlist.placeholderColors,
+                imageUrl = playlist.imageUrl,
+                overlayText = playlist.labelOverlay,
+                modifier = Modifier.fillMaxSize()
+            )
         }
-        Text(text = playlist.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
+        Text(
+            text = playlist.title,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 12.dp)
+        )
     }
 }
 
@@ -416,7 +524,13 @@ fun FeaturedArtistCard(featured: FeaturedArtist, onListenNow: () -> Unit = {}, o
                 }
             }
             Spacer(Modifier.width(12.dp))
-            Box(modifier = Modifier.weight(0.8f).aspectRatio(1f).clip(RoundedCornerShape(12.dp))) { ArtPlaceholder(colors = featured.artist.placeholderColors, modifier = Modifier.fillMaxSize()) }
+            Box(modifier = Modifier.weight(0.8f).aspectRatio(1f).clip(RoundedCornerShape(12.dp))) {
+                ArtPlaceholder(
+                    colors = featured.artist.placeholderColors,
+                    imageUrl = featured.artist.imageUrl,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     }
 }

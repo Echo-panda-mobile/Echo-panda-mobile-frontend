@@ -1,11 +1,14 @@
 package com.example.echo_panda_mobile.presentation.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.*
+import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.MusicRepository
 import com.example.echo_panda_mobile.data.repository.MusicResult
+import com.example.echo_panda_mobile.data.repository.TokenStorage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,10 +30,10 @@ data class HomeUiState(
     val errorMessage: String?              = null
 )
 
-class HomeViewModel(
-    private val musicRepository: MusicRepository = MusicRepository(),
-    private val authRepository: AuthRepository = AuthRepository()
-) : ViewModel() {
+class HomeViewModel(application: Application) : AndroidViewModel(application) {
+    private val tokenStorage = TokenStorage(application)
+    private val musicRepository = MusicRepository(RetrofitClient.getMusicService(tokenStorage))
+    private val authRepository = AuthRepository()
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -54,11 +57,11 @@ class HomeViewModel(
                 val featuredDef   = async { musicRepository.getFeaturedArtist() }
                 val recentListenDef = async { musicRepository.getRecentListening() }
                 
-                val recent        = (recentDef.await()       as? MusicResult.Success)?.data ?: emptyList()
-                val artists       = (artistsDef.await()      as? MusicResult.Success)?.data ?: emptyList()
-                val albums        = (albumsDef.await()       as? MusicResult.Success)?.data ?: emptyList()
-                val featured      = (featuredDef.await()     as? MusicResult.Success)?.data
-                val recentListen  = (recentListenDef.await() as? MusicResult.Success)?.data ?: emptyList()
+                val recent        = (recentDef.await()       as? MusicResult.Success<*>?)?.data as? List<Playlist> ?: emptyList()
+                val artists       = (artistsDef.await()      as? MusicResult.Success<*>?)?.data as? List<Artist>   ?: emptyList()
+                val albums        = (albumsDef.await()       as? MusicResult.Success<*>?)?.data as? List<Album>    ?: emptyList()
+                val featured      = (featuredDef.await()     as? MusicResult.Success<*>?)?.data as? FeaturedArtist
+                val recentListen  = (recentListenDef.await() as? MusicResult.Success<*>?)?.data as? List<Playlist> ?: emptyList()
 
                 _uiState.update { 
                     it.copy(

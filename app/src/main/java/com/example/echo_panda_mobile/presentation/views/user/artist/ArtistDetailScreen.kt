@@ -20,12 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.echo_panda_mobile.data.model.*
 import com.example.echo_panda_mobile.presentation.components.*
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
@@ -129,15 +131,36 @@ private fun ArtistHeader(
             .fillMaxWidth()
             .height(340.dp)
     ) {
-        // Background with image-like gradient
+        // Background with image or gradient
+        if (!artist.imageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = artist.imageUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(headerColor, Color(0xFF05070D)),
+                            startY = 0f,
+                            endY = 1200f
+                        )
+                    )
+            )
+        }
+
+        // Overlay Gradient for text readability
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(headerColor, Color(0xFF05070D)),
-                        startY = 0f,
-                        endY = 1200f
+                        colors = listOf(Color.Transparent, Color(0xFF05070D).copy(alpha = 0.8f)),
+                        startY = 400f
                     )
                 )
         )
@@ -290,6 +313,7 @@ private fun PopularTrackItem(
         
         SquareArtCard(
             colors = track.placeholderColors,
+            imageUrl = track.imageUrl,
             size = 52.dp,
             cornerRadius = 4.dp
         )
