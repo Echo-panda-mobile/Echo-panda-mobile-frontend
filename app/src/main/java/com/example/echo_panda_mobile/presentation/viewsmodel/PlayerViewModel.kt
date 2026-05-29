@@ -3,7 +3,6 @@ package com.example.echo_panda_mobile.presentation.viewsmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.echo_panda_mobile.data.model.Playlist
 import com.example.echo_panda_mobile.data.model.Track
 import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.repository.MusicRepository
@@ -21,8 +20,6 @@ data class PlayerUiState(
     val errorMessage: String? = null,
     val isPlaying: Boolean = false,
     val progress: Float = 0f,
-    val showPlaylistDialog: Boolean = false,
-    val userPlaylists: List<Playlist> = emptyList(),
     val streamUrl: String? = null,
     val streamExpiresAt: Long = 0,
     val currentPositionMs: Long = 0,
@@ -58,17 +55,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun loadTrack(trackId: String) {
-        android.util.Log.d("PlayerViewModel", "loadTrack called with ID: $trackId")
+    fun loadTrack(trackId: String, resumePositionMs: Long? = null) {
+        android.util.Log.d("PlayerViewModel", "loadTrack called with ID: $trackId, resume: $resumePositionMs")
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             
             // 1. Get track metadata
-            android.util.Log.d("PlayerViewModel", "Fetching metadata for $trackId")
             val trackResult = musicRepository.getTrackById(trackId)
-            android.util.Log.d("PlayerViewModel", "Metadata result: $trackResult")
             if (trackResult is MusicResult.Success) {
                 val track = trackResult.data
+                // Use provided resume point if available, otherwise check if metadata has one
+                val resumeAt = resumePositionMs ?: track.resumePositionMs ?: 0L
+                
                 _uiState.update { it.copy(track = track) }
                 
                 // 2. Get stream ticket
@@ -83,8 +81,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                             streamExpiresAt = System.currentTimeMillis() + ((ticket.expiresInSeconds ?: 300) * 1000)
                         ) }
                         
-                        // Start playing automatically
-                        playerManager.play(audioUrl, track.title, track.artist)
+                        // Start playing automatically with resume point
+                        playerManager.play(audioUrl, track.title, track.artist, resumeAt)
                         
                         // 3. Add to listen history
                         musicRepository.addToListenHistory(trackId)
@@ -148,7 +146,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             _uiState.update { it.copy(track = currentTrack.copy(isFavorite = !currentTrack.isFavorite)) }
             
             // Call repository
-            val result = musicRepository.toggleFavorite(currentTrack.id)
+            val result = musicRepository.toggleFavorite(currentTrack.id, currentTrack.isFavorite)
             if (result is MusicResult.Error) {
                 // Rollback if error
                 _uiState.update { it.copy(track = currentTrack) }
@@ -168,27 +166,4 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun openPlaylistDialog() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(showPlaylistDialog = true) }
-            val playlists = musicRepository.getRecentPlaylists()
-            if (playlists is MusicResult.Success) {
-                _uiState.update { it.copy(userPlaylists = playlists.data) }
-            }
-        }
-    }
-
-    fun closePlaylistDialog() {
-        _uiState.update { it.copy(showPlaylistDialog = false) }
-    }
-
-    fun addToPlaylist(playlistId: String) {
-        val currentTrack = _uiState.value.track ?: return
-        viewModelScope.launch {
-            val result = musicRepository.addToPlaylist(currentTrack.id, playlistId)
-            if (result is MusicResult.Success) {
-                closePlaylistDialog()
-            }
-        }
-    }
 }

@@ -1,8 +1,13 @@
 package com.example.echo_panda_mobile.data.remote
 
+import com.google.gson.JsonDeserializationContext
+import com.google.gson.JsonDeserializer
+import com.google.gson.JsonElement
+import com.google.gson.annotations.JsonAdapter
 import com.google.gson.annotations.SerializedName
 import retrofit2.Response
 import retrofit2.http.*
+import java.lang.reflect.Type
 
 // ─── Base Response Wrapper ──────────────────────────────────────────────────
 
@@ -64,10 +69,48 @@ data class StreamTicketResponse(
 
 // ─── Album DTOs ───────────────────────────────────────────────────────────────
 
+/** API may return artist as a string (lists) or nested object (album detail). */
+data class AlbumArtistField(
+    val id: String? = null,
+    val name: String = "Unknown"
+)
+
+class AlbumArtistFieldAdapter : JsonDeserializer<AlbumArtistField> {
+    override fun deserialize(
+        json: JsonElement?,
+        typeOfT: Type?,
+        context: JsonDeserializationContext?
+    ): AlbumArtistField {
+        if (json == null || json.isJsonNull) return AlbumArtistField()
+        return when {
+            json.isJsonPrimitive -> AlbumArtistField(name = json.asString)
+            json.isJsonObject -> {
+                val obj = json.asJsonObject
+                val idElement = obj.get("id")
+                val id = when {
+                    idElement == null || idElement.isJsonNull -> null
+                    idElement.isJsonPrimitive -> {
+                        val prim = idElement.asJsonPrimitive
+                        if (prim.isNumber) prim.asNumber.toString() else prim.asString
+                    }
+                    else -> null
+                }
+                val name = obj.get("name")?.takeIf { !it.isJsonNull }?.asString
+                    ?: obj.get("artist_name")?.takeIf { !it.isJsonNull }?.asString
+                    ?: "Unknown"
+                AlbumArtistField(id = id, name = name)
+            }
+            else -> AlbumArtistField()
+        }
+    }
+}
+
 data class AlbumDto(
     @SerializedName("id") val id: String,
     @SerializedName("title") val title: String,
-    @SerializedName("artist") val artist: String,
+    @SerializedName("artist")
+    @JsonAdapter(AlbumArtistFieldAdapter::class)
+    val artist: AlbumArtistField? = null,
     @SerializedName("release_date") val releaseDate: String? = null,
     @SerializedName("description") val description: String? = null,
     @SerializedName("cover_url") val coverUrl: String? = null
@@ -76,14 +119,65 @@ data class AlbumDto(
 // ─── Song DTOs ────────────────────────────────────────────────────────────────
 
 data class SongDto(
-    @SerializedName("id") val id: Int,
-    @SerializedName("title") val title: String,
-    @SerializedName("artist_name") val artistName: String?,
-    @SerializedName("duration") val durationSeconds: Int,
-    @SerializedName("track_number") val trackNumber: Int,
-    @SerializedName("album_id") val albumId: Int?,
+    @SerializedName("id") val id: Int? = null,
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("artist_name") val artistName: String? = null,
+    @SerializedName("duration") val durationSeconds: Int? = null,
+    @SerializedName("track_number") val trackNumber: Int? = null,
+    @SerializedName("album_id") val albumId: Int? = null,
     @SerializedName("cover_url") val coverUrl: String? = null,
-    @SerializedName("album") val album: AlbumDto? = null
+    @SerializedName("album") val album: AlbumDto? = null,
+    @SerializedName("is_favorited") val isFavorite: Boolean? = null
+)
+
+/** Favorites may return a flat song or `{ "song": { ... } }` — this DTO handles both. */
+data class FavoriteItemDto(
+    @SerializedName("song") val song: SongDto? = null,
+    @SerializedName("song_id") val songId: Int? = null,
+    @SerializedName("id") val id: Int? = null,
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("artist_name") val artistName: String? = null,
+    @SerializedName("duration") val durationSeconds: Int? = null,
+    @SerializedName("track_number") val trackNumber: Int? = null,
+    @SerializedName("album_id") val albumId: Int? = null,
+    @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("album") val album: AlbumDto? = null,
+    @SerializedName("is_favorited") val isFavorite: Boolean? = null
+)
+
+// Playlist DTOs
+data class PlaylistDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("name") val name: String?,
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("label") val label: String? = null
+)
+
+data class CreatePlaylistRequest(
+    @SerializedName("name") val name: String
+)
+
+data class AddSongToPlaylistRequest(
+    @SerializedName("song_id") val songId: Int
+)
+
+data class ListenHistoryDto(
+    @SerializedName("id") val id: Int,
+    @SerializedName("song_id") val songId: Int,
+    @SerializedName("song") val song: SongDto,
+    @SerializedName("duration_listened") val durationListened: Int? = null,
+    @SerializedName("completed") val completed: Boolean? = null,
+    @SerializedName("created_at") val createdAt: String? = null
+)
+
+data class PlayHistoryDto(
+    @SerializedName("id") val id: Int,
+    @SerializedName("song_id") val songId: Int,
+    @SerializedName("progress_seconds") val progressSeconds: Int,
+    @SerializedName("song") val song: SongDto
 )
 
 // ─── Service Interface ────────────────────────────────────────────────────────
@@ -141,8 +235,50 @@ interface MusicApiService {
         @Path("id") songId: String
     ): Response<StreamTicketResponse>
 
+    @GET("playback/recent")
+    suspend fun getRecentlyPlayed(): Response<BaseResponse<List<SongDto>>>
+
+    @GET("favorites")
+    suspend fun getFavorites(): Response<PaginatedResponse<FavoriteItemDto>>
+
+    @GET("playlists/{playlist}/songs")
+    suspend fun getPlaylistSongs(
+        @Path("playlist") playlistId: String,
+        @Query("per_page") perPage: Int? = null
+    ): Response<PaginatedResponse<SongDto>>
+
+    // Playlists endpoints
+    @GET("playlists")
+    suspend fun getPlaylists(
+        @Query("per_page") perPage: Int? = null
+    ): Response<PaginatedResponse<PlaylistDto>>
+
+    @POST("playlists")
+    suspend fun createPlaylist(
+        @Body request: CreatePlaylistRequest
+    ): Response<BaseResponse<PlaylistDto>>
+
+    @POST("playlists/{playlist}/songs")
+    suspend fun addSongToPlaylist(
+        @Path("playlist") playlistId: String,
+        @Body request: AddSongToPlaylistRequest
+    ): Response<Unit>
+
+    @GET("playback/continue")
+    suspend fun getContinueListening(): Response<BaseResponse<List<PlayHistoryDto>>>
+
+    @GET("listen-history")
+    suspend fun getListenHistory(
+        @Query("per_page") perPage: Int? = null
+    ): Response<PaginatedResponse<ListenHistoryDto>>
+
     @POST("favorites/songs")
     suspend fun toggleFavorite(
+        @Body request: CheckFavoriteRequest
+    ): Response<Unit>
+
+    @POST("favorites/songs/remove")
+    suspend fun removeFavorite(
         @Body request: CheckFavoriteRequest
     ): Response<Unit>
 

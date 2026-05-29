@@ -76,6 +76,20 @@ object LibraryRepository {
         _playlists.value = _playlists.value.toList()
     }
 
+    /**
+     * Upsert a playlist from server into the local state. If the playlist already exists (by id)
+     * it will be replaced, otherwise appended.
+     */
+    fun addOrUpdatePlaylist(playlist: Playlist) {
+        val existing = _playlists.value.indexOfFirst { it.id == playlist.id }
+        _playlists.value = if (existing >= 0) {
+            _playlists.value.toMutableList().also { it[existing] = playlist }
+        } else {
+            _playlists.value + playlist
+        }
+        playlistTracks.putIfAbsent(playlist.id, mutableSetOf())
+    }
+
     fun getPlaylistTrackCount(playlistId: String): Int {
         return playlistTracks[playlistId]?.size ?: 0
     }

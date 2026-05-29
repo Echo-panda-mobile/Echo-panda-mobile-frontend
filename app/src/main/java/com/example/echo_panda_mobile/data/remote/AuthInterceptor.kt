@@ -14,6 +14,7 @@ class AuthInterceptor(private val tokenStorage: TokenStorage) : Interceptor {
         val isS3 = url.contains("amazonaws.com")
         
         val newRequestBuilder = request.newBuilder()
+            .addHeader("Accept", "application/json")
         
         if (isS3) {
             newRequestBuilder.removeHeader("Authorization")

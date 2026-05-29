@@ -1,10 +1,14 @@
 package com.example.echo_panda_mobile.presentation.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.Album
+import com.example.echo_panda_mobile.data.model.Track
+import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.repository.MusicRepository
 import com.example.echo_panda_mobile.data.repository.MusicResult
+import com.example.echo_panda_mobile.data.repository.TokenStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,9 +21,9 @@ data class AlbumDetailUiState(
     val errorMessage: String? = null
 )
 
-class AlbumDetailViewModel(
-    private val musicRepository: MusicRepository = MusicRepository()
-) : ViewModel() {
+class AlbumDetailViewModel(application: Application) : AndroidViewModel(application) {
+    private val tokenStorage = TokenStorage(application)
+    private val musicRepository = MusicRepository(RetrofitClient.getMusicService(tokenStorage))
 
     private val _uiState = MutableStateFlow(AlbumDetailUiState())
     val uiState: StateFlow<AlbumDetailUiState> = _uiState.asStateFlow()
@@ -38,6 +42,28 @@ class AlbumDetailViewModel(
                     _uiState.update { it.copy(isLoading = false) }
                 }
             }
+        }
+    }
+
+    fun toggleFavorite(track: Track) {
+        val wasFavorite = track.isFavorite
+        updateTrackFavorite(track.id, !wasFavorite)
+        viewModelScope.launch {
+            val result = musicRepository.toggleFavorite(track.id, wasFavorite)
+            if (result is MusicResult.Error) {
+                updateTrackFavorite(track.id, wasFavorite)
+            }
+        }
+    }
+
+    private fun updateTrackFavorite(trackId: String, isFavorite: Boolean) {
+        _uiState.update { state ->
+            val updatedAlbum = state.album?.copy(
+                tracks = state.album.tracks.map {
+                    if (it.id == trackId) it.copy(isFavorite = isFavorite) else it
+                }
+            )
+            state.copy(album = updatedAlbum)
         }
     }
 }

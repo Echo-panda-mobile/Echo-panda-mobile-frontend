@@ -47,7 +47,7 @@ class ArtistDetailViewModel(application: Application) : AndroidViewModel(applica
             
             if (artistResult is MusicResult.Success) {
                 val artist = artistResult.data
-                
+
                 // 2. Load albums and songs for this artist in parallel
                 val albumsDef = async { musicRepository.getArtistAlbums(artist.name) }
                 val tracksDef = async { musicRepository.getArtistSongs(artist.name) }
@@ -90,11 +90,31 @@ class ArtistDetailViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    fun addToFavorites(track: Track) {
-        LibraryRepository.addTrackToFavorites(track)
+    fun toggleFavorite(track: Track) {
+        val wasFavorite = track.isFavorite
+        updateTrackFavorite(track.id, !wasFavorite)
+        viewModelScope.launch {
+            val result = musicRepository.toggleFavorite(track.id, wasFavorite)
+            if (result is MusicResult.Success && !wasFavorite) {
+                LibraryRepository.addTrackToFavorites(track.copy(isFavorite = true))
+            }
+            if (result is MusicResult.Error) {
+                updateTrackFavorite(track.id, wasFavorite)
+            }
+        }
     }
 
-    fun addToPlaylist(track: Track, playlistId: String) {
-        LibraryRepository.addTrackToPlaylist(track, playlistId)
+    private fun updateTrackFavorite(trackId: String, isFavorite: Boolean) {
+        _uiState.update { state ->
+            state.copy(
+                popularTracks = state.popularTracks.map {
+                    if (it.id == trackId) it.copy(isFavorite = isFavorite) else it
+                },
+                singles = state.singles.map {
+                    if (it.id == trackId) it.copy(isFavorite = isFavorite) else it
+                }
+            )
+        }
     }
+
 }

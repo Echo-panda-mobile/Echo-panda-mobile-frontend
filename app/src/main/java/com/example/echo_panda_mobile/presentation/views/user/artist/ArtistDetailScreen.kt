@@ -39,7 +39,7 @@ fun ArtistDetailScreen(
     artistId: String,
     onBack: () -> Unit,
     onNavigateToAlbum: (String) -> Unit,
-    onNavigateToPlayer: (String) -> Unit,
+    onNavigateToPlayer: (String, Long?) -> Unit,
     onNavigateToDashboard: () -> Unit = {},
     viewModel: ArtistDetailViewModel = viewModel()
 ) {
@@ -84,13 +84,7 @@ fun ArtistDetailScreen(
                     onToggleFollow = { viewModel.toggleFollow() },
                     onTrackClick = onNavigateToPlayer,
                     onAddToFavorites = { track ->
-                        viewModel.addToFavorites(track)
-                        scope.launch { snackbarHostState.showSnackbar("Added ${track.title} to Liked Songs") }
-                    },
-                    onAddToPlaylist = { track ->
-                        // Simplified: assuming we have a main playlist
-                        viewModel.addToPlaylist(track, "p1")
-                        scope.launch { snackbarHostState.showSnackbar("Added ${track.title} to Playlist") }
+                        viewModel.toggleFavorite(track)
                     },
                     onDashboardClick = onNavigateToDashboard
                 )
@@ -203,9 +197,8 @@ private fun ArtistHeader(
 private fun PopularSection(
     state: com.example.echo_panda_mobile.presentation.viewsmodel.ArtistDetailUiState,
     onToggleFollow: () -> Unit,
-    onTrackClick: (String) -> Unit,
+    onTrackClick: (String, Long?) -> Unit,
     onAddToFavorites: (Track) -> Unit,
-    onAddToPlaylist: (Track) -> Unit,
     onDashboardClick: () -> Unit
 ) {
     val isArtistRole = state.currentUser?.role?.lowercase() == "artist"
@@ -287,9 +280,8 @@ private fun PopularSection(
             PopularTrackItem(
                 index = index + 1,
                 track = track,
-                onClick = { onTrackClick(track.id) },
-                onFavorite = { onAddToFavorites(track) },
-                onPlaylist = { onAddToPlaylist(track) }
+                onClick = { onTrackClick(track.id, track.resumePositionMs) },
+                onFavorite = { onAddToFavorites(track) }
             )
         }
     }
@@ -300,10 +292,10 @@ private fun PopularTrackItem(
     index: Int,
     track: Track,
     onClick: () -> Unit,
-    onFavorite: () -> Unit,
-    onPlaylist: () -> Unit
+    onFavorite: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var showPlaylistPicker by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
@@ -345,6 +337,15 @@ private fun PopularTrackItem(
             )
         }
         
+        IconButton(onClick = onFavorite) {
+            Icon(
+                imageVector = if (track.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                contentDescription = "Favorite",
+                tint = if (track.isFavorite) Color.Red else Color.White.copy(alpha = 0.4f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
         Box {
             IconButton(onClick = { showMenu = true }) {
                 Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White.copy(alpha = 0.4f))
@@ -356,17 +357,35 @@ private fun PopularTrackItem(
                 modifier = Modifier.background(EchoPandaColors.BgCardDark)
             ) {
                 DropdownMenuItem(
-                    text = { Text("Add to Favorites", color = Color.White) },
+                    text = {
+                        Text(
+                            if (track.isFavorite) "Remove from Favorites" else "Add to Favorites",
+                            color = Color.White
+                        )
+                    },
                     onClick = { onFavorite(); showMenu = false },
-                    leadingIcon = { Icon(Icons.Default.Favorite, null, tint = EchoPandaColors.AccentBlue) }
+                    leadingIcon = {
+                        Icon(
+                            if (track.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            null,
+                            tint = if (track.isFavorite) Color.Red else EchoPandaColors.AccentBlue
+                        )
+                    }
                 )
                 DropdownMenuItem(
                     text = { Text("Add to Playlist", color = Color.White) },
-                    onClick = { onPlaylist(); showMenu = false },
+                    onClick = {
+                        showPlaylistPicker = true
+                        showMenu = false
+                    },
                     leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, null, tint = EchoPandaColors.AccentBlue) }
                 )
             }
         }
+    }
+
+    if (showPlaylistPicker) {
+        PlaylistPickerDialog(track = track, onDismiss = { showPlaylistPicker = false })
     }
 }
 
@@ -402,7 +421,7 @@ private fun ArtistAlbumsSection(
 @Composable
 private fun ArtistSinglesSection(
     singles: List<Track>,
-    onTrackClick: (String) -> Unit
+    onTrackClick: (String, Long?) -> Unit
 ) {
     Column {
         SectionHeader(
@@ -423,7 +442,7 @@ private fun ArtistSinglesSection(
                     colors = track.placeholderColors,
                     imageUrl = track.imageUrl,
                     size = 140.dp,
-                    onClick = { onTrackClick(track.id) }
+                    onClick = { onTrackClick(track.id, track.resumePositionMs) }
                 )
             }
         }

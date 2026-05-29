@@ -32,7 +32,7 @@ fun FavoritesScreen(
     selectedNav: Int = 3,
     onNavSelect: (Int) -> Unit = {},
     onBack: () -> Unit,
-    onNavigateToPlayer: (String) -> Unit,
+    onNavigateToPlayer: (String, Long?) -> Unit,
     viewModel: FavoritesViewModel = viewModel(),
     globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
@@ -78,6 +78,20 @@ fun FavoritesScreen(
                 Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
+            } else if (state.errorMessage != null && state.favoriteTracks.isEmpty()) {
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = state.errorMessage ?: "Could not load liked songs",
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+            } else if (state.favoriteTracks.isEmpty()) {
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "No liked songs yet",
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -89,7 +103,13 @@ fun FavoritesScreen(
                     item {
                         FavoritesHeaderSection(
                             songCount = state.favoriteTracks.size,
-                            themeColor = themeColor
+                            themeColor = themeColor,
+                            onPlayAll = {
+                                state.favoriteTracks.firstOrNull()?.let { track ->
+                                    globalPlayerViewModel.playTrack(track)
+                                    onNavigateToPlayer(track.id, track.resumePositionMs)
+                                }
+                            }
                         )
                     }
 
@@ -105,7 +125,10 @@ fun FavoritesScreen(
                             isPlaying = isPlaying,
                             onClick = { 
                                 globalPlayerViewModel.playTrack(track)
-                                onNavigateToPlayer(track.id) 
+                                onNavigateToPlayer(track.id, track.resumePositionMs)
+                            },
+                            onAddToFavorites = {
+                                viewModel.toggleFavorite(track)
                             }
                         )
                     }
@@ -162,7 +185,11 @@ private fun FavoritesTopBar(
 }
 
 @Composable
-private fun FavoritesHeaderSection(songCount: Int, themeColor: Color) {
+private fun FavoritesHeaderSection(
+    songCount: Int,
+    themeColor: Color,
+    onPlayAll: () -> Unit = {}
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -231,7 +258,8 @@ private fun FavoritesHeaderSection(songCount: Int, themeColor: Color) {
                         fontSize = 12.sp
                     )
                     IconButton(
-                        onClick = { /* TODO */ },
+                        onClick = onPlayAll,
+                        enabled = songCount > 0,
                         modifier = Modifier
                             .size(40.dp)
                             .background(Color.White.copy(alpha = 0.1f), CircleShape)

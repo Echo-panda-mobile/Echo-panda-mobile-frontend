@@ -12,6 +12,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class DiscoverUiState(
@@ -113,19 +114,30 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun toggleFavorite(track: Track) {
+        val wasFavorite = track.isFavorite
+        updateTrackFavorite(track.id, !wasFavorite)
         viewModelScope.launch {
-            val result = repository.toggleFavorite(track.id)
-            if (result is MusicResult.Success) {
-                // Update local state to reflect change immediately
-                _uiState.value = _uiState.value.copy(
-                    newReleases = _uiState.value.newReleases.map { 
-                        if (it.id == track.id) it.copy(isFavorite = !it.isFavorite) else it 
-                    },
-                    mostPlayedSongs = _uiState.value.mostPlayedSongs.map { 
-                        if (it.id == track.id) it.copy(isFavorite = !it.isFavorite) else it 
-                    }
-                )
+            val result = repository.toggleFavorite(track.id, wasFavorite)
+            if (result is MusicResult.Error) {
+                android.util.Log.e("DiscoverViewModel", "Toggle favorite error: ${result.message}")
+                updateTrackFavorite(track.id, wasFavorite)
             }
+        }
+    }
+
+    private fun updateTrackFavorite(trackId: String, isFavorite: Boolean) {
+        _uiState.update { state ->
+            state.copy(
+                newReleases = state.newReleases.map {
+                    if (it.id == trackId) it.copy(isFavorite = isFavorite) else it
+                },
+                mostPlayedSongs = state.mostPlayedSongs.map {
+                    if (it.id == trackId) it.copy(isFavorite = isFavorite) else it
+                }
+            )
+        }
+        allReleases = allReleases.map {
+            if (it.id == trackId) it.copy(isFavorite = isFavorite) else it
         }
     }
 

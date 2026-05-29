@@ -33,7 +33,8 @@ data class Track(
     val placeholderColors: List<Color> = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26)),
     val lyrics: String? = null,
     val isFavorite: Boolean = false,
-    val isDownloaded: Boolean = false
+    val isDownloaded: Boolean = false,
+    val resumePositionMs: Long? = null
 )
 
 data class Playlist(
@@ -41,7 +42,8 @@ data class Playlist(
     val title: String,
     val imageUrl: String? = null,
     val labelOverlay: String? = null,          // text shown on top of image
-    val placeholderColors: List<Color> = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26))
+    val placeholderColors: List<Color> = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26)),
+    val resumePositionMs: Long? = null
 )
 
 data class Genre(

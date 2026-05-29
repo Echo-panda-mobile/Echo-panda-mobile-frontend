@@ -5,8 +5,6 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.echo_panda_mobile.presentation.components.PlaylistPickerDialog
 import com.example.echo_panda_mobile.presentation.components.SquareArtCard
 import com.example.echo_panda_mobile.presentation.viewsmodel.PlayerViewModel
 import com.example.echo_panda_mobile.presentation.components.ErrorState
@@ -35,6 +34,7 @@ import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 @Composable
 fun PlayerScreen(
     trackId: String,
+    resumePositionMs: Long? = null,
     onBack: () -> Unit,
     viewModel: PlayerViewModel = viewModel()
 ) {
@@ -42,31 +42,16 @@ fun PlayerScreen(
     val context = LocalContext.current
 
     LaunchedEffect(trackId) {
-        viewModel.loadTrack(trackId)
+        viewModel.loadTrack(trackId, resumePositionMs)
     }
 
     val track = state.track
+    var showPlaylistPicker by remember { mutableStateOf(false) }
 
-    if (state.showPlaylistDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.closePlaylistDialog() },
-            containerColor = EchoPandaColors.BgCardDark,
-            title = { Text("Add to Playlist", color = Color.White) },
-            text = {
-                LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
-                    items(state.userPlaylists) { playlist ->
-                        Text(
-                            text = playlist.title,
-                            color = Color.White,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.addToPlaylist(playlist.id) }
-                                .padding(vertical = 12.dp)
-                        )
-                    }
-                }
-            },
-            confirmButton = {}
+    if (showPlaylistPicker && track != null) {
+        PlaylistPickerDialog(
+            track = track,
+            onDismiss = { showPlaylistPicker = false }
         )
     }
 
@@ -245,7 +230,7 @@ fun PlayerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(onClick = { viewModel.openPlaylistDialog() }) {
+                    IconButton(onClick = { showPlaylistPicker = true }) {
                         Icon(Icons.Default.Add, contentDescription = "Add to Playlist", tint = Color.White.copy(alpha = 0.5f))
                     }
                     IconButton(onClick = { viewModel.downloadTrack() }) {

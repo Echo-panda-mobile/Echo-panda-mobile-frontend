@@ -31,7 +31,7 @@ fun DiscoverScreen(
     onNavSelect: (Int) -> Unit = {},
     onNavigateToArtist: (String) -> Unit = {},
     onNavigateToAlbum: (String) -> Unit = {},
-    onNavigateToSong: (String) -> Unit = {},
+    onNavigateToSong: (String, Long?) -> Unit = { _, _ -> },
     viewModel: DiscoverViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -161,9 +161,8 @@ fun DiscoverScreen(
                             state.newReleases.take(4).forEach { track ->
                                 SongCardHorizontal(
                                     track = track,
-                                    onClick = { onNavigateToSong(track.id) },
-                                    onFavoriteClick = { viewModel.toggleFavorite(track) },
-                                    onAddToPlaylistClick = { /* TODO: show playlist picker */ }
+                                    onClick = { onNavigateToSong(track.id, track.resumePositionMs) },
+                                    onFavoriteClick = { viewModel.toggleFavorite(track) }
                                 )
                             }
                         }
@@ -209,9 +208,8 @@ fun DiscoverScreen(
                             state.mostPlayedSongs.take(4).forEach { track ->
                                 SongCardHorizontal(
                                     track = track,
-                                    onClick = { onNavigateToSong(track.id) },
-                                    onFavoriteClick = { viewModel.toggleFavorite(track) },
-                                    onAddToPlaylistClick = { /* TODO: show playlist picker */ }
+                                    onClick = { onNavigateToSong(track.id, track.resumePositionMs) },
+                                    onFavoriteClick = { viewModel.toggleFavorite(track) }
                                 )
                             }
                         }

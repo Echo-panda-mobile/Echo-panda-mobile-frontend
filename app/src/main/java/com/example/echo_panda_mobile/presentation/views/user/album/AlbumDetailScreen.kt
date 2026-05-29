@@ -33,7 +33,7 @@ fun AlbumDetailScreen(
     selectedNav: Int = 2,
     onNavSelect: (Int) -> Unit = {},
     onBack: () -> Unit,
-    onNavigateToPlayer: (String) -> Unit,
+    onNavigateToPlayer: (String, Long?) -> Unit,
     viewModel: AlbumDetailViewModel = viewModel(),
     globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
@@ -80,6 +80,14 @@ fun AlbumDetailScreen(
                 Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
+            } else if (state.errorMessage != null) {
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = state.errorMessage ?: "Something went wrong",
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 14.sp
+                    )
+                }
             } else if (album != null) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -103,15 +111,10 @@ fun AlbumDetailScreen(
                             isPlaying = index == 0,
                             onClick = {
                                 globalPlayerViewModel.playTrack(track)
-                                onNavigateToPlayer(track.id)
+                                onNavigateToPlayer(track.id, track.resumePositionMs)
                             },
                             onAddToFavorites = {
-                                LibraryRepository.addTrackToFavorites(track)
-                            },
-                            onAddToPlaylist = {
-                                val playlistId = LibraryRepository.playlists.value.firstOrNull()?.id
-                                    ?: LibraryRepository.createPlaylist("My Playlist").id
-                                LibraryRepository.addTrackToPlaylist(track, playlistId)
+                                viewModel.toggleFavorite(track)
                             }
                         )
                     }

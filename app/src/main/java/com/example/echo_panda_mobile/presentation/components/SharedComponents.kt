@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -29,12 +30,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import coil.compose.AsyncImage
 import com.example.echo_panda_mobile.data.model.*
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.theme.LocalAppLanguage
 import com.example.echo_panda_mobile.presentation.navigation.Routes
-
+import com.example.echo_panda_mobile.data.repository.LibraryRepository
+import kotlinx.coroutines.launch
+import com.example.echo_panda_mobile.presentation.viewmodel.PlaylistSelectionViewModel
+import com.example.echo_panda_mobile.presentation.viewmodel.PlaylistSelectionUiState
+import androidx.lifecycle.viewmodel.compose.viewModel
 // ─── Navigation Components ──────────────────
 
 enum class BottomNavTab(val key: String, val icon: ImageVector, val index: Int) {
@@ -404,33 +411,97 @@ fun AlbumListRow(album: Album, modifier: Modifier = Modifier, onClick: () -> Uni
 }
 
 @Composable
-fun SongRow(index: Int, track: Track, isPlaying: Boolean = false, onClick: () -> Unit = {}, onAddToFavorites: (() -> Unit)? = null, onAddToPlaylist: (() -> Unit)? = null) {
+fun SongRow(index: Int, track: Track, isPlaying: Boolean = false, onClick: () -> Unit = {}, onAddToFavorites: (() -> Unit)? = null) {
     var showMenu by remember { mutableStateOf(false) }
-    Row(modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 10.dp, horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.width(32.dp)) {
-            if (isPlaying) Icon(Icons.Default.Pause, null, tint = Color.White, modifier = Modifier.size(16.dp))
-            else Text(text = (index + 1).toString(), color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
-        }
-        SquareArtCard(
-            colors = track.placeholderColors,
-            imageUrl = track.imageUrl,
-            size = 48.dp,
-            cornerRadius = 4.dp
-        )
-        Spacer(Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = track.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Text(text = track.artist, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
-        }
-        val mins = (track.durationMs / 1000) / 60
-        val secs = (track.durationMs / 1000) % 60
-        Text(text = String.format("%d:%02d", mins, secs), color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp))
-        Box {
-            IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, null, tint = Color.White.copy(alpha = 0.5f)) }
-            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }, modifier = Modifier.background(EchoPandaColors.BgCardDark)) {
-                if (onAddToFavorites != null) DropdownMenuItem(text = { Text("Add to Favorites", color = Color.White) }, onClick = { onAddToFavorites(); showMenu = false })
-                if (onAddToPlaylist != null) DropdownMenuItem(text = { Text("Add to Playlist", color = Color.White) }, onClick = { onAddToPlaylist(); showMenu = false })
+    var showPlaylistPicker by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp, horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Area 1: Playable Content (Artwork + Info)
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onClick() }
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.width(32.dp)) {
+                if (isPlaying) Icon(Icons.Default.Pause, null, tint = EchoPandaColors.AccentBlue, modifier = Modifier.size(16.dp))
+                else Text(text = (index + 1).toString(), color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
             }
+            SquareArtCard(
+                colors = track.placeholderColors,
+                imageUrl = track.imageUrl,
+                size = 48.dp,
+                cornerRadius = 4.dp
+            )
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = track.title, color = if (isPlaying) EchoPandaColors.AccentBlue else Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(text = track.artist, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+            }
+        }
+        
+        // Area 2: Action Buttons
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Favorite Button
+            IconButton(onClick = { onAddToFavorites?.invoke() }) {
+                Icon(
+                    imageVector = if (track.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Favorite",
+                    tint = if (track.isFavorite) Color.Red else Color.White.copy(alpha = 0.3f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            val mins = (track.durationMs / 1000) / 60
+            val secs = (track.durationMs / 1000) % 60
+            Text(
+                text = String.format(java.util.Locale.getDefault(), "%d:%02d", mins, secs),
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 13.sp,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+            
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Default.MoreVert, null, tint = Color.White.copy(alpha = 0.5f))
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier.background(EchoPandaColors.BgCardDark)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Add to Playlist", color = Color.White) },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, null, tint = Color.Gray) },
+                        onClick = {
+                            showPlaylistPicker = true
+                            showMenu = false
+                        }
+                    )
+                    if (onAddToFavorites != null) {
+                        DropdownMenuItem(
+                            text = { Text(if (track.isFavorite) "Remove from Favorites" else "Add to Favorites", color = Color.White) },
+                            leadingIcon = {
+                                Icon(
+                                    if (track.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    null,
+                                    tint = if (track.isFavorite) Color.Red else Color.Gray
+                                )
+                            },
+                            onClick = { onAddToFavorites(); showMenu = false }
+                        )
+                    }
+                }
+            }
+        }
+
+        if (showPlaylistPicker) {
+            PlaylistPickerDialog(track = track, onDismiss = { showPlaylistPicker = false })
         }
     }
 }
@@ -440,120 +511,261 @@ fun SongCardHorizontal(
     track: Track,
     isPlaying: Boolean = false,
     onClick: () -> Unit = {},
-    onFavoriteClick: () -> Unit = {},
-    onAddToPlaylistClick: () -> Unit = {}
+    onFavoriteClick: () -> Unit = {}
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var showPlaylistPicker by remember { mutableStateOf(false) }
     
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 8.dp, horizontal = 16.dp),
+            .padding(vertical = 4.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Status Icon (Play/Pause)
-        Icon(
-            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(18.dp)
-        )
-        
-        Spacer(Modifier.width(12.dp))
-        
-        // Artwork
-        SquareArtCard(
-            colors = track.placeholderColors,
-            imageUrl = track.imageUrl,
-            size = 52.dp,
-            cornerRadius = 8.dp,
-            onClick = onClick // Pass the click through to the image as well
-        )
-        
-        Spacer(Modifier.width(16.dp))
-        
-        // Info
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = track.title,
-                color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+        // Area 1: Playable Content
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onClick() }
+                .padding(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Status Icon (Play/Pause)
+            Icon(
+                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                contentDescription = null,
+                tint = if (isPlaying) EchoPandaColors.AccentBlue else Color.White,
+                modifier = Modifier.size(18.dp)
             )
-            Text(
-                text = track.artist,
-                color = Color.White.copy(alpha = 0.5f),
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+            
+            Spacer(Modifier.width(12.dp))
+            
+            // Artwork
+            SquareArtCard(
+                colors = track.placeholderColors,
+                imageUrl = track.imageUrl,
+                size = 52.dp,
+                cornerRadius = 8.dp
             )
+            
+            Spacer(Modifier.width(16.dp))
+            
+            // Info
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = track.title,
+                    color = if (isPlaying) EchoPandaColors.AccentBlue else Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = track.artist,
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
         
-        // Duration
-        val mins = (track.durationMs / 1000) / 60
-        val secs = (track.durationMs / 1000) % 60
-        Text(
-            text = String.format(java.util.Locale.getDefault(), "%d:%02d", mins, secs),
-            color = Color.White.copy(alpha = 0.4f),
-            fontSize = 13.sp,
-            modifier = Modifier.padding(horizontal = 12.dp)
-        )
-        
-        // Menu
-        Box {
-            IconButton(onClick = { showMenu = true }) {
+        // Area 2: Action Buttons
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Favorite Shortcut
+            IconButton(onClick = onFavoriteClick) {
                 Icon(
-                    imageVector = Icons.Default.MoreVert,
+                    imageVector = if (track.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.4f)
+                    tint = if (track.isFavorite) Color.Red else Color.White.copy(alpha = 0.3f),
+                    modifier = Modifier.size(20.dp)
                 )
             }
+
+            // Duration
+            val mins = (track.durationMs / 1000) / 60
+            val secs = (track.durationMs / 1000) % 60
+            Text(
+                text = String.format(java.util.Locale.getDefault(), "%d:%02d", mins, secs),
+                color = Color.White.copy(alpha = 0.4f),
+                fontSize = 13.sp,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
             
-            DropdownMenu(
-                expanded = showMenu,
-                onDismissRequest = { showMenu = false },
-                modifier = Modifier.background(EchoPandaColors.BgCardDark)
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Favorite", color = Color.White) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = if (track.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = null,
-                            tint = if (track.isFavorite) Color.Red else Color.Gray
-                        )
-                    },
-                    onClick = {
-                        onFavoriteClick()
-                        showMenu = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Add to Playlist", color = Color.White) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
-                            contentDescription = null,
-                            tint = Color.Gray
-                        )
-                    },
-                    onClick = {
-                        onAddToPlaylistClick()
-                        showMenu = false
-                    }
-                )
+            // Menu
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Options",
+                        tint = Color.White.copy(alpha = 0.4f)
+                    )
+                }
+                
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier.background(EchoPandaColors.BgCardDark)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(if (track.isFavorite) "Remove Favorite" else "Favorite", color = Color.White) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (track.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = null,
+                                tint = if (track.isFavorite) Color.Red else Color.Gray
+                            )
+                        },
+                        onClick = {
+                            onFavoriteClick()
+                            showMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Add to Playlist", color = Color.White) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
+                                contentDescription = null,
+                                tint = Color.Gray
+                            )
+                        },
+                        onClick = {
+                            showPlaylistPicker = true
+                            showMenu = false
+                        }
+                    )
+                }
             }
+        }
+
+        if (showPlaylistPicker) {
+            PlaylistPickerDialog(track = track, onDismiss = { showPlaylistPicker = false })
         }
     }
 }
 
 @Composable
+fun PlaylistPickerDialog(track: Track, onDismiss: () -> Unit) {
+    var newPlaylistName by remember { mutableStateOf("") }
+    val localPlaylists by LibraryRepository.playlists.collectAsState(initial = emptyList())
+    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val tokenStorage = remember { com.example.echo_panda_mobile.data.repository.TokenStorage(context) }
+    val musicRepository = remember { com.example.echo_panda_mobile.data.repository.MusicRepository(com.example.echo_panda_mobile.data.remote.RetrofitClient.getMusicService(tokenStorage)) }
+
+    var remotePlaylists by remember { mutableStateOf<List<com.example.echo_panda_mobile.data.model.Playlist>>(emptyList()) }
+
+    // Load remote playlists once when dialog opens
+    LaunchedEffect(Unit) {
+        android.util.Log.d("PlaylistPickerDialog", "Fetching remote playlists...")
+        when (val res = musicRepository.getPlaylists(perPage = 50)) {
+            is com.example.echo_panda_mobile.data.repository.MusicResult.Success -> {
+                android.util.Log.d("PlaylistPickerDialog", "Loaded ${res.data.size} playlists from server")
+                remotePlaylists = res.data
+            }
+            is com.example.echo_panda_mobile.data.repository.MusicResult.Error -> {
+                android.util.Log.e("PlaylistPickerDialog", "Error loading playlists: ${res.message}")
+            }
+            else -> {}
+        }
+    }
+
+    val merged = (remotePlaylists + localPlaylists).distinctBy { it.id }
+
+    AlertDialog(
+        onDismissRequest = { onDismiss() },
+        containerColor = EchoPandaColors.BgCardDark,
+        title = { Text("Add to Playlist", color = Color.White) },
+        text = {
+            Column {
+                LazyColumn(modifier = Modifier.heightIn(max = 260.dp)) {
+                    items(merged) { playlist ->
+                        Text(
+                            text = playlist.title,
+                            color = Color.White,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    coroutineScope.launch {
+                                        android.util.Log.d("PlaylistPickerDialog", "Adding track ${track.id} to playlist ${playlist.id}")
+                                        // Attempt remote add first; fall back to local update
+                                        val apiResult = musicRepository.addToPlaylist(track.id, playlist.id)
+                                        if (apiResult is com.example.echo_panda_mobile.data.repository.MusicResult.Success) {
+                                            android.util.Log.d("PlaylistPickerDialog", "API Add success")
+                                            LibraryRepository.addOrUpdatePlaylist(playlist)
+                                            LibraryRepository.addTrackToPlaylist(track, playlist.id)
+                                        } else {
+                                            android.util.Log.e("PlaylistPickerDialog", "API Add failed, falling back to local")
+                                            // still update local to reflect action
+                                            LibraryRepository.addTrackToPlaylist(track, playlist.id)
+                                        }
+                                        onDismiss()
+                                    }
+                                }
+                                .padding(vertical = 12.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = newPlaylistName,
+                    onValueChange = { newPlaylistName = it },
+                    placeholder = { Text("New playlist name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val name = newPlaylistName.trim()
+                if (name.isNotBlank()) {
+                    coroutineScope.launch {
+                        when (val createdRes = musicRepository.createPlaylist(name)) {
+                            is com.example.echo_panda_mobile.data.repository.MusicResult.Success -> {
+                                val created = createdRes.data
+                                LibraryRepository.addOrUpdatePlaylist(created)
+                                // add the track to the newly created playlist
+                                val apiAdd = musicRepository.addToPlaylist(track.id, created.id)
+                                if (apiAdd is com.example.echo_panda_mobile.data.repository.MusicResult.Success) {
+                                    LibraryRepository.addTrackToPlaylist(track, created.id)
+                                } else {
+                                    // still add locally
+                                    LibraryRepository.addTrackToPlaylist(track, created.id)
+                                }
+                                onDismiss()
+                            }
+                            is com.example.echo_panda_mobile.data.repository.MusicResult.Error -> {
+                                // fallback: create locally
+                                val localCreated = LibraryRepository.createPlaylist(name)
+                                LibraryRepository.addTrackToPlaylist(track, localCreated.id)
+                                onDismiss()
+                            }
+                            else -> {
+                                val localCreated = LibraryRepository.createPlaylist(name)
+                                LibraryRepository.addTrackToPlaylist(track, localCreated.id)
+                                onDismiss()
+                            }
+                        }
+                    }
+                }
+            }) { Text("Create & Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = { onDismiss() }) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
 fun MiniPlayer(track: Track, isPlaying: Boolean, progress: Float, onTogglePlay: () -> Unit, onNext: () -> Unit, onPrevious: () -> Unit, onClick: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF121212).copy(alpha = 0.95f)).clickable { onClick() }) {
-        LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth().height(2.dp), color = Color.White, trackColor = Color.White.copy(alpha = 0.2f))
+        LinearProgressIndicator(
+            modifier = Modifier.fillMaxWidth().height(2.dp),
+            color = Color.White,
+            trackColor = Color.White.copy(alpha = 0.2f)
+        )
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             SquareArtCard(
                 colors = track.placeholderColors,
@@ -666,6 +878,180 @@ fun FeaturedArtistCard(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlaylistPickerBottomSheet(
+    songId: String,
+    onDismiss: () -> Unit,
+    viewModel: PlaylistSelectionViewModel = viewModel()
+) {
+    val state by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val sheetState = rememberModalBottomSheetState()
+    var newPlaylistName by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadPlaylists()
+    }
+
+    // Handle dismiss based on trigger (Success cases)
+    LaunchedEffect(state.dismissTrigger) {
+        if (state.dismissTrigger) {
+            onDismiss()
+            viewModel.resetDismissTrigger()
+        }
+    }
+
+    // Handle Error Snackbar
+    LaunchedEffect(state.errorMessage) {
+        state.errorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearMessages()
+        }
+    }
+
+    // Handle Success Snackbar
+    LaunchedEffect(state.successMessage) {
+        state.successMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearMessages()
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = EchoPandaColors.BgCardDark,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = 0.3f)) }
+    ) {
+        Box(modifier = Modifier.fillMaxHeight(0.6f)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = "Add to Playlist",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+
+                if (state.isLoading && state.playlists.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(state.playlists) { playlist ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = !state.isActionInProgress) {
+                                        viewModel.addSongToPlaylist(songId, playlist.id)
+                                    }
+                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.PlaylistPlay,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(Modifier.width(16.dp))
+                                Text(
+                                    text = playlist.title,
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+
+                        item {
+                            Spacer(Modifier.height(8.dp))
+                            Divider(color = Color.White.copy(alpha = 0.1f))
+                            Spacer(Modifier.height(8.dp))
+
+                            if (!state.showCreateInput) {
+                                // "Create new playlist" trigger row
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.toggleCreateInput(true) }
+                                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = EchoPandaColors.AccentBlue,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(Modifier.width(16.dp))
+                                    Text(
+                                        text = "Create new playlist",
+                                        color = EchoPandaColors.AccentBlue,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            } else {
+                                // Inline Creation UI
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    OutlinedTextField(
+                                        value = newPlaylistName,
+                                        onValueChange = { newPlaylistName = it },
+                                        placeholder = { Text("Playlist Name", color = Color.Gray) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true,
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            focusedBorderColor = EchoPandaColors.AccentBlue,
+                                            unfocusedBorderColor = Color.White.copy(alpha = 0.3f)
+                                        )
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End
+                                    ) {
+                                        TextButton(onClick = { viewModel.toggleCreateInput(false) }) {
+                                            Text("Cancel", color = Color.Gray)
+                                        }
+                                        Button(
+                                            onClick = { viewModel.createAndAdd(songId, newPlaylistName) },
+                                            enabled = newPlaylistName.isNotBlank() && !state.isActionInProgress,
+                                            colors = ButtonDefaults.buttonColors(containerColor = EchoPandaColors.AccentBlue)
+                                        ) {
+                                            if (state.isActionInProgress) {
+                                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.Black)
+                                            } else {
+                                                Text("Create & Add", color = Color.Black)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Snackbar at the bottom of the sheet
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
     }
 }

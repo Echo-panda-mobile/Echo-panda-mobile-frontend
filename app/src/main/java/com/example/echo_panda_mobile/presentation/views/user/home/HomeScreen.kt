@@ -35,7 +35,7 @@ fun HomeScreen(
     onNavSelect: (Int) -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     onNavigateToAlbum: (String) -> Unit = {},
-    onNavigateToPlayer: (String) -> Unit = {},
+    onNavigateToPlayer: (String, Long?) -> Unit = { _, _ -> },
     onNavigateToArtist: (String) -> Unit = {},
     viewModel: HomeViewModel = viewModel(),
     globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
@@ -73,6 +73,15 @@ fun HomeScreen(
                         .padding(padding)
                         .verticalScroll(rememberScrollState())
                 ) {
+                    if (state.errorMessage != null) {
+                        Text(
+                            text = state.errorMessage!!,
+                            color = EchoPandaColors.ErrorRed,
+                            modifier = Modifier.padding(16.dp),
+                            fontSize = 14.sp
+                        )
+                    }
+
                     Spacer(Modifier.height(16.dp))
 
                     // ── Continue Listening ──────────────────────────────────────
@@ -96,13 +105,15 @@ fun HomeScreen(
                                             playlist = playlist,
                                             modifier = Modifier.weight(1f),
                                             onClick = { 
-                                                // Mock playing a track from this playlist
-                                                val mockTrack = com.example.echo_panda_mobile.data.model.Track(
-                                                    id = "p1", title = playlist.title, artist = "Various Artists",
+                                                val track = com.example.echo_panda_mobile.data.model.Track(
+                                                    id = playlist.id,
+                                                    title = playlist.title,
+                                                    artist = playlist.labelOverlay ?: "Various Artists",
+                                                    imageUrl = playlist.imageUrl,
                                                     placeholderColors = playlist.placeholderColors
                                                 )
-                                                globalPlayerViewModel.playTrack(mockTrack)
-                                                onNavigateToPlayer(mockTrack.id)
+                                                globalPlayerViewModel.playTrack(track)
+                                                onNavigateToPlayer(track.id, playlist.resumePositionMs)
                                             }
                                         )
                                     }
@@ -197,13 +208,15 @@ fun HomeScreen(
                                     size = 160.dp,
                                     cornerRadius = 16.dp,
                                     onClick = { 
-                                        // Mock play
-                                        val mockTrack = com.example.echo_panda_mobile.data.model.Track(
-                                            id = "p1", title = playlist.title, artist = "Various Artists",
+                                        val track = com.example.echo_panda_mobile.data.model.Track(
+                                            id = playlist.id,
+                                            title = playlist.title,
+                                            artist = playlist.labelOverlay ?: "Various Artists",
+                                            imageUrl = playlist.imageUrl,
                                             placeholderColors = playlist.placeholderColors
                                         )
-                                        globalPlayerViewModel.playTrack(mockTrack)
-                                        onNavigateToPlayer(mockTrack.id)
+                                        globalPlayerViewModel.playTrack(track)
+                                        onNavigateToPlayer(track.id, playlist.resumePositionMs)
                                     }
                                 )
                             }

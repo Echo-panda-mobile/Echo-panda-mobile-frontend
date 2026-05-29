@@ -109,20 +109,17 @@ class MusicPlayerManager(context: Context) {
         positionJob?.cancel()
     }
 
-    fun play(url: String?, title: String?, artist: String?) {
+    fun play(url: String?, title: String?, artist: String?, resumePositionMs: Long = 0) {
         if (url.isNullOrBlank()) {
             Log.e(TAG, "Cannot play: URL is null or empty")
             return
         }
-        Log.d(TAG, "Attempting to play: $url")
+        Log.d(TAG, "Attempting to play: $url at position $resumePositionMs")
         
         // Stop any current playback and clear state
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
         
-        // Note: AuthInterceptor in OkHttpClient will handle the Authorization header
-        // and any other standard headers defined in RetrofitClient.
-
         val mediaItem = MediaItem.Builder()
             .setUri(url)
             .setMediaId(url)
@@ -135,6 +132,9 @@ class MusicPlayerManager(context: Context) {
             .build()
         
         exoPlayer.setMediaItem(mediaItem)
+        if (resumePositionMs > 0) {
+            exoPlayer.seekTo(resumePositionMs)
+        }
         exoPlayer.prepare()
         exoPlayer.play()
     }

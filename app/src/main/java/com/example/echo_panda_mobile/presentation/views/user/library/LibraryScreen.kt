@@ -28,7 +28,6 @@ import com.example.echo_panda_mobile.presentation.components.EchoPandaBottomBar
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.viewsmodel.LibraryItem
 import com.example.echo_panda_mobile.presentation.viewsmodel.LibraryViewModel
-import com.example.echo_panda_mobile.presentation.viewsmodel.LibraryState
 
 @Composable
 fun LibraryScreen(
@@ -37,6 +36,8 @@ fun LibraryScreen(
     onNavigateToFavorites: () -> Unit = {},
     onNavigateToArtist: (String) -> Unit = {},
     onNavigateToAlbum: (String) -> Unit = {},
+    onNavigateToPlaylist: (String) -> Unit = {},
+    onNavigateToPlayer: (String, Long?) -> Unit = { _, _ -> },
     viewModel: LibraryViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -52,6 +53,16 @@ fun LibraryScreen(
         },
         bottomBar = { EchoPandaBottomBar(selectedNav, onNavSelect) }
     ) { padding ->
+        if (state.isLoading && state.filteredItems.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
+            }
+        } else {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -99,9 +110,8 @@ fun LibraryScreen(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(Modifier.width(8.dp))
-                    val sectionTitle = if (state.selectedFilter == "All" || state.selectedFilter == "Recently") "Recently played" else state.selectedFilter
                     Text(
-                        text = sectionTitle,
+                        text = viewModel.sectionTitle(state.selectedFilter),
                         color = EchoPandaColors.AccentBlue,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
@@ -110,14 +120,28 @@ fun LibraryScreen(
                 Spacer(Modifier.height(16.dp))
             }
 
+            if (state.filteredItems.isEmpty() && !state.isLoading) {
+                item {
+                    Text(
+                        text = state.errorMessage ?: "Nothing here yet",
+                        color = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(vertical = 24.dp)
+                    )
+                }
+            }
+
             items(state.filteredItems) { item ->
                 LibraryListItem(
                     item = item,
                     onClick = {
                         when (item) {
                             is LibraryItem.ArtistItem -> onNavigateToArtist(item.artist.id)
-                            is LibraryItem.PlaylistItem -> { /* TODO: Navigate to Playlist */ }
+                            is LibraryItem.PlaylistItem -> onNavigateToPlaylist(item.playlist.id)
                             is LibraryItem.AlbumItem -> onNavigateToAlbum(item.album.id)
+                            is LibraryItem.RecentTrackItem -> onNavigateToPlayer(
+                                item.track.id,
+                                item.track.resumePositionMs
+                            )
                         }
                     }
                 )
@@ -126,6 +150,7 @@ fun LibraryScreen(
             item {
                 Spacer(Modifier.height(32.dp))
             }
+        }
         }
 
         if (state.isCreatePlaylistOpen) {
@@ -169,13 +194,19 @@ fun LibraryScreen(
                 },
                 title = { Text("Add Favorite Artist") },
                 text = {
-                    OutlinedTextField(
-                        value = state.newArtistName,
-                        onValueChange = viewModel::onNewArtistNameChange,
-                        placeholder = { Text("Artist name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Column {
+                        OutlinedTextField(
+                            value = state.newArtistName,
+                            onValueChange = viewModel::onNewArtistNameChange,
+                            placeholder = { Text("Artist name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        state.followArtistError?.let { error ->
+                            Spacer(Modifier.height(8.dp))
+                            Text(error, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                        }
+                    }
                 }
             )
         }
@@ -320,7 +351,11 @@ fun LibraryListItem(
                         .size(80.dp)
                         .clip(CircleShape)
                 ) {
-                    ArtPlaceholder(colors = item.artist.placeholderColors, modifier = Modifier.fillMaxSize())
+                    ArtPlaceholder(
+                        colors = item.artist.placeholderColors,
+                        imageUrl = item.artist.imageUrl,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
                 Spacer(Modifier.width(16.dp))
                 Text(
@@ -336,7 +371,11 @@ fun LibraryListItem(
                         .size(80.dp)
                         .clip(RoundedCornerShape(8.dp))
                 ) {
-                    ArtPlaceholder(colors = item.playlist.placeholderColors, modifier = Modifier.fillMaxSize())
+                    ArtPlaceholder(
+                        colors = item.playlist.placeholderColors,
+                        imageUrl = item.playlist.imageUrl,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
                 Spacer(Modifier.width(16.dp))
                 Column {
@@ -360,7 +399,11 @@ fun LibraryListItem(
                         .size(80.dp)
                         .clip(RoundedCornerShape(8.dp))
                 ) {
-                    ArtPlaceholder(colors = item.album.placeholderColors, modifier = Modifier.fillMaxSize())
+                    ArtPlaceholder(
+                        colors = item.album.placeholderColors,
+                        imageUrl = item.album.imageUrl,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
                 Spacer(Modifier.width(16.dp))
                 Column {
@@ -372,6 +415,33 @@ fun LibraryListItem(
                     )
                     Text(
                         text = item.album.artist,
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 14.sp
+                    )
+                }
+            }
+            is LibraryItem.RecentTrackItem -> {
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                ) {
+                    ArtPlaceholder(
+                        colors = item.track.placeholderColors,
+                        imageUrl = item.track.imageUrl,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    Text(
+                        text = item.track.title,
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = item.track.artist,
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 14.sp
                     )
