@@ -1,9 +1,11 @@
 package com.example.echo_panda_mobile.presentation.viewsmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.AuthResult
+import com.example.echo_panda_mobile.data.repository.TokenStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,9 +19,9 @@ data class ForgotPasswordUiState(
     val isEmailSent: Boolean = false
 )
 
-class ForgotPasswordViewModel(
-    private val repository: AuthRepository = AuthRepository()
-) : ViewModel() {
+class ForgotPasswordViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = AuthRepository(TokenStorage(application))
 
     private val _uiState = MutableStateFlow(ForgotPasswordUiState())
     val uiState: StateFlow<ForgotPasswordUiState> = _uiState.asStateFlow()

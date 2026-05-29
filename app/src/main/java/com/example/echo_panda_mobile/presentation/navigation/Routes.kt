@@ -55,10 +55,10 @@ object Routes {
      * Returns the GRAPH route for the role — safe to use as NavHost startDestination
      * and as the target of navController.navigate().
      */
-    fun getHomeRoute(role: String?) = when (role?.uppercase()) {
-        "ARTIST" -> ARTIST_GRAPH
-        "ADMIN"  -> ADMIN_GRAPH
-        else     -> USER_GRAPH
+    fun getHomeRoute(role: String?) = when (role?.lowercase()) {
+        "artist", "publicer" -> ARTIST_GRAPH
+        "admin" -> ADMIN_GRAPH
+        else -> USER_GRAPH
     }
 
     // Bottom nav index → route mapping (user destinations, not graph routes)

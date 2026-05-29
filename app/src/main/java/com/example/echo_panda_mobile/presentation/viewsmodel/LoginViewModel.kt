@@ -1,12 +1,16 @@
 package com.example.echo_panda_mobile.presentation.viewsmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Intent
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.AuthResponse
 import com.example.echo_panda_mobile.data.model.LoginRequest
 import com.example.echo_panda_mobile.data.model.UserRole
 import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.AuthResult
+import com.example.echo_panda_mobile.data.repository.FirebaseAuthManager
+import com.example.echo_panda_mobile.data.repository.TokenStorage
 import com.example.echo_panda_mobile.presentation.navigation.Routes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,17 +18,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class LoginUiState(
-    val email             : String  = "",
-    val password          : String  = "",
-    val isLoading         : Boolean = false,
-    val errorMessage      : String? = null,
-    val isPasswordVisible : Boolean = false,
-    val navigateTo        : String? = null
+    val email: String = "",
+    val password: String = "",
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val isPasswordVisible: Boolean = false,
+    val navigateTo: String? = null
 )
 
-class LoginViewModel(
-    private val repository: AuthRepository = AuthRepository()
-) : ViewModel() {
+class LoginViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = AuthRepository(
+        tokenStorage = TokenStorage(application),
+        firebaseAuthManager = FirebaseAuthManager(application)
+    )
 
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
@@ -49,55 +56,46 @@ class LoginViewModel(
 
             val result = repository.login(
                 LoginRequest(
-                    email    = _uiState.value.email.trim(),
+                    email = _uiState.value.email.trim(),
                     password = _uiState.value.password
                 )
             )
 
-            when (result) {
-                is AuthResult.Success<*> -> {
-                    val authResponse = result.data as? AuthResponse
-                    // Navigate to the GRAPH route, not the leaf destination.
-                    // NavHost resolves the startDestination inside each graph automatically.
-                    val destination = Routes.getHomeRoute(authResponse?.user?.role)
-                    _uiState.value = _uiState.value.copy(
-                        isLoading  = false,
-                        navigateTo = destination
-                    )
-                }
-                is AuthResult.Error -> {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading    = false,
-                        errorMessage = result.message
-                    )
-                }
-                else -> Unit
-            }
+            handleAuthResult(result)
+        }
+    }
+
+    fun signInWithGoogle(data: Intent?) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            handleAuthResult(repository.signInWithGoogle(data))
         }
     }
 
     fun onGoogleSignIn(idToken: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            handleAuthResult(repository.signInWithGoogle(idToken))
+        }
+    }
 
-            val result = repository.signInWithGoogle(idToken)
-            when (result) {
-                is AuthResult.Success<*> -> {
-                    val authResponse = result.data as? AuthResponse
-                    val destination  = Routes.getHomeRoute(authResponse?.user?.role)
-                    _uiState.value = _uiState.value.copy(
-                        isLoading  = false,
-                        navigateTo = destination
-                    )
-                }
-                is AuthResult.Error -> {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading    = false,
-                        errorMessage = result.message
-                    )
-                }
-                else -> Unit
+    private fun handleAuthResult(result: AuthResult<*>) {
+        when (result) {
+            is AuthResult.Success<*> -> {
+                val authResponse = result.data as? AuthResponse
+                val destination = Routes.getHomeRoute(authResponse?.user?.role)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    navigateTo = destination
+                )
             }
+            is AuthResult.Error -> {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = result.message
+                )
+            }
+            else -> Unit
         }
     }
 

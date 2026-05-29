@@ -16,6 +16,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.echo_panda_mobile.data.repository.AuthRepository
+import com.example.echo_panda_mobile.data.repository.TokenStorage
 import com.example.echo_panda_mobile.presentation.components.MiniPlayer
 import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
 import com.example.echo_panda_mobile.presentation.views.auth.LoginScreen
@@ -35,8 +36,10 @@ fun AppNavigation() {
     val playerState by globalPlayerViewModel.playerState.collectAsState()
 
     // Single stable instances — never recreated on recomposition
+    val context = navController.context
+    val tokenStorage = remember { TokenStorage(context) }
     val auth = remember { FirebaseAuth.getInstance() }
-    val authRepo = remember { AuthRepository() }
+    val authRepo = remember { AuthRepository(tokenStorage) }
 
     // ── Auth state ────────────────────────────────────────────────────────────
     var currentUser by remember { mutableStateOf(auth.currentUser) }
@@ -70,9 +73,9 @@ fun AppNavigation() {
             if (currentUser == null) {
                 Routes.LOGIN
             } else {
-                // Persistent session check: fetch profile once to determine correct Home/Dashboard
                 val profile = authRepo.getCurrentUserProfile()
-                Routes.getHomeRoute(profile?.role?.uppercase())
+                userRole = profile?.role
+                Routes.getHomeRoute(profile?.role)
             }
         }
 
@@ -179,7 +182,7 @@ fun AppNavigation() {
                             // Re-calculate the home route based on user role
                             scope.launch {
                                 val profile = authRepo.getCurrentUserProfile()
-                                val nextRoute = Routes.getHomeRoute(profile?.role?.uppercase())
+                                val nextRoute = Routes.getHomeRoute(profile?.role)
                                 navController.navigate(nextRoute) {
                                     popUpTo(Routes.INTRO) { inclusive = true }
                                     launchSingleTop = true

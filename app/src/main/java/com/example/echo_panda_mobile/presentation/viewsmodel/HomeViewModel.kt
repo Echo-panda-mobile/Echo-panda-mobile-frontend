@@ -33,7 +33,7 @@ data class HomeUiState(
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val tokenStorage = TokenStorage(application)
     private val musicRepository = MusicRepository(RetrofitClient.getMusicService(tokenStorage))
-    private val authRepository = AuthRepository()
+    private val authRepository = AuthRepository(TokenStorage(application))
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()

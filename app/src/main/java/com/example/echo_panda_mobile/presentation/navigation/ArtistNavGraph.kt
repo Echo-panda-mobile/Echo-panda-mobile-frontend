@@ -4,7 +4,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.example.echo_panda_mobile.data.repository.TokenStorage
+import kotlinx.coroutines.launch
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
@@ -21,7 +25,9 @@ fun NavGraphBuilder.artistNavGraph(
         route = Routes.ARTIST_GRAPH
     ) {
         composable(Routes.ARTIST_DASHBOARD) {
-            val authRepo = remember { AuthRepository() }
+            val context = LocalContext.current
+            val authRepo = remember { AuthRepository(TokenStorage(context)) }
+            val scope = rememberCoroutineScope()
             var currentUser by remember { mutableStateOf<User?>(null) }
 
             LaunchedEffect(Unit) {
@@ -32,8 +38,11 @@ fun NavGraphBuilder.artistNavGraph(
                 currentUser = currentUser,
                 onNavigate = { route -> navController.navigate(route) },
                 onLogout = {
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(0) { inclusive = true }
+                    scope.launch {
+                        authRepo.logout()
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 }
             )
