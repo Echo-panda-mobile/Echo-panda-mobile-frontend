@@ -121,7 +121,10 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                     val authResponse = result.data as? AuthResponse
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        navigateTo = Routes.getHomeRoute(authResponse?.user?.role)
+                        navigateTo = Routes.getHomeRoute(
+                            authResponse?.user?.role,
+                            authResponse?.redirectTo
+                        )
                     )
                 }
                 is AuthResult.Error -> {
@@ -144,7 +147,10 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                     val authResponse = result.data as? AuthResponse
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        navigateTo = Routes.getHomeRoute(authResponse?.user?.role)
+                        navigateTo = Routes.getHomeRoute(
+                            authResponse?.user?.role,
+                            authResponse?.redirectTo
+                        )
                     )
                 }
                 is AuthResult.Error -> {

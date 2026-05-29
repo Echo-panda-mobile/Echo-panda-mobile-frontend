@@ -20,6 +20,7 @@ data class AlbumUiState(
     val topAlbums: List<Album> = emptyList(),
     val newAlbums: List<Album> = emptyList(),
     val popularAlbums: List<Album> = emptyList(),
+    val allAlbums: List<Album> = emptyList(),
     val filteredAlbums: List<Album> = emptyList(),
     val selectedCategory: String = "All",
     val errorMessage: String? = null,
@@ -28,8 +29,9 @@ data class AlbumUiState(
 )
 
 class AlbumViewModel(application: Application) : AndroidViewModel(application) {
-    private val tokenStorage = TokenStorage(application)
-    private val musicRepository = MusicRepository(RetrofitClient.getMusicService(tokenStorage))
+    private val musicRepository = MusicRepository(
+        RetrofitClient.getMusicService(TokenStorage(application))
+    )
 
     private val _uiState = MutableStateFlow(AlbumUiState())
     val uiState: StateFlow<AlbumUiState> = _uiState.asStateFlow()
@@ -40,26 +42,41 @@ class AlbumViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadAlbums() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+
             val topDef = async { musicRepository.getTopAlbums() }
             val newDef = async { musicRepository.getNewAlbums() }
             val popularDef = async { musicRepository.getPopularAlbums() }
-            
+            val allDef = async { musicRepository.getAllAlbums(perPage = 50) }
+
             val topResult = topDef.await()
             val newResult = newDef.await()
             val popularResult = popularDef.await()
-            
+            val allResult = allDef.await()
+
+            val top = (topResult as? MusicResult.Success)?.data ?: emptyList()
+            val new = (newResult as? MusicResult.Success)?.data ?: emptyList()
+            val popular = (popularResult as? MusicResult.Success)?.data ?: emptyList()
+            val allFromApi = (allResult as? MusicResult.Success)?.data
+
+            val all = allFromApi?.takeIf { it.isNotEmpty() }
+                ?: (top + new + popular).distinctBy { it.id }
+
+            val error = listOf(topResult, newResult, popularResult, allResult)
+                .filterIsInstance<MusicResult.Error>()
+                .firstOrNull()
+                ?.message
+                .takeIf { all.isEmpty() }
+
             _uiState.update { state ->
-                val top = (topResult as? MusicResult.Success)?.data ?: emptyList()
-                val new = (newResult as? MusicResult.Success)?.data ?: emptyList()
-                val popular = (popularResult as? MusicResult.Success)?.data ?: emptyList()
                 state.copy(
                     isLoading = false,
                     topAlbums = top,
                     newAlbums = new,
                     popularAlbums = popular,
-                    filteredAlbums = popular // Default to popular for "All"
+                    allAlbums = all,
+                    filteredAlbums = all,
+                    errorMessage = error
                 )
             }
         }
@@ -67,15 +84,14 @@ class AlbumViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onSearchQueryChange(query: String) {
         _uiState.update { state ->
+            val source = state.allAlbums.ifEmpty { state.popularAlbums }
             val filtered = if (query.isBlank()) {
-                state.popularAlbums
+                source
             } else {
-                (state.topAlbums + state.newAlbums + state.popularAlbums)
-                    .distinctBy { it.id }
-                    .filter { 
-                        it.title.contains(query, ignoreCase = true) || 
-                        it.artist.contains(query, ignoreCase = true) 
-                    }
+                source.filter {
+                    it.title.contains(query, ignoreCase = true) ||
+                        it.artist.contains(query, ignoreCase = true)
+                }
             }
             state.copy(searchQuery = query, filteredAlbums = filtered)
         }
@@ -84,10 +100,10 @@ class AlbumViewModel(application: Application) : AndroidViewModel(application) {
     fun setCategory(category: String) {
         _uiState.update { state ->
             val filtered = when (category) {
-                "Trending" -> state.topAlbums
-                "Newest" -> state.newAlbums
-                "Pop", "Rock", "Hip-Hop" -> state.popularAlbums // Simulated
-                else -> state.popularAlbums
+                "Trending" -> state.topAlbums.ifEmpty { state.allAlbums }
+                "Newest" -> state.newAlbums.ifEmpty { state.allAlbums }
+                "Pop", "Rock", "Hip-Hop" -> state.popularAlbums.ifEmpty { state.allAlbums }
+                else -> state.allAlbums
             }
             state.copy(selectedCategory = category, filteredAlbums = filtered)
         }

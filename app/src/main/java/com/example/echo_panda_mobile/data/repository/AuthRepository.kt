@@ -40,6 +40,8 @@ class AuthRepository(
             return AuthResult.Error("Email and password are required.")
         }
 
+        tokenStorage.clearSession()
+
         return try {
             val result = firebaseAuth.signInWithEmailAndPassword(email, password).await()
             val firebaseUser = result.user
@@ -52,6 +54,8 @@ class AuthRepository(
     }
 
     suspend fun signInWithGoogle(idToken: String): AuthResult<AuthResponse> {
+        tokenStorage.clearSession()
+
         return try {
             if (idToken.isBlank()) {
                 return AuthResult.Error("Google sign-in token is required.")
@@ -82,6 +86,8 @@ class AuthRepository(
     }
 
     suspend fun register(request: RegisterRequest): AuthResult<AuthResponse> {
+        tokenStorage.clearSession()
+
         return try {
             when {
                 request.name.isBlank() -> return AuthResult.Error("Name is required.")
@@ -128,14 +134,8 @@ class AuthRepository(
     suspend fun getCurrentUserProfile(): User? {
         val firebaseUser = firebaseAuth.currentUser ?: return null
 
-        if (!tokenStorage.getToken().isNullOrBlank()) {
-            try {
-                return authApi.me().user.toUser(firebaseUser)
-            } catch (_: Exception) {
-                // Token may be expired — fall through to refresh via Firebase session.
-            }
-        }
-
+        // Always re-sync through Firebase so role/token match this Firebase account
+        // (avoids a stale Sanctum token from an older session keeping you on the user app).
         return when (val sync = syncBackendSession(firebaseUser, provider = "session_restore")) {
             is AuthResult.Success -> sync.data.user
             else -> null
@@ -214,7 +214,7 @@ class AuthRepository(
             // Proceed with local logout even if the backend call fails.
         } finally {
             firebaseAuth.signOut()
-            tokenStorage.clear()
+            tokenStorage.clearSession()
         }
     }
 
@@ -251,15 +251,18 @@ class AuthRepository(
                 )
             )
 
-            tokenStorage.saveToken(response.token)
-            tokenStorage.saveRole(response.user.role)
+            val normalizedRole = response.user.role.trim().lowercase()
 
-            val user = response.user.toUser(firebaseUser)
+            tokenStorage.saveToken(response.token)
+            tokenStorage.saveRole(normalizedRole)
+
+            val user = response.user.copy(role = normalizedRole).toUser(firebaseUser)
             AuthResult.Success(
                 AuthResponse(
                     user = user,
                     token = response.token,
-                    message = response.message ?: "Login successful."
+                    message = response.message ?: "Login successful.",
+                    redirectTo = response.redirect_to
                 )
             )
         } catch (e: HttpException) {
@@ -297,18 +300,28 @@ class AuthRepository(
         e is FirebaseAuthInvalidCredentialsException &&
             e.errorCode == "ERROR_INVALID_EMAIL" -> "Invalid email format."
         e is FirebaseAuthInvalidCredentialsException &&
-            e.errorCode == "ERROR_WRONG_PASSWORD" -> "Incorrect password."
+            e.errorCode == "ERROR_WRONG_PASSWORD" -> incorrectFirebaseCredentialsMessage()
+        e is FirebaseAuthInvalidCredentialsException &&
+            (e.errorCode == "ERROR_INVALID_CREDENTIAL" ||
+                e.message?.contains("incorrect, malformed or has expired", ignoreCase = true) == true) ->
+            incorrectFirebaseCredentialsMessage()
         e is FirebaseAuthInvalidCredentialsException &&
             e.errorCode == "ERROR_INVALID_CUSTOM_TOKEN" -> "Invalid or expired credentials."
-        e is FirebaseAuthInvalidUserException -> "User not found. Please sign up."
-        e.message?.contains("no user record", ignoreCase = true) == true -> "User not found. Please sign up."
+        e is FirebaseAuthInvalidUserException -> incorrectFirebaseCredentialsMessage()
+        e.message?.contains("no user record", ignoreCase = true) == true -> incorrectFirebaseCredentialsMessage()
         e.message?.contains("password is invalid", ignoreCase = true) == true -> "Incorrect password."
+        e.message?.contains("incorrect, malformed or has expired", ignoreCase = true) == true ->
+            incorrectFirebaseCredentialsMessage()
         e.message?.contains("user has been disabled", ignoreCase = true) == true ->
             "This account has been disabled."
         e.message?.contains("too many unsuccessful", ignoreCase = true) == true ->
             "Too many login attempts. Try again later."
         else -> e.message ?: "Login failed. Please try again."
     }
+
+    private fun incorrectFirebaseCredentialsMessage(): String =
+        "Wrong email or password for Firebase. The web admin password is separate — " +
+            "create this email in Firebase Console (project echo-panda-auth) or reset the password there."
 
     private fun com.example.echo_panda_mobile.data.remote.BackendUser.toUser(
         firebaseUser: FirebaseUser

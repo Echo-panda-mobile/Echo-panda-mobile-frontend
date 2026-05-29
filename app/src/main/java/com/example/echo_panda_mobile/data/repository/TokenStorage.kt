@@ -33,6 +33,13 @@ class TokenStorage(context: Context) {
         return sharedPreferences.getString("user_role", null)
     }
 
+    fun clearSession() {
+        sharedPreferences.edit()
+            .remove("auth_token")
+            .remove("user_role")
+            .apply()
+    }
+
     fun clear() {
         sharedPreferences.edit().clear().apply()
     }

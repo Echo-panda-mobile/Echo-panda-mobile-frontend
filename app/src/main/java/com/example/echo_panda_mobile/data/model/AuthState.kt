@@ -20,6 +20,7 @@ data class AuthState(
 ) {
     val isUser: Boolean get() = role == UserRole.USER
     val isArtist: Boolean get() = role == UserRole.ARTIST
+    val isAdmin: Boolean get() = role == UserRole.ADMIN
 }
 
 @Immutable

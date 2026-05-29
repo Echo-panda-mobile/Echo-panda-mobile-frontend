@@ -59,24 +59,31 @@ fun AppNavigation() {
     // Resolve the correct start destination once per session.
     // Re-runs only when currentUser changes (login / logout).
     LaunchedEffect(currentUser) {
-        startRoute = null  // show spinner while resolving
-
         val prefs = navController.context
             .getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
 
         val hasSeenIntroGlobal = prefs.getBoolean("has_seen_intro", false)
 
+        if (currentUser != null) {
+            val profile = authRepo.getCurrentUserProfile()
+            userRole = profile?.role
+        } else {
+            userRole = null
+        }
+
+        // Only compute the initial NavHost destination once per cold start.
+        if (startRoute != null) {
+            return@LaunchedEffect
+        }
+
+        startRoute = null // show spinner while resolving
+
         val destination = if (!hasSeenIntroGlobal) {
             Routes.INTRO
+        } else if (currentUser == null) {
+            Routes.LOGIN
         } else {
-            // If intro already seen, proceed with normal auth flow.
-            if (currentUser == null) {
-                Routes.LOGIN
-            } else {
-                val profile = authRepo.getCurrentUserProfile()
-                userRole = profile?.role
-                Routes.getHomeRoute(profile?.role)
-            }
+            Routes.getHomeRoute(userRole)
         }
 
         startRoute = destination
@@ -94,7 +101,7 @@ fun AppNavigation() {
     val selectedNav = Routes.bottomNavIndex(currentRoute)
     val onNavSelect: (Int) -> Unit = { index ->
         val isAdminRoute = currentRoute?.startsWith("admin/") == true
-        val route = if (isAdminRoute || userRole?.uppercase() == "ADMIN") {
+        val route = if (isAdminRoute || Routes.isAdminRole(userRole)) {
             Routes.adminBottomNavRoute(index)
         } else {
             Routes.bottomNavRoute(index)
@@ -122,7 +129,9 @@ fun AppNavigation() {
                 LoginScreen(
                     onBack = { navController.popBackStack() },
                     onAuthenticateSuccess = { destination ->
-                        // destination is already the role-based route from LoginViewModel
+                        scope.launch {
+                            userRole = authRepo.getCurrentUserProfile()?.role
+                        }
                         navController.navigate(destination) {
                             popUpTo(Routes.LOGIN) { inclusive = true }
                             launchSingleTop = true

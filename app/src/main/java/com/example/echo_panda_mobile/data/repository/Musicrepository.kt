@@ -17,21 +17,97 @@ sealed class MusicResult<out T> {
 
 class MusicRepository(private val apiService: MusicApiService? = null) {
 
-    private val IMAGE_BASE_URL = "https://api.echopanda.me/storage/"
     private val defaultColors = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26))
 
-    private fun ensureFullUrl(url: String?): String? {
-        if (url.isNullOrBlank()) return null
-        
-        // If it's already an absolute URL (like an S3 signed URL), use it as is
-        if (url.startsWith("http")) return url
-        
-        // If it's a relative path, it's a legacy/fallback path that we know will fail 
-        // with 403 unless we use the signed-url endpoint. 
-        // However, we'll keep the construction logic just in case the backend 
-        // makes the storage public in the future.
-        val cleanPath = if (url.startsWith("/")) url.substring(1) else url
-        return "$IMAGE_BASE_URL$cleanPath"
+    /** Only use URLs that are already absolute (e.g. fresh S3 presigned links from the API). */
+    private fun directImageUrl(url: String?): String? =
+        url?.takeIf { it.isNotBlank() && it.startsWith("http") }
+
+    /**
+     * S3 objects are private — same flow as [fetchSignedArtistImageUrl]:
+     * always resolve covers through the signed-url API, never via /storage/ on the app host.
+     */
+    private suspend fun fetchSignedArtistImageUrl(artistId: String): String? {
+        if (apiService == null) return null
+        return try {
+            val response = apiService.getArtistImageUrl(artistId)
+            if (response.isSuccessful) {
+                val signed = response.body()?.signedUrl ?: response.body()?.url
+                if (!signed.isNullOrBlank() && signed.startsWith("http")) signed else null
+            } else {
+                android.util.Log.w(
+                    "MusicRepository",
+                    "Artist image-url failed for $artistId: ${response.code()}"
+                )
+                null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MusicRepository", "Artist signed image error for $artistId", e)
+            null
+        }
+    }
+
+    private suspend fun fetchSignedAlbumCoverUrl(albumId: String): String? {
+        if (apiService == null) return null
+        return try {
+            val response = apiService.getAlbumCoverUrl(albumId)
+            if (response.isSuccessful) {
+                val signed = response.body()?.signedUrl ?: response.body()?.url
+                if (!signed.isNullOrBlank() && signed.startsWith("http")) signed else null
+            } else {
+                android.util.Log.w(
+                    "MusicRepository",
+                    "Album cover-url failed for $albumId: ${response.code()}"
+                )
+                null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MusicRepository", "Album signed cover error for $albumId", e)
+            null
+        }
+    }
+
+    private suspend fun resolveAlbumCoverUrl(albumId: String, coverUrl: String?): String? {
+        fetchSignedAlbumCoverUrl(albumId)?.let { return it }
+        return directImageUrl(coverUrl)
+    }
+
+    private suspend fun enrichAlbum(album: Album): Album =
+        album.copy(imageUrl = resolveAlbumCoverUrl(album.id, album.imageUrl))
+
+    private suspend fun enrichAlbumDto(dto: AlbumDto): Album =
+        enrichAlbum(dto.toDomain())
+
+    private suspend fun fetchSignedSongCoverUrl(songId: String): String? {
+        if (apiService == null) return null
+        return try {
+            val response = apiService.getSongCoverUrl(songId)
+            if (response.isSuccessful) {
+                val signed = response.body()?.signedUrl ?: response.body()?.url
+                if (!signed.isNullOrBlank() && signed.startsWith("http")) signed else null
+            } else null
+        } catch (e: Exception) {
+            android.util.Log.e("MusicRepository", "Song signed cover error for $songId", e)
+            null
+        }
+    }
+
+    private suspend fun resolveTrackCoverUrl(
+        songId: String,
+        albumId: String?,
+        coverUrl: String?,
+        albumCoverUrl: String?
+    ): String? {
+        fetchSignedSongCoverUrl(songId)?.let { return it }
+        albumId?.let { fetchSignedAlbumCoverUrl(it)?.let { signed -> return signed } }
+        return directImageUrl(coverUrl ?: albumCoverUrl)
+    }
+
+    private suspend fun enrichArtist(artist: Artist): Artist {
+        val signed = fetchSignedArtistImageUrl(artist.id)
+        return if (signed != null) artist.copy(imageUrl = signed) else {
+            artist.copy(imageUrl = directImageUrl(artist.imageUrl))
+        }
     }
 
     private suspend fun mergeFavoriteStatus(tracks: List<Track>): List<Track> {
@@ -76,15 +152,12 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
                 val playlists = historyDtos.map { history ->
                     async {
                         val dto = history.song
-                        var imageUrl = ensureFullUrl(dto.coverUrl ?: dto.album?.coverUrl)
-                        try {
-                            // Try to get a signed URL for the song cover
-                            val imgResponse = apiService.getSongCoverUrl(dto.resolvedId())
-                            if (imgResponse.isSuccessful) {
-                                val signedUrl = imgResponse.body()?.signedUrl ?: imgResponse.body()?.url
-                                if (!signedUrl.isNullOrBlank()) imageUrl = signedUrl
-                            }
-                        } catch (e: Exception) {}
+                        val imageUrl = resolveTrackCoverUrl(
+                            songId = dto.resolvedId(),
+                            albumId = dto.albumId?.toString() ?: dto.album?.id?.toString(),
+                            coverUrl = dto.coverUrl,
+                            albumCoverUrl = dto.album?.coverUrl
+                        )
 
                         Playlist(
                             id = dto.resolvedId(),
@@ -115,20 +188,14 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
                 val albumDtos = response.body()?.data ?: emptyList()
                 val playlists = albumDtos.map { dto ->
                     async {
-                        var imageUrl = ensureFullUrl(dto.coverUrl)
-                        try {
-                            val imgResponse = apiService.getAlbumCoverUrl(dto.id)
-                            if (imgResponse.isSuccessful) {
-                                val signedUrl = imgResponse.body()?.signedUrl ?: imgResponse.body()?.url
-                                if (!signedUrl.isNullOrBlank()) imageUrl = signedUrl
-                            }
-                        } catch (e: Exception) {}
+                        val albumId = dto.id.toString()
+                        val imageUrl = resolveAlbumCoverUrl(albumId, dto.coverUrl)
 
                         Playlist(
-                            id = dto.id,
+                            id = albumId,
                             title = dto.title,
                             imageUrl = imageUrl,
-                            placeholderColors = getColorsForId(dto.id)
+                            placeholderColors = getColorsForId(albumId)
                         )
                     }
                 }.awaitAll()
@@ -152,21 +219,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
                 
                 // Fetch signed URLs for artist images
                 val artists = artistDtos.map { dto ->
-                    async {
-                        var artist = dto.toDomain()
-                        try {
-                            val imgResponse = apiService.getArtistImageUrl(dto.id)
-                            if (imgResponse.isSuccessful) {
-                                val signedUrl = imgResponse.body()?.signedUrl ?: imgResponse.body()?.url
-                                if (!signedUrl.isNullOrBlank()) {
-                                    artist = artist.copy(imageUrl = signedUrl)
-                                }
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("MusicRepository", "Failed to fetch signed URL for artist ${dto.id}", e)
-                        }
-                        artist
-                    }
+                    async { enrichArtist(dto.toDomain()) }
                 }.awaitAll()
                 
                 MusicResult.Success(artists)
@@ -201,23 +254,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
             }
 
             if (artist != null) {
-                // 2. Fetch SIGNED image URL (Relative paths often 403)
-                try {
-                    android.util.Log.d("MusicRepository", "Fetching signed image URL for artist: $artistId")
-                    val imageResponse = apiService.getArtistImageUrl(artistId)
-                    if (imageResponse.isSuccessful) {
-                        val body = imageResponse.body()
-                        val signedUrl = body?.signedUrl ?: body?.url
-                        if (!signedUrl.isNullOrBlank()) {
-                            android.util.Log.d("MusicRepository", "Found artist signed URL: $signedUrl")
-                            artist = artist.copy(imageUrl = signedUrl)
-                        }
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("MusicRepository", "Error fetching artist signed image", e)
-                }
-                
-                MusicResult.Success(artist!!)
+                MusicResult.Success(enrichArtist(artist))
             } else {
                 MusicResult.Error("Artist not found (404)")
             }
@@ -234,17 +271,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
             if (response.isSuccessful) {
                 val albumDtos = response.body()?.data ?: emptyList()
                 val albums = albumDtos.map { dto ->
-                    async {
-                        var album = dto.toDomain()
-                        try {
-                            val imgResponse = apiService.getAlbumCoverUrl(dto.id)
-                            if (imgResponse.isSuccessful) {
-                                val signedUrl = imgResponse.body()?.signedUrl ?: imgResponse.body()?.url
-                                if (!signedUrl.isNullOrBlank()) album = album.copy(imageUrl = signedUrl)
-                            }
-                        } catch (e: Exception) {}
-                        album
-                    }
+                    async { enrichAlbumDto(dto) }
                 }.awaitAll()
                 MusicResult.Success(albums)
             } else {
@@ -264,17 +291,13 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
                 val tracks = songDtos.map { dto ->
                     async {
                         val track = dto.toDomain(dto.artistName ?: "Unknown")
-                        // attempt to get signed cover
-                        try {
-                            val imgResponse = apiService.getSongCoverUrl(dto.resolvedId())
-                            if (imgResponse.isSuccessful) {
-                                val signedUrl = imgResponse.body()?.signedUrl ?: imgResponse.body()?.url
-                                if (!signedUrl.isNullOrBlank()) {
-                                    return@async track.copy(imageUrl = signedUrl)
-                                }
-                            }
-                        } catch (e: Exception) {}
-                        track
+                        val imageUrl = resolveTrackCoverUrl(
+                            songId = dto.resolvedId(),
+                            albumId = dto.albumId?.toString() ?: dto.album?.id?.toString(),
+                            coverUrl = dto.coverUrl,
+                            albumCoverUrl = dto.album?.coverUrl
+                        )
+                        track.copy(imageUrl = imageUrl)
                     }
                 }.awaitAll()
                 MusicResult.Success(mergeFavoriteStatus(tracks))
@@ -292,7 +315,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
             val response = apiService.getSongs(search = artistName)
             if (response.isSuccessful) {
                 val tracks = response.body()?.data?.map { it.toDomain(artistName) } ?: emptyList()
-                MusicResult.Success(mergeFavoriteStatus(tracks))
+                MusicResult.Success(mergeFavoriteStatus(enrichTrackCovers(tracks)))
             } else {
                 MusicResult.Error("Failed to fetch artist songs: ${response.code()}")
             }
@@ -310,17 +333,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
             if (response.isSuccessful) {
                 val albumDtos = response.body()?.data?.map { it.album } ?: emptyList()
                 val albums = albumDtos.map { dto ->
-                    async {
-                        var album = dto.toDomain()
-                        try {
-                            val imgResponse = apiService.getAlbumCoverUrl(dto.id)
-                            if (imgResponse.isSuccessful) {
-                                val signedUrl = imgResponse.body()?.signedUrl ?: imgResponse.body()?.url
-                                if (!signedUrl.isNullOrBlank()) album = album.copy(imageUrl = signedUrl)
-                            }
-                        } catch (e: Exception) {}
-                        album
-                    }
+                    async { enrichAlbumDto(dto) }
                 }.awaitAll()
                 MusicResult.Success(albums)
             } else {
@@ -329,17 +342,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
                 if (fallback.isSuccessful) {
                     val albumDtos = fallback.body()?.data ?: emptyList()
                     val albums = albumDtos.map { dto ->
-                        async {
-                            var album = dto.toDomain()
-                            try {
-                                val imgResponse = apiService.getAlbumCoverUrl(dto.id)
-                                if (imgResponse.isSuccessful) {
-                                    val signedUrl = imgResponse.body()?.signedUrl ?: imgResponse.body()?.url
-                                    if (!signedUrl.isNullOrBlank()) album = album.copy(imageUrl = signedUrl)
-                                }
-                            } catch (e: Exception) {}
-                            album
-                        }
+                        async { enrichAlbumDto(dto) }
                     }.awaitAll()
                     MusicResult.Success(albums)
                 } else {
@@ -358,21 +361,29 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
             if (response.isSuccessful) {
                 val albumDtos = response.body()?.data ?: emptyList()
                 val albums = albumDtos.map { dto ->
-                    async {
-                        var album = dto.toDomain()
-                        try {
-                            val imgResponse = apiService.getAlbumCoverUrl(dto.id)
-                            if (imgResponse.isSuccessful) {
-                                val signedUrl = imgResponse.body()?.signedUrl ?: imgResponse.body()?.url
-                                if (!signedUrl.isNullOrBlank()) album = album.copy(imageUrl = signedUrl)
-                            }
-                        } catch (e: Exception) {}
-                        album
-                    }
+                    async { enrichAlbumDto(dto) }
                 }.awaitAll()
                 MusicResult.Success(albums)
             } else {
                 MusicResult.Error("Failed to fetch new albums: ${response.code()}")
+            }
+        } catch (e: Exception) {
+            MusicResult.Error(e.localizedMessage ?: "Network error")
+        }
+    }
+
+    suspend fun getAllAlbums(perPage: Int = 50): MusicResult<List<Album>> = withContext(Dispatchers.IO) {
+        if (apiService == null) return@withContext MusicResult.Error("API service not initialized")
+        try {
+            val response = apiService.getAlbums(sortBy = "latest", perPage = perPage)
+            if (response.isSuccessful) {
+                val albumDtos = response.body()?.data ?: emptyList()
+                val albums = albumDtos.map { dto ->
+                    async { enrichAlbumDto(dto) }
+                }.awaitAll()
+                MusicResult.Success(albums)
+            } else {
+                MusicResult.Error("Failed to fetch albums: ${response.code()}")
             }
         } catch (e: Exception) {
             MusicResult.Error(e.localizedMessage ?: "Network error")
@@ -386,17 +397,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
             if (response.isSuccessful) {
                 val albumDtos = response.body()?.data ?: emptyList()
                 val albums = albumDtos.map { dto ->
-                    async {
-                        var album = dto.toDomain()
-                        try {
-                            val imgResponse = apiService.getAlbumCoverUrl(dto.id)
-                            if (imgResponse.isSuccessful) {
-                                val signedUrl = imgResponse.body()?.signedUrl ?: imgResponse.body()?.url
-                                if (!signedUrl.isNullOrBlank()) album = album.copy(imageUrl = signedUrl)
-                            }
-                        } catch (e: Exception) {}
-                        album
-                    }
+                    async { enrichAlbumDto(dto) }
                 }.awaitAll()
                 MusicResult.Success(albums)
             } else {
@@ -416,7 +417,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
             val albumDto = albumResponse.body() ?: return@withContext MusicResult.Error("Empty response body")
 
             // 2. Fetch Album Songs
-            val songsResponse = apiService.getSongs(albumId = albumDto.id.toIntOrNull())
+            val songsResponse = apiService.getSongs(albumId = albumDto.id)
             val tracks = if (songsResponse.isSuccessful) {
                 songsResponse.body()?.data?.map {
                     it.toDomain(albumDto.artist?.name ?: "Unknown")
@@ -424,12 +425,13 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
             } else emptyList()
             val tracksWithFavorites = mergeFavoriteStatus(tracks)
 
-            MusicResult.Success(
+            val album = enrichAlbum(
                 albumDto.toDomain().copy(
                     tracks = tracksWithFavorites,
                     totalDuration = "${tracksWithFavorites.sumOf { it.durationMs } / 60000}m"
                 )
             )
+            MusicResult.Success(album)
         } catch (e: Exception) {
             MusicResult.Error(e.localizedMessage ?: "Network error")
         }
@@ -443,7 +445,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
             val response = apiService.getSongs(search = search)
             if (response.isSuccessful) {
                 val tracks = response.body()?.data?.map { it.toDomain("Unknown") } ?: emptyList()
-                MusicResult.Success(mergeFavoriteStatus(tracks))
+                MusicResult.Success(mergeFavoriteStatus(enrichTrackCovers(tracks)))
             } else {
                 MusicResult.Error("Failed to fetch songs: ${response.code()}")
             }
@@ -460,58 +462,25 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
             android.util.Log.d("MusicRepository", "getSongDetail response code: ${response.code()}")
             if (response.isSuccessful) {
                 val songDto = response.body() ?: return@withContext MusicResult.Error("Empty response body")
-                
-                // CRITICAL: We start with a version of the track where the image is NULL 
-                // to FORCE the fallback logic below to fetch a Signed URL.
-                // The coverUrl in the main DTO is a relative path that causes a 403.
-                var track = songDto.toDomain("Unknown").copy(imageUrl = null)
-                
-                // Fetch extra details for the detail screen
-                try {
-                    val songIntId = id.toIntOrNull()
-                    if (songIntId != null) {
-                        // 1. Favorite status check
+
+                var track = songDto.toDomain("Unknown")
+                val coverUrl = resolveTrackCoverUrl(
+                    songId = id,
+                    albumId = songDto.albumId?.toString() ?: songDto.album?.id?.toString(),
+                    coverUrl = songDto.coverUrl,
+                    albumCoverUrl = songDto.album?.coverUrl
+                )
+                track = track.copy(imageUrl = coverUrl)
+
+                id.toIntOrNull()?.let { songIntId ->
+                    try {
                         val favResponse = apiService.checkIsFavorite(CheckFavoriteRequest(songIntId))
                         if (favResponse.isSuccessful) {
                             track = track.copy(isFavorite = favResponse.body()?.isFavorite ?: false)
                         }
+                    } catch (e: Exception) {
+                        android.util.Log.e("MusicRepository", "Favorite check failed for $id", e)
                     }
-                    
-                    // 2. Fetch SIGNED cover URL (Relative paths in metadata are forbidden)
-                    android.util.Log.d("MusicRepository", "Attempting signed song cover fetch for ID: $id")
-                    val songCoverResponse = apiService.getSongCoverUrl(id)
-                    if (songCoverResponse.isSuccessful) {
-                        val body = songCoverResponse.body()
-                        val signedUrl = body?.signedUrl ?: body?.url
-                        if (!signedUrl.isNullOrBlank() && signedUrl.startsWith("http")) {
-                            android.util.Log.d("MusicRepository", "Found signed song cover: $signedUrl")
-                            track = track.copy(imageUrl = signedUrl)
-                        }
-                    }
-                    
-                    // 3. Fallback to SIGNED album cover URL
-                    if (track.imageUrl.isNullOrBlank() && songDto.albumId != null) {
-                        val albumId = songDto.albumId.toString()
-                        android.util.Log.d("MusicRepository", "Song signed cover null, attempting album signed cover fetch for ID: $albumId")
-                        val albumCoverResponse = apiService.getAlbumCoverUrl(albumId)
-                        if (albumCoverResponse.isSuccessful) {
-                            val body = albumCoverResponse.body()
-                            val signedUrl = body?.signedUrl ?: body?.url
-                            if (!signedUrl.isNullOrBlank() && signedUrl.startsWith("http")) {
-                                android.util.Log.d("MusicRepository", "Found signed album cover: $signedUrl")
-                                track = track.copy(imageUrl = signedUrl)
-                            }
-                        }
-                    }
-                    
-                    // 4. Last resort: If no signed URL found, use the relative path (will likely 403)
-                    if (track.imageUrl.isNullOrBlank()) {
-                        val fallbackUrl = ensureFullUrl(songDto.coverUrl ?: songDto.album?.coverUrl)
-                        android.util.Log.w("MusicRepository", "No signed URL found. Falling back to relative: $fallbackUrl")
-                        track = track.copy(imageUrl = fallbackUrl)
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("MusicRepository", "Error fetching extra track details", e)
                 }
 
                 MusicResult.Success(track)
@@ -561,7 +530,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
             val response = apiService.getMostPlayedSongs(limit = limit)
             if (response.isSuccessful) {
                 val tracks = response.body()?.data?.map { it.song.toDomain("Unknown") } ?: emptyList()
-                MusicResult.Success(mergeFavoriteStatus(tracks))
+                MusicResult.Success(mergeFavoriteStatus(enrichTrackCovers(tracks)))
             } else {
                 MusicResult.Error("Failed to fetch most played songs: ${response.code()}")
             }
@@ -575,17 +544,19 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
     private fun ArtistDto.toDomain() = Artist(
         id = id,
         name = name,
-        imageUrl = ensureFullUrl(imageUrl),
+        imageUrl = directImageUrl(imageUrl),
         monthlyListeners = monthlyListeners ?: "0M",
         placeholderColors = getColorsForId(id)
     )
 
     private fun AlbumDto.toDomain() = Album(
-        id = id,
+        id = id.toString(),
         title = title,
-        artist = artist?.name ?: "Unknown",
-        imageUrl = ensureFullUrl(coverUrl),
-        placeholderColors = getColorsForId(id)
+        artist = artist?.name?.takeIf { it.isNotBlank() && it != "Unknown" }
+            ?: artistName?.takeIf { it.isNotBlank() }
+            ?: "Unknown",
+        imageUrl = directImageUrl(coverUrl),
+        placeholderColors = getColorsForId(id.toString())
     )
 
     private fun SongDto.resolvedTitle(): String =
@@ -600,7 +571,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
         title = resolvedTitle(),
         artist = artistName?.takeIf { it.isNotBlank() } ?: defaultArtist,
         durationMs = (durationSeconds ?: 0) * 1000L,
-        imageUrl = ensureFullUrl(coverUrl ?: album?.coverUrl),
+        imageUrl = directImageUrl(coverUrl ?: album?.coverUrl),
         album = album?.title?.takeIf { it.isNotBlank() },
         placeholderColors = getColorsForId(resolvedId()),
         isFavorite = isFavorite ?: false
@@ -618,7 +589,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
             title = resolvedTitle,
             artist = artistName?.takeIf { it.isNotBlank() } ?: "Unknown",
             durationMs = (durationSeconds ?: 0) * 1000L,
-            imageUrl = ensureFullUrl(coverUrl ?: album?.coverUrl),
+            imageUrl = directImageUrl(coverUrl ?: album?.coverUrl),
             album = album?.title?.takeIf { it.isNotBlank() },
             placeholderColors = getColorsForId(idStr),
             isFavorite = true
@@ -643,14 +614,12 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
                 val playlists = historyDtos.map { dto ->
                     async {
                         val song = dto.song
-                        var imageUrl = ensureFullUrl(song.coverUrl ?: song.album?.coverUrl)
-                        try {
-                            val imgResponse = apiService.getSongCoverUrl(song.resolvedId())
-                            if (imgResponse.isSuccessful) {
-                                val signedUrl = imgResponse.body()?.signedUrl ?: imgResponse.body()?.url
-                                if (!signedUrl.isNullOrBlank()) imageUrl = signedUrl
-                            }
-                        } catch (e: Exception) {}
+                        val imageUrl = resolveTrackCoverUrl(
+                            songId = song.resolvedId(),
+                            albumId = song.albumId?.toString() ?: song.album?.id?.toString(),
+                            coverUrl = song.coverUrl,
+                            albumCoverUrl = song.album?.coverUrl
+                        )
 
                         Playlist(
                             id = song.resolvedId(),
@@ -775,22 +744,16 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
 
     private suspend fun enrichTrackCovers(tracks: List<Track>): List<Track> {
         if (tracks.isEmpty() || apiService == null) return tracks
-        val service = apiService
         return coroutineScope {
             tracks.map { track ->
                 async {
-                    var enriched = track
-                    try {
-                        val imgResponse = service.getSongCoverUrl(track.id)
-                        if (imgResponse.isSuccessful) {
-                            val signedUrl = imgResponse.body()?.signedUrl ?: imgResponse.body()?.url
-                            if (!signedUrl.isNullOrBlank()) {
-                                enriched = enriched.copy(imageUrl = signedUrl)
-                            }
-                        }
-                    } catch (_: Exception) {
-                    }
-                    enriched
+                    val imageUrl = resolveTrackCoverUrl(
+                        songId = track.id,
+                        albumId = null,
+                        coverUrl = track.imageUrl,
+                        albumCoverUrl = null
+                    )
+                    track.copy(imageUrl = imageUrl)
                 }
             }.awaitAll()
         }
@@ -852,7 +815,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
                     Playlist(
                         id = dto.id,
                         title = dto.name ?: dto.title ?: "Untitled",
-                        imageUrl = ensureFullUrl(dto.coverUrl),
+                        imageUrl = directImageUrl(dto.coverUrl),
                         labelOverlay = dto.label,
                         placeholderColors = getColorsForId(dto.id)
                     )
@@ -877,7 +840,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
                 val playlist = Playlist(
                     id = dto.id,
                     title = dto.name ?: dto.title ?: "Untitled",
-                    imageUrl = ensureFullUrl(dto.coverUrl),
+                    imageUrl = directImageUrl(dto.coverUrl),
                     labelOverlay = dto.label,
                     placeholderColors = getColorsForId(dto.id)
                 )

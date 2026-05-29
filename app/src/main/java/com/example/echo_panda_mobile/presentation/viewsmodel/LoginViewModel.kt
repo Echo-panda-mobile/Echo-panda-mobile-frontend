@@ -83,7 +83,10 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         when (result) {
             is AuthResult.Success<*> -> {
                 val authResponse = result.data as? AuthResponse
-                val destination = Routes.getHomeRoute(authResponse?.user?.role)
+                val destination = Routes.getHomeRoute(
+                    authResponse?.user?.role,
+                    authResponse?.redirectTo
+                )
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     navigateTo = destination

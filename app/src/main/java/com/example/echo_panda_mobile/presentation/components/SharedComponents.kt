@@ -371,41 +371,76 @@ fun ArtistCircleCard(artist: Artist, modifier: Modifier = Modifier, size: Dp = 7
 @Composable
 fun AlbumCard(album: Album, modifier: Modifier = Modifier, width: Dp = 110.dp, onClick: () -> Unit = {}) {
     val finalMod = if (width != Dp.Unspecified) modifier.width(width) else modifier
-    Column(modifier = finalMod.clickable { onClick() }) {
+    val titleColor = MaterialTheme.colorScheme.onBackground
+    val subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Column(modifier = finalMod.clickable(onClick = onClick)) {
         SquareArtCard(
             colors = album.placeholderColors,
             imageUrl = album.imageUrl,
             modifier = Modifier.fillMaxWidth(),
             size = width,
-            onClick = onClick // Pass click through
+            onClick = onClick
         )
         Spacer(Modifier.height(8.dp))
-        Text(text = album.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(text = album.artist, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            text = album.title.ifBlank { "Untitled Album" },
+            color = titleColor,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = album.artist.ifBlank { "Unknown Artist" },
+            color = subtitleColor,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
 @Composable
-fun AlbumListRow(album: Album, modifier: Modifier = Modifier, onClick: () -> Unit = {}, onAddToFavorites: (() -> Unit)? = null, onAddToPlaylist: (() -> Unit)? = null) {
-    var showMenu by remember { mutableStateOf(false) }
-    Row(modifier = modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+fun AlbumListRow(
+    album: Album,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
+) {
+    val titleColor = MaterialTheme.colorScheme.onBackground
+    val subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         SquareArtCard(
             colors = album.placeholderColors,
             imageUrl = album.imageUrl,
             size = 64.dp,
-            cornerRadius = 8.dp
+            cornerRadius = 8.dp,
+            onClick = onClick
         )
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = album.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(text = album.artist, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
-        }
-        Box {
-            IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, null, tint = Color.White.copy(alpha = 0.4f)) }
-            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }, modifier = Modifier.background(EchoPandaColors.BgCardDark)) {
-                if (onAddToFavorites != null) DropdownMenuItem(text = { Text("Add to Favorites", color = Color.White) }, onClick = { onAddToFavorites(); showMenu = false })
-                if (onAddToPlaylist != null) DropdownMenuItem(text = { Text("Add to Playlist", color = Color.White) }, onClick = { onAddToPlaylist(); showMenu = false })
-            }
+            Text(
+                text = album.title.ifBlank { "Untitled Album" },
+                color = titleColor,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = album.artist.ifBlank { "Unknown Artist" },
+                color = subtitleColor,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

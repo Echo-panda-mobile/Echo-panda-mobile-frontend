@@ -1,6 +1,5 @@
 package com.example.echo_panda_mobile.presentation.views.admin
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -8,7 +7,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,8 +14,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.echo_panda_mobile.presentation.viewsmodel.AdminAddArtistViewModel
 
 private val BgDark = Color(0xFF05070D)
 private val CardBg = Color(0xFF161C24)
@@ -26,34 +28,44 @@ private val TextMuted = Color.White.copy(alpha = 0.5f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AdminAddArtistScreen(onBack: () -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var artistRole by remember { mutableStateOf("Single") } // Single or Group
-    var gender by remember { mutableStateOf("Male") } // Male, Female, They
-    var password by remember { mutableStateOf("") }
-    
-    // Automatically set gender to "They" if role is "Group"
-    LaunchedEffect(artistRole) {
-        if (artistRole == "Group") {
-            gender = "They"
-        } else if (gender == "They") {
-            gender = "Male"
+fun AdminAddArtistScreen(
+    onBack: () -> Unit,
+    viewModel: AdminAddArtistViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.createdSuccessfully) {
+        if (uiState.createdSuccessfully) {
+            uiState.successMessage?.let { snackbarHostState.showSnackbar(it) }
+            viewModel.consumeSuccess()
+            onBack()
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Add New Artist", color = Color.White, fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        "Add New Artist",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    IconButton(onClick = onBack, enabled = !uiState.isLoading) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BgDark)
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = BgDark
     ) { paddingValues ->
         Column(
@@ -65,41 +77,86 @@ fun AdminAddArtistScreen(onBack: () -> Unit) {
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Form Fields
-            Text("Artist Information", color = AccentPurple, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Artist information",
+                color = AccentPurple,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
             Spacer(modifier = Modifier.height(16.dp))
 
-            ArtistInputField(label = "Full Name", value = name, onValueChange = { name = it }, placeholder = "Enter artist or group name")
-            ArtistInputField(label = "Email Address", value = email, onValueChange = { email = it }, placeholder = "artist@example.com")
-            ArtistInputField(label = "Initial Password", value = password, onValueChange = { password = it }, placeholder = "Set a temporary password", isPassword = true)
+            ArtistInputField(
+                label = "Full name",
+                value = uiState.name,
+                onValueChange = viewModel::onNameChange,
+                placeholder = "Enter artist or group name"
+            )
+            ArtistInputField(
+                label = "Email address",
+                value = uiState.email,
+                onValueChange = viewModel::onEmailChange,
+                placeholder = "artist@example.com"
+            )
+            ArtistInputField(
+                label = "Password",
+                value = uiState.password,
+                onValueChange = viewModel::onPasswordChange,
+                placeholder = "Min. 8 characters (mobile login)",
+                isPassword = true
+            )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Role Selection
-            Text("Artist Type", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Row(modifier = Modifier.padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                RoleChip("Single", artistRole == "Single") { artistRole = "Single" }
-                RoleChip("Group", artistRole == "Group") { artistRole = "Group" }
+            Text(
+                "Artist type",
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Row(
+                modifier = Modifier.padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                RoleChip("Single", uiState.artistType == "Single") {
+                    viewModel.onArtistTypeChange("Single")
+                }
+                RoleChip("Group", uiState.artistType == "Group") {
+                    viewModel.onArtistTypeChange("Group")
+                }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Gender Selection (Only if Single)
-            if (artistRole == "Single") {
-                Text("Gender", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Row(modifier = Modifier.padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    RoleChip("Male", gender == "Male") { gender = "Male" }
-                    RoleChip("Female", gender == "Female") { gender = "Female" }
+            if (uiState.artistType == "Single") {
+                Text(
+                    "Gender",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Row(
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    RoleChip("Male", uiState.gender == "Male") {
+                        viewModel.onGenderChange("Male")
+                    }
+                    RoleChip("Female", uiState.gender == "Female") {
+                        viewModel.onGenderChange("Female")
+                    }
                 }
             } else {
-                Text("Gender", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Gender",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
                 Surface(
                     modifier = Modifier.padding(vertical = 12.dp),
                     color = CardBg,
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        text = "They (Default for Groups)",
+                        text = "They (default for groups)",
                         color = TextMuted,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                         fontSize = 14.sp
@@ -107,17 +164,39 @@ fun AdminAddArtistScreen(onBack: () -> Unit) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            uiState.errorMessage?.let { message ->
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = message,
+                    color = Color(0xFFFF6B6B),
+                    fontSize = 13.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
 
             Button(
-                onClick = { /* Implement logic to save to database/repository */ onBack() },
+                onClick = { viewModel.createArtist() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
+                colors = ButtonDefaults.buttonColors(containerColor = AccentPurple),
+                enabled = !uiState.isLoading
             ) {
-                Text("Create Artist Account", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        "Create artist account",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -139,8 +218,12 @@ fun ArtistInputField(
         TextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
-            placeholder = { Text(placeholder, color = Color.White.copy(alpha = 0.3f), fontSize = 14.sp) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp)),
+            placeholder = {
+                Text(placeholder, color = Color.White.copy(alpha = 0.3f), fontSize = 14.sp)
+            },
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = CardBg,
                 unfocusedContainerColor = CardBg,
@@ -150,7 +233,11 @@ fun ArtistInputField(
                 unfocusedTextColor = Color.White
             ),
             singleLine = true,
-            visualTransformation = if (isPassword) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None
+            visualTransformation = if (isPassword) {
+                PasswordVisualTransformation()
+            } else {
+                VisualTransformation.None
+            }
         )
     }
 }
@@ -159,13 +246,20 @@ fun ArtistInputField(
 fun RoleChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         modifier = Modifier
-            .clickable { onClick() }
+            .clickable(onClick = onClick)
             .height(44.dp),
         color = if (selected) AccentPurple.copy(alpha = 0.2f) else CardBg,
         shape = RoundedCornerShape(12.dp),
-        border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, AccentPurple) else null
+        border = if (selected) {
+            androidx.compose.foundation.BorderStroke(1.dp, AccentPurple)
+        } else {
+            null
+        }
     ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 24.dp)) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.padding(horizontal = 20.dp)
+        ) {
             Text(
                 text = label,
                 color = if (selected) AccentPurple else Color.White,

@@ -20,9 +20,16 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Production API. Override in debug for local backend (emulator → host machine).
+        buildConfigField("String", "API_BASE_URL", "\"https://api.echopanda.me/api/\"")
     }
 
     buildTypes {
+        debug {
+            // Same production API as release (web + mobile both use api.echopanda.me).
+            buildConfigField("String", "API_BASE_URL", "\"https://api.echopanda.me/api/\"")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -31,12 +38,13 @@ android {
             )
         }
     }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-    }
-    buildFeatures {
-        compose = true
     }
 }
 
