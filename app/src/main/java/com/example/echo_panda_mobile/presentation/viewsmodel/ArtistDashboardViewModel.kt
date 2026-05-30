@@ -1,7 +1,9 @@
 package com.example.echo_panda_mobile.presentation.viewsmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.echo_panda_mobile.data.repository.TokenStorage
 import com.example.echo_panda_mobile.data.model.ArtistDashboardData
 import com.example.echo_panda_mobile.data.model.DashboardMockData
 import com.example.echo_panda_mobile.data.model.User
@@ -17,10 +19,12 @@ import kotlinx.coroutines.launch
  * Manages loading state, dashboard data, and error handling
  * Supports both mock data (for UI testing) and real API calls
  */
-class ArtistDashboardViewModel(
-    private val dashboardRepository: DashboardRepository = DashboardRepository(),
-    private val authRepository: com.example.echo_panda_mobile.data.repository.AuthRepository = com.example.echo_panda_mobile.data.repository.AuthRepository()
-) : ViewModel() {
+class ArtistDashboardViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val dashboardRepository = DashboardRepository()
+    private val authRepository = com.example.echo_panda_mobile.data.repository.AuthRepository(
+        TokenStorage(application)
+    )
 
     // ─── State Definitions ─────────────────────────────────────────────────────
 

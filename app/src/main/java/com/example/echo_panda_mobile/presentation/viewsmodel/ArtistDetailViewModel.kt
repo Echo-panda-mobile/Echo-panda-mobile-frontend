@@ -31,7 +31,7 @@ data class ArtistDetailUiState(
 class ArtistDetailViewModel(application: Application) : AndroidViewModel(application) {
     private val tokenStorage = TokenStorage(application)
     private val musicRepository = MusicRepository(RetrofitClient.getMusicService(tokenStorage))
-    private val authRepository = AuthRepository()
+    private val authRepository = AuthRepository(tokenStorage)
 
     private val _uiState = MutableStateFlow(ArtistDetailUiState())
     val uiState: StateFlow<ArtistDetailUiState> = _uiState.asStateFlow()

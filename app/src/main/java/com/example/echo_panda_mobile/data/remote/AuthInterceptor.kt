@@ -12,11 +12,14 @@ class AuthInterceptor(private val tokenStorage: TokenStorage) : Interceptor {
         // CRITICAL: If the URL is an AWS S3 Pre-Signed URL, we MUST NOT send the 
         // app's Authorization header. S3 URLs are self-contained.
         val isS3 = url.contains("amazonaws.com")
-        
+        val isPublicAuthEndpoint = url.contains("/firebase/session")
+            || url.endsWith("/login")
+            || url.endsWith("/register")
+
         val newRequestBuilder = request.newBuilder()
             .addHeader("Accept", "application/json")
-        
-        if (isS3) {
+
+        if (isS3 || isPublicAuthEndpoint) {
             newRequestBuilder.removeHeader("Authorization")
         } else {
             val token = tokenStorage.getToken()

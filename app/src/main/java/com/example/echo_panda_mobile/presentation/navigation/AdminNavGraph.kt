@@ -7,7 +7,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.echo_panda_mobile.data.repository.TokenStorage
+import kotlinx.coroutines.launch
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
@@ -37,15 +40,19 @@ fun NavGraphBuilder.adminNavGraph(
         route = "admin_graph"
     ) {
         composable(Routes.ADMIN_DASHBOARD) {
-            val authRepo = remember { AuthRepository() }
+            val context = LocalContext.current
+            val authRepo = remember { AuthRepository(TokenStorage(context)) }
+            val scope = rememberCoroutineScope()
 
             AdminDashboardScreen(
                 selectedNav = selectedNav,
                 onNavSelect = onNavSelect,
                 onLogout = {
-                    authRepo.logout()
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(0) { inclusive = true }
+                    scope.launch {
+                        authRepo.logout()
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 },
                 onProfileClick = {
@@ -182,13 +189,17 @@ fun NavGraphBuilder.adminNavGraph(
         }
 
         composable(Routes.ADMIN_PROFILE) {
-            val authRepo = remember { AuthRepository() }
+            val context = LocalContext.current
+            val authRepo = remember { AuthRepository(TokenStorage(context)) }
+            val scope = rememberCoroutineScope()
             AdminProfileScreen(
                 onBack = { navController.popBackStack() },
                 onLogout = {
-                    authRepo.logout()
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(0) { inclusive = true }
+                    scope.launch {
+                        authRepo.logout()
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 }
             )

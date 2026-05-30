@@ -1,12 +1,16 @@
 package com.example.echo_panda_mobile.presentation.viewsmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Intent
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.AuthResponse
 import com.example.echo_panda_mobile.data.model.RegisterRequest
 import com.example.echo_panda_mobile.data.model.UserRole
 import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.AuthResult
+import com.example.echo_panda_mobile.data.repository.FirebaseAuthManager
+import com.example.echo_panda_mobile.data.repository.TokenStorage
 import com.example.echo_panda_mobile.presentation.navigation.Routes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,21 +18,24 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class RegisterUiState(
-    val name: String               = "",
-    val email: String              = "",
-    val password: String           = "",
-    val confirmPassword: String    = "",
-    val selectedRole: String       = "user",    // "user" | "artist"
-    val isLoading: Boolean         = false,
-    val errorMessage: String?      = null,
+    val name: String = "",
+    val email: String = "",
+    val password: String = "",
+    val confirmPassword: String = "",
+    val selectedRole: String = "user",
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
     val isPasswordVisible: Boolean = false,
     val isConfirmPasswordVisible: Boolean = false,
-    val navigateTo: String?        = null
+    val navigateTo: String? = null
 )
 
-class RegisterViewModel(
-    private val repository: AuthRepository = AuthRepository()
-) : ViewModel() {
+class RegisterViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = AuthRepository(
+        tokenStorage = TokenStorage(application),
+        firebaseAuthManager = FirebaseAuthManager(application)
+    )
 
     private val _uiState = MutableStateFlow(RegisterUiState())
     val uiState: StateFlow<RegisterUiState> = _uiState.asStateFlow()
@@ -76,27 +83,53 @@ class RegisterViewModel(
                 UserRole.USER -> "user"
                 UserRole.UNKNOWN -> "user"
             }
-            
+
             val result = repository.register(
                 RegisterRequest(
-                    name                 = state.name.trim(),
-                    email                = state.email.trim(),
-                    password             = state.password,
+                    name = state.name.trim(),
+                    email = state.email.trim(),
+                    password = state.password,
                     passwordConfirmation = state.confirmPassword,
-                    role                 = roleStr
+                    role = roleStr
                 )
             )
 
             when (result) {
                 is AuthResult.Success<AuthResponse> -> {
                     _uiState.value = _uiState.value.copy(
-                        isLoading  = false,
+                        isLoading = false,
                         navigateTo = Routes.VERIFY_EMAIL
                     )
                 }
                 is AuthResult.Error -> {
                     _uiState.value = _uiState.value.copy(
-                        isLoading    = false,
+                        isLoading = false,
+                        errorMessage = result.message
+                    )
+                }
+                else -> Unit
+            }
+        }
+    }
+
+    fun signInWithGoogle(data: Intent?) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+
+            when (val result = repository.signInWithGoogle(data)) {
+                is AuthResult.Success<*> -> {
+                    val authResponse = result.data as? AuthResponse
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        navigateTo = Routes.getHomeRoute(
+                            authResponse?.user?.role,
+                            authResponse?.redirectTo
+                        )
+                    )
+                }
+                is AuthResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
                         errorMessage = result.message
                     )
                 }
@@ -109,20 +142,20 @@ class RegisterViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-            val result = repository.signInWithGoogle(idToken)
-            when (result) {
+            when (val result = repository.signInWithGoogle(idToken)) {
                 is AuthResult.Success<*> -> {
                     val authResponse = result.data as? AuthResponse
-                    // Use the centralized route resolver for consistency
-                    val destination = Routes.getHomeRoute(authResponse?.user?.role)
                     _uiState.value = _uiState.value.copy(
-                        isLoading  = false,
-                        navigateTo = destination
+                        isLoading = false,
+                        navigateTo = Routes.getHomeRoute(
+                            authResponse?.user?.role,
+                            authResponse?.redirectTo
+                        )
                     )
                 }
                 is AuthResult.Error -> {
                     _uiState.value = _uiState.value.copy(
-                        isLoading    = false,
+                        isLoading = false,
                         errorMessage = result.message
                     )
                 }

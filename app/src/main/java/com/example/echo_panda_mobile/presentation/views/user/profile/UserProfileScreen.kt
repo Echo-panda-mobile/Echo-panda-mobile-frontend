@@ -32,7 +32,6 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.echo_panda_mobile.presentation.viewsmodel.UserProfileViewModel
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
-import com.google.firebase.auth.FirebaseAuth
 
 @Composable
 fun UserProfileScreen(
@@ -66,8 +65,7 @@ fun UserProfileScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showLogoutDialog = false
-                    FirebaseAuth.getInstance().signOut()
-                    onLogoutSuccess()
+                    viewModel.logout(onLogoutSuccess)
                 }) {
                     Text("Log Out", color = EchoPandaColors.ErrorRed)
                 }

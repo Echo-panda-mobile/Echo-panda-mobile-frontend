@@ -96,6 +96,7 @@ class AlbumArtistFieldAdapter : JsonDeserializer<AlbumArtistField> {
                     else -> null
                 }
                 val name = obj.get("name")?.takeIf { !it.isJsonNull }?.asString
+                    ?: obj.get("stage_name")?.takeIf { !it.isJsonNull }?.asString
                     ?: obj.get("artist_name")?.takeIf { !it.isJsonNull }?.asString
                     ?: "Unknown"
                 AlbumArtistField(id = id, name = name)
@@ -106,8 +107,9 @@ class AlbumArtistFieldAdapter : JsonDeserializer<AlbumArtistField> {
 }
 
 data class AlbumDto(
-    @SerializedName("id") val id: String,
+    @SerializedName("id") val id: Int,
     @SerializedName("title") val title: String,
+    @SerializedName("artist_name") val artistName: String? = null,
     @SerializedName("artist")
     @JsonAdapter(AlbumArtistFieldAdapter::class)
     val artist: AlbumArtistField? = null,

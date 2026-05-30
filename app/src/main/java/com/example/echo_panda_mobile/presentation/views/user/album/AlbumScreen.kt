@@ -31,7 +31,6 @@ import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.theme.LocalAppLanguage
 import com.example.echo_panda_mobile.presentation.theme.LocalIsDarkTheme
 import com.example.echo_panda_mobile.presentation.viewsmodel.AlbumViewModel
-import kotlinx.coroutines.launch
 
 @Composable
 fun AlbumScreen(
@@ -44,10 +43,8 @@ fun AlbumScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val isDark = LocalIsDarkTheme.current
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    
     val bgStart = if (isDark) EchoPandaColors.BgDarkStart else EchoPandaColors.BgLightStart
+    val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
     val bgEnd = if (isDark) EchoPandaColors.BgDarkEnd else EchoPandaColors.BgLightEnd
 
     Box(
@@ -58,7 +55,6 @@ fun AlbumScreen(
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = Color.Transparent,
-            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 AlbumTopBar(
                     query = state.searchQuery,
@@ -82,6 +78,15 @@ fun AlbumScreen(
                         .padding(padding)
                         .verticalScroll(rememberScrollState())
                 ) {
+                    if (!state.errorMessage.isNullOrBlank()) {
+                        Text(
+                            text = state.errorMessage!!,
+                            color = EchoPandaColors.ErrorRed,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+
                     // ── Filter Chips ──────────────────────────────────────────
                     AlbumFilterChips(
                         selected = state.selectedCategory,
@@ -99,20 +104,14 @@ fun AlbumScreen(
                             state.filteredAlbums.forEach { album ->
                                 AlbumListRow(
                                     album = album,
-                                    onClick = { onNavigateToDetail(album.id) },
-                                    onAddToFavorites = {
-                                        scope.launch { snackbarHostState.showSnackbar("Added ${album.title} to Favorites") }
-                                    },
-                                    onAddToPlaylist = {
-                                        scope.launch { snackbarHostState.showSnackbar("Added ${album.title} to Playlist") }
-                                    }
+                                    onClick = { onNavigateToDetail(album.id) }
                                 )
-                                HorizontalDivider(color = Color.White.copy(alpha = 0.05f), thickness = 0.5.dp)
+                                HorizontalDivider(color = mutedColor.copy(alpha = 0.25f), thickness = 0.5.dp)
                             }
                             if (state.filteredAlbums.isEmpty()) {
                                 Text(
                                     "No albums found",
-                                    color = Color.White.copy(alpha = 0.5f),
+                                    color = mutedColor,
                                     modifier = Modifier.fillMaxWidth().padding(32.dp),
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
@@ -161,22 +160,27 @@ fun AlbumScreen(
                         Column(
                             modifier = Modifier.padding(horizontal = 16.dp)
                         ) {
-                            state.popularAlbums.forEach { album ->
-                                AlbumListRow(
-                                    album = album,
-                                    onClick = { onNavigateToDetail(album.id) },
-                                    onAddToFavorites = {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Added ${album.title} to Favorites")
-                                        }
-                                    },
-                                    onAddToPlaylist = {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Added ${album.title} to Playlist")
-                                        }
-                                    }
+                            val allAlbums = state.allAlbums.ifEmpty { state.popularAlbums }
+                            if (allAlbums.isEmpty()) {
+                                Text(
+                                    text = "No albums available",
+                                    color = mutedColor,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 24.dp),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
-                                HorizontalDivider(color = Color.White.copy(alpha = 0.05f), thickness = 0.5.dp)
+                            } else {
+                                allAlbums.forEach { album ->
+                                    AlbumListRow(
+                                        album = album,
+                                        onClick = { onNavigateToDetail(album.id) }
+                                    )
+                                    HorizontalDivider(
+                                        color = mutedColor.copy(alpha = 0.25f),
+                                        thickness = 0.5.dp
+                                    )
+                                }
                             }
                         }
                     }
@@ -243,7 +247,13 @@ private fun FeaturedAlbumHero(
             modifier = Modifier.fillMaxSize().padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SquareArtCard(colors = album.placeholderColors, size = 100.dp, cornerRadius = 8.dp)
+            SquareArtCard(
+                colors = album.placeholderColors,
+                imageUrl = album.imageUrl,
+                size = 100.dp,
+                cornerRadius = 8.dp,
+                onClick = onClick
+            )
             Spacer(Modifier.width(20.dp))
             Column {
                 Text(
@@ -254,13 +264,13 @@ private fun FeaturedAlbumHero(
                     letterSpacing = 1.sp
                 )
                 Text(
-                    text = album.title,
+                    text = album.title.ifBlank { "Untitled Album" },
                     color = Color.White,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = album.artist,
+                    text = album.artist.ifBlank { "Unknown Artist" },
                     color = Color.White.copy(alpha = 0.7f),
                     fontSize = 14.sp
                 )

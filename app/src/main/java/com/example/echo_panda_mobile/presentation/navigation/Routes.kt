@@ -55,10 +55,21 @@ object Routes {
      * Returns the GRAPH route for the role — safe to use as NavHost startDestination
      * and as the target of navController.navigate().
      */
-    fun getHomeRoute(role: String?) = when (role?.uppercase()) {
-        "ARTIST" -> ARTIST_GRAPH
-        "ADMIN"  -> ADMIN_GRAPH
-        else     -> USER_GRAPH
+    fun isAdminRole(role: String?): Boolean =
+        role?.trim()?.equals("admin", ignoreCase = true) == true
+
+    /**
+     * Picks the nav graph from API role and optional [redirectTo] from /firebase/session.
+     */
+    fun getHomeRoute(role: String?, redirectTo: String? = null): String {
+        if (redirectTo?.contains("admin", ignoreCase = true) == true) {
+            return ADMIN_GRAPH
+        }
+        return when (role?.trim()?.lowercase()) {
+            "artist", "publicer" -> ARTIST_GRAPH
+            "admin" -> ADMIN_GRAPH
+            else -> USER_GRAPH
+        }
     }
 
     // Bottom nav index → route mapping (user destinations, not graph routes)

@@ -25,5 +25,6 @@ data class RegisterRequest(
 data class AuthResponse(
     val user: User,
     val token: String,
-    val message: String
+    val message: String,
+    val redirectTo: String? = null
 )
