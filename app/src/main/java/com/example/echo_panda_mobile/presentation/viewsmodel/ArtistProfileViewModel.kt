@@ -34,7 +34,8 @@ class ArtistProfileViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                val user = authRepository.getCurrentUser()
+                val user = authRepository.getCachedUser()
+                    ?: authRepository.getCurrentUserProfile()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     user = user

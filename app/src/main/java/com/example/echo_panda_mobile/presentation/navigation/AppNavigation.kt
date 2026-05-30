@@ -47,7 +47,12 @@ fun AppNavigation() {
     // null  = still resolving (show spinner)
     // non-null = ready, hand off to NavHost
     var startRoute by remember { mutableStateOf<String?>(null) }
-    var userRole by remember { mutableStateOf<String?>(null) }
+    // Seed role from encrypted storage so cold start does not block on /firebase/session.
+    var userRole by remember {
+        mutableStateOf(
+            if (auth.currentUser != null) tokenStorage.getRole() else null
+        )
+    }
 
     // Keep currentUser in sync with Firebase (handles logout from other screens)
     DisposableEffect(auth) {
@@ -56,37 +61,37 @@ fun AppNavigation() {
         onDispose { auth.removeAuthStateListener(listener) }
     }
 
-    // Resolve the correct start destination once per session.
-    // Re-runs only when currentUser changes (login / logout).
-    LaunchedEffect(currentUser) {
+    // Resolve the correct start destination (login / logout / role changes).
+    LaunchedEffect(currentUser, userRole) {
         val prefs = navController.context
             .getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-
         val hasSeenIntroGlobal = prefs.getBoolean("has_seen_intro", false)
 
-        if (currentUser != null) {
-            val profile = authRepo.getCurrentUserProfile()
-            userRole = profile?.role
-        } else {
+        if (currentUser == null) {
             userRole = null
+        } else if (userRole == null) {
+            userRole = tokenStorage.getRole() ?: "user"
         }
 
-        // Only compute the initial NavHost destination once per cold start.
-        if (startRoute != null) {
-            return@LaunchedEffect
+        val destination = when {
+            !hasSeenIntroGlobal -> Routes.INTRO
+            currentUser == null -> Routes.LOGIN
+            userRole == null    -> null
+            else                -> Routes.getHomeRoute(userRole)
         }
 
-        startRoute = null // show spinner while resolving
-
-        val destination = if (!hasSeenIntroGlobal) {
-            Routes.INTRO
-        } else if (currentUser == null) {
-            Routes.LOGIN
-        } else {
-            Routes.getHomeRoute(userRole)
+        if (destination != null && startRoute != destination) {
+            startRoute = destination
         }
+    }
 
-        startRoute = destination
+    // Refresh role/token in the background once per session (TTL inside AuthRepository).
+    LaunchedEffect(currentUser?.uid) {
+        if (currentUser == null) return@LaunchedEffect
+        val profile = authRepo.getCurrentUserProfile()
+        profile?.role?.let { refreshedRole ->
+            if (refreshedRole != userRole) userRole = refreshedRole
+        }
     }
 
     // Block rendering until we know where to send the user
@@ -129,9 +134,8 @@ fun AppNavigation() {
                 LoginScreen(
                     onBack = { navController.popBackStack() },
                     onAuthenticateSuccess = { destination ->
-                        scope.launch {
-                            userRole = authRepo.getCurrentUserProfile()?.role
-                        }
+                        userRole = tokenStorage.getRole()
+                            ?: authRepo.getCachedUser()?.role
                         navController.navigate(destination) {
                             popUpTo(Routes.LOGIN) { inclusive = true }
                             launchSingleTop = true
@@ -188,14 +192,12 @@ fun AppNavigation() {
                                 launchSingleTop = true
                             }
                         } else {
-                            // Re-calculate the home route based on user role
-                            scope.launch {
-                                val profile = authRepo.getCurrentUserProfile()
-                                val nextRoute = Routes.getHomeRoute(profile?.role)
-                                navController.navigate(nextRoute) {
-                                    popUpTo(Routes.INTRO) { inclusive = true }
-                                    launchSingleTop = true
-                                }
+                            val nextRoute = Routes.getHomeRoute(
+                                userRole ?: tokenStorage.getRole()
+                            )
+                            navController.navigate(nextRoute) {
+                                popUpTo(Routes.INTRO) { inclusive = true }
+                                launchSingleTop = true
                             }
                         }
                     }

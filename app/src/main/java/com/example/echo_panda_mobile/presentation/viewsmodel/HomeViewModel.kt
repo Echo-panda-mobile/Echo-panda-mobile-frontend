@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 data class HomeUiState(
     val isLoading: Boolean          = true,
@@ -45,10 +44,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(isLoading = true) }
 
             try {
-                // Load user profile with a timeout to prevent hanging on Firestore issues
-                val user = withTimeoutOrNull(3000) {
-                    authRepository.getCurrentUser()
-                }
+                val user = authRepository.getCachedUser()
 
                 // Load music data in parallel
                 val recentDef     = async { musicRepository.getRecentPlaylists() }

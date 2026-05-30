@@ -26,12 +26,18 @@ fun NavGraphBuilder.artistNavGraph(
     ) {
         composable(Routes.ARTIST_DASHBOARD) {
             val context = LocalContext.current
-            val authRepo = remember { AuthRepository(TokenStorage(context)) }
+            val tokenStorage = remember { TokenStorage(context) }
+            val authRepo = remember { AuthRepository(tokenStorage) }
             val scope = rememberCoroutineScope()
-            var currentUser by remember { mutableStateOf<User?>(null) }
+            var currentUser by remember {
+                mutableStateOf(authRepo.getCachedUser())
+            }
 
             LaunchedEffect(Unit) {
-                currentUser = authRepo.getCurrentUserProfile()
+                if (currentUser == null) {
+                    currentUser = authRepo.getCachedUser()
+                        ?: authRepo.getCurrentUserProfile()
+                }
             }
 
             ArtistDashboardScreen(

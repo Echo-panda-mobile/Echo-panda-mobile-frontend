@@ -36,7 +36,8 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                val user = authRepository.getCurrentUser()
+                val user = authRepository.getCachedUser()
+                    ?: authRepository.getCurrentUserProfile()
                 val playlists = authRepository.getUserPlaylists()
                 val likedSongs = authRepository.getUserLikedSongs()
                 
@@ -60,6 +61,7 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val result = authRepository.updateUserProfile(name, email)
             if (result is AuthResult.Success) {
+                authRepository.refreshCurrentUserProfile()
                 loadUserProfile()
             } else if (result is AuthResult.Error) {
                 _uiState.value = _uiState.value.copy(errorMessage = result.message)
@@ -83,6 +85,7 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
                 photoUrl = photoUrl
             )
             if (result is AuthResult.Success) {
+                authRepository.refreshCurrentUserProfile()
                 loadUserProfile()
             } else if (result is AuthResult.Error) {
                 _uiState.value = _uiState.value.copy(

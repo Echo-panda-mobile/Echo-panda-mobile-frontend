@@ -131,18 +131,40 @@ class AuthRepository(
         }
     }
 
-    suspend fun getCurrentUserProfile(): User? {
+    /**
+     * Returns the signed-in user from memory/disk when available.
+     * Does not call the backend — safe for tab switches and screen recomposition.
+     */
+    fun getCachedUser(): User? {
+        val firebaseUser = firebaseAuth.currentUser ?: return null
+        UserSessionCache.getIfFresh()?.let { return it }
+        return UserSessionCache.fromStorage(tokenStorage, firebaseUser)
+    }
+
+    /**
+     * Resolves the user profile, syncing with the backend only when cache is missing or stale.
+     */
+    suspend fun getCurrentUserProfile(forceRefresh: Boolean = false): User? {
         val firebaseUser = firebaseAuth.currentUser ?: return null
 
-        // Always re-sync through Firebase so role/token match this Firebase account
-        // (avoids a stale Sanctum token from an older session keeping you on the user app).
+        if (!forceRefresh) {
+            getCachedUser()?.let { return it }
+        }
+
         return when (val sync = syncBackendSession(firebaseUser, provider = "session_restore")) {
-            is AuthResult.Success -> sync.data.user
-            else -> null
+            is AuthResult.Success -> {
+                val user = sync.data.user
+                UserSessionCache.persist(tokenStorage, user)
+                user
+            }
+            else -> getCachedUser()
         }
     }
 
-    suspend fun getCurrentUser(): User? = getCurrentUserProfile()
+    suspend fun refreshCurrentUserProfile(): User? =
+        getCurrentUserProfile(forceRefresh = true)
+
+    suspend fun getCurrentUser(): User? = getCachedUser() ?: getCurrentUserProfile()
 
     suspend fun getUserLikedSongs(): List<String> {
         val firebaseUser = firebaseAuth.currentUser ?: return emptyList()
@@ -214,6 +236,7 @@ class AuthRepository(
             // Proceed with local logout even if the backend call fails.
         } finally {
             firebaseAuth.signOut()
+            UserSessionCache.invalidate()
             tokenStorage.clearSession()
         }
     }
@@ -257,6 +280,7 @@ class AuthRepository(
             tokenStorage.saveRole(normalizedRole)
 
             val user = response.user.copy(role = normalizedRole).toUser(firebaseUser)
+            UserSessionCache.persist(tokenStorage, user)
             AuthResult.Success(
                 AuthResponse(
                     user = user,
