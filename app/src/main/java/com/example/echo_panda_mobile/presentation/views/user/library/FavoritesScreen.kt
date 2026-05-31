@@ -106,7 +106,7 @@ fun FavoritesScreen(
                             themeColor = themeColor,
                             onPlayAll = {
                                 state.favoriteTracks.firstOrNull()?.let { track ->
-                                    globalPlayerViewModel.playTrack(track)
+                                    globalPlayerViewModel.playQueue(state.favoriteTracks, track.id)
                                     onNavigateToPlayer(track.id, track.resumePositionMs)
                                 }
                             }
@@ -123,8 +123,8 @@ fun FavoritesScreen(
                             index = index,
                             track = track,
                             isPlaying = isPlaying,
-                            onClick = { 
-                                globalPlayerViewModel.playTrack(track)
+                            onClick = {
+                                globalPlayerViewModel.playQueue(state.favoriteTracks, track.id)
                                 onNavigateToPlayer(track.id, track.resumePositionMs)
                             },
                             onAddToFavorites = {

@@ -31,6 +31,7 @@ import coil.compose.AsyncImage
 import com.example.echo_panda_mobile.data.model.*
 import com.example.echo_panda_mobile.presentation.components.*
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
+import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
 import com.example.echo_panda_mobile.presentation.viewsmodel.ArtistDetailViewModel
 import kotlinx.coroutines.launch
 
@@ -41,7 +42,8 @@ fun ArtistDetailScreen(
     onNavigateToAlbum: (String) -> Unit,
     onNavigateToPlayer: (String, Long?) -> Unit,
     onNavigateToDashboard: () -> Unit = {},
-    viewModel: ArtistDetailViewModel = viewModel()
+    viewModel: ArtistDetailViewModel = viewModel(),
+    globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
@@ -82,7 +84,16 @@ fun ArtistDetailScreen(
                 PopularSection(
                     state = state,
                     onToggleFollow = { viewModel.toggleFollow() },
-                    onTrackClick = onNavigateToPlayer,
+                    onTrackClick = { trackId, resumeMs ->
+                        val queue = when {
+                            state.popularTracks.any { it.id == trackId } -> state.popularTracks
+                            else -> state.singles
+                        }
+                        if (queue.isNotEmpty()) {
+                            globalPlayerViewModel.playQueue(queue, trackId)
+                        }
+                        onNavigateToPlayer(trackId, resumeMs)
+                    },
                     onAddToFavorites = { track ->
                         viewModel.toggleFavorite(track)
                     },
@@ -101,7 +112,12 @@ fun ArtistDetailScreen(
                     Spacer(modifier = Modifier.height(32.dp))
                     ArtistSinglesSection(
                         singles = state.singles,
-                        onTrackClick = onNavigateToPlayer
+                        onTrackClick = { trackId, resumeMs ->
+                            if (state.singles.isNotEmpty()) {
+                                globalPlayerViewModel.playQueue(state.singles, trackId)
+                            }
+                            onNavigateToPlayer(trackId, resumeMs)
+                        }
                     )
                 }
 

@@ -138,7 +138,7 @@ fun PlaylistDetailScreen(
                                     track = track,
                                     isPlaying = isPlaying,
                                     onClick = {
-                                        globalPlayerViewModel.playTrack(track)
+                                        globalPlayerViewModel.playQueue(state.tracks, track.id)
                                         onNavigateToPlayer(track.id, track.resumePositionMs)
                                     },
                                     onAddToFavorites = { viewModel.toggleFavorite(track) }

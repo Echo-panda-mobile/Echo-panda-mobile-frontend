@@ -218,7 +218,6 @@ fun AppNavigation() {
                 MiniPlayer(
                     track        = playerState.currentTrack!!,
                     isPlaying    = playerState.isPlaying,
-                    progress     = playerState.progress,
                     onTogglePlay = { globalPlayerViewModel.togglePlayPause() },
                     onNext       = { globalPlayerViewModel.nextTrack() },
                     onPrevious   = { globalPlayerViewModel.previousTrack() },

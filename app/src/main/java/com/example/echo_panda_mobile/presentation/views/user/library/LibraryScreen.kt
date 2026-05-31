@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.example.echo_panda_mobile.presentation.views.user.library
 
 import androidx.compose.foundation.background
@@ -12,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,7 +28,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.echo_panda_mobile.presentation.components.ArtPlaceholder
 import com.example.echo_panda_mobile.presentation.components.EchoPandaBottomBar
+import com.example.echo_panda_mobile.presentation.components.SongCardHorizontal
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
+import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
 import com.example.echo_panda_mobile.presentation.viewsmodel.LibraryItem
 import com.example.echo_panda_mobile.presentation.viewsmodel.LibraryViewModel
 
@@ -38,9 +43,16 @@ fun LibraryScreen(
     onNavigateToAlbum: (String) -> Unit = {},
     onNavigateToPlaylist: (String) -> Unit = {},
     onNavigateToPlayer: (String, Long?) -> Unit = { _, _ -> },
-    viewModel: LibraryViewModel = viewModel()
+    viewModel: LibraryViewModel = viewModel(),
+    globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val recentTracks = remember(state.filteredItems) {
+        state.filteredItems.filterIsInstance<LibraryItem.RecentTrackItem>()
+    }
+    val otherItems = remember(state.filteredItems) {
+        state.filteredItems.filter { it !is LibraryItem.RecentTrackItem }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -63,10 +75,16 @@ fun LibraryScreen(
                 CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
             }
         } else {
-        LazyColumn(
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = { viewModel.refresh() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+        ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
                 .padding(horizontal = 16.dp)
         ) {
             item {
@@ -130,7 +148,30 @@ fun LibraryScreen(
                 }
             }
 
-            items(state.filteredItems) { item ->
+            if (recentTracks.isNotEmpty()) {
+                item {
+                    val queue = recentTracks.map { it.track }
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        recentTracks.forEach { item ->
+                            val track = item.track
+                            SongCardHorizontal(
+                                track = track,
+                                onClick = {
+                                    globalPlayerViewModel.playQueue(queue, track.id)
+                                    onNavigateToPlayer(track.id, track.resumePositionMs)
+                                },
+                                onFavoriteClick = { viewModel.toggleFavorite(track) }
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+
+            items(
+                items = otherItems,
+                key = { libraryItemKey(it) }
+            ) { item ->
                 LibraryListItem(
                     item = item,
                     onClick = {
@@ -150,6 +191,7 @@ fun LibraryScreen(
             item {
                 Spacer(Modifier.height(32.dp))
             }
+        }
         }
         }
 
@@ -211,6 +253,13 @@ fun LibraryScreen(
             )
         }
     }
+}
+
+private fun libraryItemKey(item: LibraryItem): String = when (item) {
+    is LibraryItem.ArtistItem -> "artist_${item.artist.id}"
+    is LibraryItem.PlaylistItem -> "playlist_${item.playlist.id}"
+    is LibraryItem.AlbumItem -> "album_${item.album.id}"
+    is LibraryItem.RecentTrackItem -> "recent_${item.track.id}"
 }
 
 @Composable

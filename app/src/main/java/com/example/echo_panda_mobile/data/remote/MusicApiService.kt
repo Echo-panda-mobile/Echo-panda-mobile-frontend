@@ -58,6 +58,13 @@ data class ListenHistoryRequest(
     @SerializedName("completed") val completed: Boolean? = null
 )
 
+data class PlaybackProgressRequest(
+    @SerializedName("song_id") val songId: Int,
+    @SerializedName("progress_seconds") val progressSeconds: Int,
+    @SerializedName("duration_seconds") val durationSeconds: Int,
+    @SerializedName("source") val source: String? = "android"
+)
+
 data class StreamTicketResponse(
     @SerializedName("song_id") val songId: Int? = null,
     @SerializedName("quality") val quality: String? = null,
@@ -74,6 +81,36 @@ data class AlbumArtistField(
     val id: String? = null,
     val name: String = "Unknown"
 )
+
+/** Parses JSON numbers or strings (e.g. `"210"` or `"3:30"`) into seconds. */
+class FlexibleIntAdapter : JsonDeserializer<Int?> {
+    override fun deserialize(
+        json: JsonElement?,
+        typeOfT: Type?,
+        context: JsonDeserializationContext?
+    ): Int? {
+        if (json == null || json.isJsonNull) return null
+        if (!json.isJsonPrimitive) return null
+        val prim = json.asJsonPrimitive
+        return when {
+            prim.isNumber -> prim.asInt
+            prim.isString -> {
+                val raw = prim.asString.trim()
+                raw.toIntOrNull() ?: run {
+                    val parts = raw.split(":")
+                    if (parts.size == 2) {
+                        val mins = parts[0].toIntOrNull() ?: 0
+                        val secs = parts[1].toIntOrNull() ?: 0
+                        mins * 60 + secs
+                    } else {
+                        null
+                    }
+                }
+            }
+            else -> null
+        }
+    }
+}
 
 class AlbumArtistFieldAdapter : JsonDeserializer<AlbumArtistField> {
     override fun deserialize(
@@ -125,7 +162,12 @@ data class SongDto(
     @SerializedName("title") val title: String? = null,
     @SerializedName("name") val name: String? = null,
     @SerializedName("artist_name") val artistName: String? = null,
-    @SerializedName("duration") val durationSeconds: Int? = null,
+    @SerializedName("artist")
+    @JsonAdapter(AlbumArtistFieldAdapter::class)
+    val artist: AlbumArtistField? = null,
+    @SerializedName("duration")
+    @JsonAdapter(FlexibleIntAdapter::class)
+    val durationSeconds: Int? = null,
     @SerializedName("track_number") val trackNumber: Int? = null,
     @SerializedName("album_id") val albumId: Int? = null,
     @SerializedName("cover_url") val coverUrl: String? = null,
@@ -133,20 +175,12 @@ data class SongDto(
     @SerializedName("is_favorited") val isFavorite: Boolean? = null
 )
 
-/** Favorites may return a flat song or `{ "song": { ... } }` — this DTO handles both. */
+/** Laravel favorites: `{ favoritable_type, favoritable: { song fields... } }` or `{ song: ... }`. */
 data class FavoriteItemDto(
-    @SerializedName("song") val song: SongDto? = null,
-    @SerializedName("song_id") val songId: Int? = null,
-    @SerializedName("id") val id: Int? = null,
-    @SerializedName("title") val title: String? = null,
-    @SerializedName("name") val name: String? = null,
-    @SerializedName("artist_name") val artistName: String? = null,
-    @SerializedName("duration") val durationSeconds: Int? = null,
-    @SerializedName("track_number") val trackNumber: Int? = null,
-    @SerializedName("album_id") val albumId: Int? = null,
-    @SerializedName("cover_url") val coverUrl: String? = null,
-    @SerializedName("album") val album: AlbumDto? = null,
-    @SerializedName("is_favorited") val isFavorite: Boolean? = null
+    @SerializedName("favoritable_type") val favoritableType: String? = null,
+    @SerializedName("favoritable_id") val favoritableId: Int? = null,
+    @SerializedName("favoritable") val favoritable: SongDto? = null,
+    @SerializedName("song") val song: SongDto? = null
 )
 
 // Playlist DTOs
@@ -180,6 +214,12 @@ data class PlayHistoryDto(
     @SerializedName("song_id") val songId: Int,
     @SerializedName("progress_seconds") val progressSeconds: Int,
     @SerializedName("song") val song: SongDto
+)
+
+/** Mobile MB API: recently played row with normalized song. */
+data class MbRecentItemDto(
+    @SerializedName("song") val song: SongDto,
+    @SerializedName("progress_seconds") val progressSeconds: Int? = null
 )
 
 // ─── Service Interface ────────────────────────────────────────────────────────
@@ -240,8 +280,28 @@ interface MusicApiService {
     @GET("playback/recent")
     suspend fun getRecentlyPlayed(): Response<BaseResponse<List<SongDto>>>
 
+    /** Mobile-only: normalized recently played (listen-history). */
+    @GET("mb/playback/recent")
+    suspend fun getMbRecentlyPlayed(
+        @Query("limit") limit: Int? = 50
+    ): Response<BaseResponse<List<MbRecentItemDto>>>
+
+    @POST("playback/progress")
+    suspend fun trackPlaybackProgress(
+        @Body request: PlaybackProgressRequest
+    ): Response<BaseResponse<PlayHistoryDto>>
+
     @GET("favorites")
-    suspend fun getFavorites(): Response<PaginatedResponse<FavoriteItemDto>>
+    suspend fun getFavorites(
+        @Query("type") type: String? = "song",
+        @Query("per_page") perPage: Int? = 100
+    ): Response<PaginatedResponse<FavoriteItemDto>>
+
+    /** Mobile-only: liked songs with full song metadata for the library UI. */
+    @GET("mb/favorites")
+    suspend fun getMbFavorites(
+        @Query("per_page") perPage: Int? = 100
+    ): Response<PaginatedResponse<FavoriteItemDto>>
 
     @GET("playlists/{playlist}/songs")
     suspend fun getPlaylistSongs(

@@ -45,6 +45,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
             try {
                 val user = authRepository.getCachedUser()
+                val profilePhotoUrl = authRepository.resolveProfilePhotoUrl()
 
                 // Load music data in parallel
                 val recentDef     = async { musicRepository.getRecentPlaylists() }
@@ -63,7 +64,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     it.copy(
                         isLoading        = false,
                         userName         = user?.name ?: "User",
-                        userPhotoUrl     = user?.photoUrl,
+                        userPhotoUrl     = profilePhotoUrl ?: user?.photoUrl,
                         recentPlaylists  = recent,
                         popularArtists   = artists,
                         topAlbums        = albums,
@@ -82,4 +83,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refresh() = loadAll()
+
+    fun refreshContinueListening() {
+        viewModelScope.launch {
+            try {
+                val recentDef = async { musicRepository.getRecentPlaylists() }
+                val recentListenDef = async { musicRepository.getRecentListening() }
+                val recent = (recentDef.await() as? MusicResult.Success<*>?)?.data as? List<Playlist> ?: emptyList()
+                val recentListen =
+                    (recentListenDef.await() as? MusicResult.Success<*>?)?.data as? List<Playlist> ?: emptyList()
+                _uiState.update { it.copy(recentPlaylists = recent, recentListening = recentListen) }
+            } catch (_: Exception) {
+                // Keep existing lists on transient failure
+            }
+        }
+    }
+
+    fun refreshUserHeader() {
+        viewModelScope.launch {
+            val user = authRepository.getCachedUser()
+            val profilePhotoUrl = authRepository.resolveProfilePhotoUrl()
+            _uiState.update {
+                it.copy(
+                    userName = user?.name ?: it.userName,
+                    userPhotoUrl = profilePhotoUrl ?: user?.photoUrl
+                )
+            }
+        }
+    }
 }

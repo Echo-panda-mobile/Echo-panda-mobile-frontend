@@ -30,6 +30,7 @@ import com.example.echo_panda_mobile.presentation.components.*
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.theme.LocalAppLanguage
 import com.example.echo_panda_mobile.presentation.theme.LocalIsDarkTheme
+import com.example.echo_panda_mobile.presentation.navigation.BrowseSection
 import com.example.echo_panda_mobile.presentation.viewsmodel.AlbumViewModel
 
 @Composable
@@ -38,10 +39,14 @@ fun AlbumScreen(
     onNavSelect: (Int) -> Unit = {},
     onNavigateToDetail: (String) -> Unit = {},
     onSearch: (String) -> Unit = {},
-    onVoiceSearch: () -> Unit = {},
+    onNavigateToBrowse: (String) -> Unit = {},
     viewModel: AlbumViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val startVoiceSearch = rememberVoiceSearchLauncher(
+        onResult = { viewModel.startSearchWithQuery(it) },
+        prompt = "Search albums..."
+    )
     val isDark = LocalIsDarkTheme.current
     val bgStart = if (isDark) EchoPandaColors.BgDarkStart else EchoPandaColors.BgLightStart
     val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -62,7 +67,7 @@ fun AlbumScreen(
                     onToggleSearch = { viewModel.toggleSearch() },
                     onChange = viewModel::onSearchQueryChange,
                     onSearch = { onSearch(state.searchQuery) },
-                    onVoiceSearch = onVoiceSearch
+                    onVoiceSearch = startVoiceSearch
                 )
             },
             bottomBar = { EchoPandaBottomBar(selectedNav, onNavSelect) }
@@ -132,8 +137,8 @@ fun AlbumScreen(
 
                         // ── Top Picks (Horizontal Scroll) ─────────────────────────────────
                         SectionHeader(
-                            fullTitle = "Top Picks", 
-                            onViewAll = { viewModel.setCategory("Trending") }
+                            fullTitle = "Top Picks",
+                            onViewAll = { onNavigateToBrowse(BrowseSection.TOP_PICKS) }
                         )
                         Spacer(Modifier.height(16.dp))
                         Row(
@@ -155,7 +160,10 @@ fun AlbumScreen(
                         Spacer(Modifier.height(32.dp))
 
                         // ── All Albums (List Style) ────────────────────────────────
-                        SectionHeader(fullTitle = "All Albums", onViewAll = null)
+                        SectionHeader(
+                            fullTitle = "All Albums",
+                            onViewAll = { onNavigateToBrowse(BrowseSection.ALL_ALBUMS) }
+                        )
                         Spacer(Modifier.height(8.dp))
                         Column(
                             modifier = Modifier.padding(horizontal = 16.dp)
@@ -324,6 +332,9 @@ private fun AlbumTopBar(
                 ),
                 singleLine = true
             )
+            IconButton(onClick = onVoiceSearch) {
+                Icon(Icons.Default.Mic, contentDescription = "Voice Search", tint = EchoPandaColors.AccentBlue)
+            }
             IconButton(onClick = onSearch) {
                 Icon(Icons.Default.Search, contentDescription = "Search", tint = EchoPandaColors.AccentBlue)
             }
@@ -353,45 +364,12 @@ private fun AlbumTopBar(
                 fontWeight = FontWeight.Bold
             )
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Default.Mic,
-                    contentDescription = "Voice Search",
-                    tint = EchoPandaColors.AccentBlue,
-                    modifier = Modifier.size(26.dp).clickable { onVoiceSearch() }
-                )
-                Spacer(Modifier.width(16.dp))
-                
-                var showMenu by remember { mutableStateOf(false) }
-                Box {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(
-                            Icons.Default.Menu,
-                            contentDescription = "Menu",
-                            tint = EchoPandaColors.AccentBlue,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false },
-                        modifier = Modifier.background(EchoPandaColors.BgCardDark)
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Sort by Name", color = Color.White) },
-                            onClick = { showMenu = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Sort by Artist", color = Color.White) },
-                            onClick = { showMenu = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Settings", color = Color.White) },
-                            onClick = { showMenu = false }
-                        )
-                    }
-                }
-            }
+            Icon(
+                Icons.Default.Mic,
+                contentDescription = "Voice Search",
+                tint = EchoPandaColors.AccentBlue,
+                modifier = Modifier.size(26.dp).clickable { onVoiceSearch() }
+            )
         }
     }
 }

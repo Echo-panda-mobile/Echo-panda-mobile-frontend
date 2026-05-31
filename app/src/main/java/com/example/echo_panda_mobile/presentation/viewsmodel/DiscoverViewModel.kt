@@ -8,6 +8,7 @@ import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.repository.MusicRepository
 import com.example.echo_panda_mobile.data.repository.MusicResult
 import com.example.echo_panda_mobile.data.repository.TokenStorage
+import com.example.echo_panda_mobile.data.util.SearchMatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +40,7 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
     private var allGenres: List<Genre> = emptyList()
     private var allMoods: List<MoodPlaylist> = emptyList()
     private var allReleases: List<Track> = emptyList()
+    private var allMostPlayed: List<Track> = emptyList()
 
     init { loadAll() }
 
@@ -56,7 +58,7 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
             allGenres   = (genresDef.await()   as? MusicResult.Success)?.data ?: emptyList()
             allMoods    = (moodsDef.await()    as? MusicResult.Success)?.data ?: emptyList()
             allReleases = (releasesDef.await() as? MusicResult.Success)?.data ?: emptyList()
-            val mostPlayed = (mostPlayedDef.await() as? MusicResult.Success)?.data ?: emptyList()
+            allMostPlayed = (mostPlayedDef.await() as? MusicResult.Success)?.data ?: emptyList()
             val artists  = (artistsDef.await()  as? MusicResult.Success)?.data ?: emptyList()
             val browse   = (browseDef.await()   as? MusicResult.Success)?.data ?: emptyList()
 
@@ -65,9 +67,42 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
                 genres           = allGenres,
                 moodPlaylists    = allMoods,
                 newReleases      = allReleases,
-                mostPlayedSongs  = mostPlayed,
+                mostPlayedSongs  = allMostPlayed,
                 popularArtists   = artists,
                 browseCategories = browse
+            )
+
+            enrichDiscoverTrackDurations()
+        }
+    }
+
+    private suspend fun enrichDiscoverTrackDurations() {
+        val combined = (allReleases + allMostPlayed).distinctBy { it.id }
+        if (combined.isEmpty()) return
+
+        val enriched = repository.enrichTracksDurationFromMedia(combined)
+        val byId = enriched.associateBy { it.id }
+        allReleases = allReleases.map { byId[it.id] ?: it }
+        allMostPlayed = allMostPlayed.map { byId[it.id] ?: it }
+        refreshTrackSectionsInState()
+    }
+
+    private fun refreshTrackSectionsInState() {
+        val query = _uiState.value.searchQuery
+        val visibleReleases = if (query.isBlank()) {
+            allReleases
+        } else {
+            allReleases.filter { SearchMatcher.matches(query, it.title, it.artist) }
+        }
+        val visibleMostPlayed = if (query.isBlank()) {
+            allMostPlayed
+        } else {
+            allMostPlayed.filter { SearchMatcher.matches(query, it.title, it.artist) }
+        }
+        _uiState.update { state ->
+            state.copy(
+                newReleases = visibleReleases,
+                mostPlayedSongs = visibleMostPlayed
             )
         }
     }
@@ -78,23 +113,22 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
             _uiState.value = _uiState.value.copy(
                 genres = allGenres,
                 moodPlaylists = allMoods,
-                newReleases = allReleases,
                 searchResults = emptyList()
             )
+            refreshTrackSectionsInState()
         } else {
-            val lowerQuery = query.lowercase()
             _uiState.value = _uiState.value.copy(
-                genres = allGenres.filter { it.name.lowercase().contains(lowerQuery) },
-                moodPlaylists = allMoods.filter { it.name.lowercase().contains(lowerQuery) },
-                newReleases = allReleases.filter { it.title.lowercase().contains(lowerQuery) || it.artist.lowercase().contains(lowerQuery) }
+                genres = allGenres.filter { SearchMatcher.matches(query, it.name, it.subLabel) },
+                moodPlaylists = allMoods.filter { SearchMatcher.matches(query, it.name) },
+                newReleases = allReleases.filter { SearchMatcher.matches(query, it.title, it.artist) },
+                mostPlayedSongs = allMostPlayed.filter { SearchMatcher.matches(query, it.title, it.artist) }
             )
-            // Simulate album search
             viewModelScope.launch {
                 val albumsResult = repository.getTopAlbums()
                 if (albumsResult is MusicResult.Success) {
                     _uiState.value = _uiState.value.copy(
-                        searchResults = albumsResult.data.filter { 
-                            it.title.lowercase().contains(lowerQuery) || it.artist.lowercase().contains(lowerQuery) 
+                        searchResults = albumsResult.data.filter {
+                            SearchMatcher.matches(query, it.title, it.artist)
                         }
                     )
                 }
@@ -111,6 +145,11 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
         if (!nextActive) {
             onSearchQueryChange("")
         }
+    }
+
+    fun startSearchWithQuery(query: String) {
+        _uiState.update { it.copy(isSearchActive = true) }
+        onSearchQueryChange(query)
     }
 
     fun toggleFavorite(track: Track) {
@@ -137,6 +176,9 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
             )
         }
         allReleases = allReleases.map {
+            if (it.id == trackId) it.copy(isFavorite = isFavorite) else it
+        }
+        allMostPlayed = allMostPlayed.map {
             if (it.id == trackId) it.copy(isFavorite = isFavorite) else it
         }
     }

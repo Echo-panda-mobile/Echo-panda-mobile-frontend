@@ -4,26 +4,32 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.User
+import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.AuthResult
+import com.example.echo_panda_mobile.data.repository.MusicRepository
+import com.example.echo_panda_mobile.data.repository.MusicResult
 import com.example.echo_panda_mobile.data.repository.TokenStorage
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class UserProfileUiState(
     val isLoading: Boolean = true,
     val user: User? = null,
-    val playlists: List<String> = emptyList(),
+    val playlistCount: Int = 0,
     val likedSongsCount: Int = 0,
-    val followingCount: Int = 0, // Placeholder for future feature
     val errorMessage: String? = null
 )
 
 class UserProfileViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val authRepository = AuthRepository(TokenStorage(application))
+    private val tokenStorage = TokenStorage(application)
+    private val authRepository = AuthRepository(tokenStorage)
+    private val musicRepository = MusicRepository(RetrofitClient.getMusicService(tokenStorage))
 
     private val _uiState = MutableStateFlow(UserProfileUiState())
     val uiState: StateFlow<UserProfileUiState> = _uiState.asStateFlow()
@@ -32,39 +38,60 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
         loadUserProfile()
     }
 
-    fun loadUserProfile() {
+    fun loadUserProfile(forceRefreshUser: Boolean = false) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             try {
-                val user = authRepository.getCachedUser()
-                    ?: authRepository.getCurrentUserProfile()
-                val playlists = authRepository.getUserPlaylists()
-                val likedSongs = authRepository.getUserLikedSongs()
-                
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    user = user,
-                    playlists = playlists,
-                    likedSongsCount = likedSongs.size,
-                    followingCount = 0 // Update this when following logic is implemented
-                )
+                val userDef = async {
+                    if (forceRefreshUser) {
+                        authRepository.refreshCurrentUserProfile()
+                    } else {
+                        authRepository.getCachedUser()
+                            ?: authRepository.getCurrentUserProfile()
+                    }
+                }
+                val playlistsDef = async { musicRepository.getPlaylists(perPage = 100) }
+                val favoritesDef = async { musicRepository.getFavoriteTracks() }
+
+                val user = userDef.await()
+                val playlistCount = when (val result = playlistsDef.await()) {
+                    is MusicResult.Success -> result.data.size
+                    else -> 0
+                }
+                val likedCount = when (val result = favoritesDef.await()) {
+                    is MusicResult.Success -> result.data.size
+                    else -> 0
+                }
+
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        user = user,
+                        playlistCount = playlistCount,
+                        likedSongsCount = likedCount,
+                        errorMessage = if (user == null) "Could not load your profile." else null
+                    )
+                }
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    errorMessage = e.message ?: "Failed to load profile"
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = e.message ?: "Failed to load profile"
+                    )
+                }
             }
         }
     }
 
-    fun updateProfile(name: String, email: String) {
+    fun updateProfile(name: String) {
         viewModelScope.launch {
+            val email = _uiState.value.user?.email?.takeIf { it.isNotBlank() }
+                ?: return@launch
             val result = authRepository.updateUserProfile(name, email)
             if (result is AuthResult.Success) {
-                authRepository.refreshCurrentUserProfile()
-                loadUserProfile()
+                loadUserProfile(forceRefreshUser = true)
             } else if (result is AuthResult.Error) {
-                _uiState.value = _uiState.value.copy(errorMessage = result.message)
+                _uiState.update { it.copy(errorMessage = result.message) }
             }
         }
     }
@@ -78,20 +105,21 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
 
     fun updateProfileImage(photoUrl: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.update { it.copy(isLoading = true) }
             val result = authRepository.updateUserProfile(
                 name = uiState.value.user?.name ?: "",
                 email = uiState.value.user?.email ?: "",
                 photoUrl = photoUrl
             )
             if (result is AuthResult.Success) {
-                authRepository.refreshCurrentUserProfile()
-                loadUserProfile()
+                loadUserProfile(forceRefreshUser = true)
             } else if (result is AuthResult.Error) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    errorMessage = result.message
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = result.message
+                    )
+                }
             }
         }
     }

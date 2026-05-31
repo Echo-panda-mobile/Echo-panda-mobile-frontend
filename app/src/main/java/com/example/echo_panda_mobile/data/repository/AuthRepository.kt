@@ -166,6 +166,23 @@ class AuthRepository(
 
     suspend fun getCurrentUser(): User? = getCachedUser() ?: getCurrentUserProfile()
 
+    /**
+     * Profile photo is not on the Laravel user model — resolve from encrypted prefs,
+     * Firebase Auth, then Firestore `users/{uid}.photoUrl`.
+     */
+    suspend fun resolveProfilePhotoUrl(): String? {
+        tokenStorage.getPhotoUrl()?.let { return it }
+        val firebaseUser = firebaseAuth.currentUser ?: return null
+        firebaseUser.photoUrl?.toString()?.let { return it }
+        return try {
+            firestore.collection("users").document(firebaseUser.uid).get().await()
+                .getString("photoUrl")
+                ?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     suspend fun getUserLikedSongs(): List<String> {
         val firebaseUser = firebaseAuth.currentUser ?: return emptyList()
         val doc = firestore.collection("users").document(firebaseUser.uid).get().await()
@@ -212,6 +229,17 @@ class AuthRepository(
 
             firestore.collection("users").document(firebaseUser.uid)
                 .set(data, SetOptions.merge()).await()
+
+            getCachedUser()?.let { current ->
+                UserSessionCache.persist(
+                    tokenStorage,
+                    current.copy(
+                        name = normalizedName,
+                        email = normalizedEmail,
+                        photoUrl = photoUrl ?: current.photoUrl ?: firebaseUser.photoUrl?.toString()
+                    )
+                )
+            }
 
             AuthResult.Success(Unit)
         } catch (e: Exception) {
@@ -355,6 +383,6 @@ class AuthRepository(
         email = email,
         role = role,
         token = tokenStorage.getToken().orEmpty(),
-        photoUrl = firebaseUser.photoUrl?.toString()
+        photoUrl = tokenStorage.getPhotoUrl() ?: firebaseUser.photoUrl?.toString()
     )
 }

@@ -50,7 +50,7 @@ object UserSessionCache {
             email = email,
             role = role,
             token = token,
-            photoUrl = firebaseUser?.photoUrl?.toString()
+            photoUrl = tokenStorage.getPhotoUrl() ?: firebaseUser?.photoUrl?.toString()
         )
     }
 

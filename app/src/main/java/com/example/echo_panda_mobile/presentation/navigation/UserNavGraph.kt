@@ -2,8 +2,11 @@ package com.example.echo_panda_mobile.presentation.navigation
 
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import androidx.navigation.navigation
+import com.example.echo_panda_mobile.presentation.views.user.browse.BrowseScreen
 import com.example.echo_panda_mobile.presentation.views.user.home.HomeScreen
 import com.example.echo_panda_mobile.presentation.views.user.discover.DiscoverScreen
 import com.example.echo_panda_mobile.presentation.views.user.library.LibraryScreen
@@ -15,6 +18,10 @@ import com.example.echo_panda_mobile.presentation.views.user.profile.UserProfile
 import com.example.echo_panda_mobile.presentation.views.user.profile.UserSettingsScreen
 import com.example.echo_panda_mobile.presentation.views.user.artist.ArtistDetailScreen
 import com.example.echo_panda_mobile.presentation.views.user.library.PlaylistDetailScreen
+
+fun NavController.navigateToBrowse(section: String) {
+    navigate(Routes.USER_BROWSE.replace("{section}", section))
+}
 
 fun NavController.navigateToPlayer(trackId: String, resumeMs: Long? = null) {
     var route = Routes.USER_PLAYER.replace("{trackId}", trackId)
@@ -48,7 +55,8 @@ fun NavGraphBuilder.userNavGraph(
                 },
                 onNavigateToArtist = { artistId ->
                     navController.navigate(Routes.ARTIST_VIEW.replace("{artistId}", artistId))
-                }
+                },
+                onNavigateToBrowse = { section -> navController.navigateToBrowse(section) }
             )
         }
 
@@ -64,7 +72,8 @@ fun NavGraphBuilder.userNavGraph(
                 },
                 onNavigateToSong = { trackId, resumeMs ->
                     navController.navigateToPlayer(trackId, resumeMs)
-                }
+                },
+                onNavigateToBrowse = { section -> navController.navigateToBrowse(section) }
             )
         }
 
@@ -108,8 +117,26 @@ fun NavGraphBuilder.userNavGraph(
                 onNavigateToDetail = { albumId ->
                     navController.navigate(Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId))
                 },
-                onSearch = { /* TODO */ },
-                onVoiceSearch = { /* TODO */ }
+                onSearch = { },
+                onNavigateToBrowse = { section -> navController.navigateToBrowse(section) }
+            )
+        }
+
+        composable(
+            route = Routes.USER_BROWSE,
+            arguments = listOf(navArgument("section") { type = NavType.StringType })
+        ) {
+            BrowseScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToArtist = { artistId ->
+                    navController.navigate(Routes.ARTIST_VIEW.replace("{artistId}", artistId))
+                },
+                onNavigateToAlbum = { albumId ->
+                    navController.navigate(Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId))
+                },
+                onNavigateToPlayer = { trackId, resumeMs ->
+                    navController.navigateToPlayer(trackId, resumeMs)
+                }
             )
         }
 
@@ -154,7 +181,7 @@ fun NavGraphBuilder.userNavGraph(
             UserProfileScreen(
                 onBack = { navController.popBackStack() },
                 onSettings = { navController.navigate(Routes.USER_SETTINGS) },
-                onEditProfile = { /* TODO */ },
+                onNavigateToLikedSongs = { navController.navigate(Routes.USER_FAVORITES) },
                 onLogoutSuccess = {
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }

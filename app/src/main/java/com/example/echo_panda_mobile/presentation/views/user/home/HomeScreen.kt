@@ -6,6 +6,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
@@ -13,6 +14,9 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -27,6 +31,7 @@ import coil.request.ImageRequest
 import com.example.echo_panda_mobile.presentation.components.*
 import com.example.echo_panda_mobile.presentation.viewmodel.HomeViewModel
 import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
+import com.example.echo_panda_mobile.presentation.navigation.BrowseSection
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 
 @Composable
@@ -37,10 +42,23 @@ fun HomeScreen(
     onNavigateToAlbum: (String) -> Unit = {},
     onNavigateToPlayer: (String, Long?) -> Unit = { _, _ -> },
     onNavigateToArtist: (String) -> Unit = {},
+    onNavigateToBrowse: (String) -> Unit = {},
     viewModel: HomeViewModel = viewModel(),
     globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshUserHeader()
+                viewModel.refreshContinueListening()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Box(
         modifier = Modifier
@@ -129,7 +147,7 @@ fun HomeScreen(
                         fullTitle = "Popular Artists",
                         highlightPart = "Artists",
                         highlightColor = EchoPandaColors.AccentBlue,
-                        onViewAll = { /* TODO */ }
+                        onViewAll = { onNavigateToBrowse(BrowseSection.POPULAR_ARTISTS) }
                     )
                     Spacer(Modifier.height(16.dp))
                     Row(
@@ -154,7 +172,7 @@ fun HomeScreen(
                         fullTitle = "Top Albums",
                         highlightPart = "Albums",
                         highlightColor = EchoPandaColors.AccentBlue,
-                        onViewAll = { /* TODO */ }
+                        onViewAll = { onNavigateToBrowse(BrowseSection.TOP_ALBUMS) }
                     )
                     Spacer(Modifier.height(16.dp))
                     Row(
@@ -240,50 +258,55 @@ private fun HomeTopBar(userName: String, userPhotoUrl: String?, onProfileClick: 
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onProfileClick)
+                .padding(end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.1f))
-                    .clickable { onProfileClick() },
+                    .background(Color(0xFF0F2537)),
                 contentAlignment = Alignment.Center
             ) {
-                if (userPhotoUrl != null) {
+                if (!userPhotoUrl.isNullOrBlank()) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(userPhotoUrl)
                             .crossfade(true)
                             .build(),
-                        contentDescription = "Profile",
+                        contentDescription = "Profile photo",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
                 } else {
                     Icon(
                         Icons.Default.Person,
-                        contentDescription = "Profile",
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
+                        contentDescription = "Profile photo",
+                        tint = EchoPandaColors.AccentBlue,
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             }
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(12.dp))
             Column {
                 Text(
-                    text = "Welcome back !",
+                    text = "Welcome back!",
+                    fontSize = 12.sp,
+                    color = Color.White.copy(alpha = 0.5f)
+                )
+                Text(
+                    text = userName,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
-                Text(
-                    text = userName,
-                    fontSize = 14.sp,
-                    color = Color.White.copy(alpha = 0.5f)
-                )
             }
         }
-        
+
         IconButton(onClick = { /* TODO */ }) {
             Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = Color.White)
         }

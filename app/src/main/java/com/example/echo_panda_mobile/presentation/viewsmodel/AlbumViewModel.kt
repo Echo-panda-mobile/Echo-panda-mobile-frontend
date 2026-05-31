@@ -8,6 +8,7 @@ import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.repository.MusicRepository
 import com.example.echo_panda_mobile.data.repository.MusicResult
 import com.example.echo_panda_mobile.data.repository.TokenStorage
+import com.example.echo_panda_mobile.data.util.SearchMatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -88,10 +89,7 @@ class AlbumViewModel(application: Application) : AndroidViewModel(application) {
             val filtered = if (query.isBlank()) {
                 source
             } else {
-                source.filter {
-                    it.title.contains(query, ignoreCase = true) ||
-                        it.artist.contains(query, ignoreCase = true)
-                }
+                source.filter { SearchMatcher.matches(query, it.title, it.artist) }
             }
             state.copy(searchQuery = query, filteredAlbums = filtered)
         }
@@ -112,5 +110,10 @@ class AlbumViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleSearch() {
         _uiState.update { it.copy(isSearchActive = !it.isSearchActive, searchQuery = "") }
         if (!_uiState.value.isSearchActive) onSearchQueryChange("")
+    }
+
+    fun startSearchWithQuery(query: String) {
+        _uiState.update { it.copy(isSearchActive = true) }
+        onSearchQueryChange(query)
     }
 }

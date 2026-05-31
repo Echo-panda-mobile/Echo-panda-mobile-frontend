@@ -9,8 +9,7 @@ import com.example.echo_panda_mobile.data.repository.MusicRepository
 import com.example.echo_panda_mobile.data.repository.MusicResult
 import com.example.echo_panda_mobile.data.repository.TokenStorage
 import com.example.echo_panda_mobile.player.MusicPlayerManager
-import androidx.media3.common.util.UnstableApi
-import kotlin.OptIn
+import com.example.echo_panda_mobile.player.PlaybackQueue
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -23,10 +22,11 @@ data class PlayerUiState(
     val streamUrl: String? = null,
     val streamExpiresAt: Long = 0,
     val currentPositionMs: Long = 0,
-    val durationMs: Long = 0
+    val durationMs: Long = 0,
+    val canSkipNext: Boolean = false,
+    val canSkipPrevious: Boolean = false
 )
 
-@OptIn(UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     private val tokenStorage = TokenStorage(application)
     private val musicRepository = MusicRepository(RetrofitClient.getMusicService(tokenStorage))
@@ -49,16 +49,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     isPlaying = playing,
                     currentPositionMs = position,
                     durationMs = duration,
-                    progress = if (duration > 0) position.toFloat() / duration else 0f
+                    progress = if (duration > 0) position.toFloat() / duration else 0f,
+                    canSkipNext = PlaybackQueue.hasNext(),
+                    canSkipPrevious = PlaybackQueue.hasPrevious() || position > 3_000L
                 ) }
             }
         }
     }
 
-    fun loadTrack(trackId: String, resumePositionMs: Long? = null) {
+    fun loadTrack(trackId: String, resumePositionMs: Long? = null, showLoading: Boolean = true) {
         android.util.Log.d("PlayerViewModel", "loadTrack called with ID: $trackId, resume: $resumePositionMs")
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update {
+                it.copy(
+                    isLoading = showLoading,
+                    errorMessage = if (showLoading) null else it.errorMessage
+                )
+            }
             
             // 1. Get track metadata
             val trackResult = musicRepository.getTrackById(trackId)
@@ -66,8 +73,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val track = trackResult.data
                 // Use provided resume point if available, otherwise check if metadata has one
                 val resumeAt = resumePositionMs ?: track.resumePositionMs ?: 0L
-                
-                _uiState.update { it.copy(track = track) }
+
+                if (PlaybackQueue.contains(trackId)) {
+                    PlaybackQueue.syncToTrack(trackId)
+                } else {
+                    PlaybackQueue.setSingle(track)
+                }
+
+                _uiState.update {
+                    it.copy(
+                        track = track,
+                        canSkipNext = PlaybackQueue.hasNext(),
+                        canSkipPrevious = PlaybackQueue.hasPrevious()
+                    )
+                }
                 
                 // 2. Get stream ticket
                 val ticketResult = musicRepository.getStreamTicket(trackId)
@@ -83,9 +102,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         
                         // Start playing automatically with resume point
                         playerManager.play(audioUrl, track.title, track.artist, resumeAt)
-                        
-                        // 3. Add to listen history
-                        musicRepository.addToListenHistory(trackId)
+
+                        val durationSeconds = (track.durationMs / 1000L)
+                            .toInt()
+                            .coerceAtLeast(1)
+                        val progressSeconds = (resumeAt / 1000L).toInt().coerceAtLeast(1)
+
+                        // Record play for Library "Recently" (listen-history + playback/recent)
+                        musicRepository.addToListenHistory(
+                            songId = trackId,
+                            duration = progressSeconds,
+                            completed = false
+                        )
+                        musicRepository.trackPlaybackProgress(
+                            songId = trackId,
+                            progressSeconds = progressSeconds,
+                            durationSeconds = durationSeconds
+                        )
                     } else {
                         _uiState.update { it.copy(errorMessage = "Stream URL not found in response") }
                     }
@@ -93,7 +126,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     _uiState.update { it.copy(errorMessage = ticketResult.message) }
                 }
                 
-                _uiState.update { it.copy(isLoading = false) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        canSkipNext = PlaybackQueue.hasNext(),
+                        canSkipPrevious = PlaybackQueue.hasPrevious()
+                    )
+                }
             } else if (trackResult is MusicResult.Error) {
                 _uiState.update { it.copy(isLoading = false, errorMessage = trackResult.message) }
             }
@@ -163,6 +202,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             if (result is MusicResult.Success) {
                 _uiState.update { it.copy(track = it.track?.copy(isDownloaded = true)) }
             }
+        }
+    }
+
+    fun skipToNext() {
+        val next = PlaybackQueue.next() ?: return
+        loadTrack(next.id, resumePositionMs = null, showLoading = false)
+    }
+
+    fun skipToPrevious() {
+        if (_uiState.value.currentPositionMs > 3_000L) {
+            playerManager.seekTo(0)
+            return
+        }
+        val previous = PlaybackQueue.previous()
+        if (previous != null) {
+            loadTrack(previous.id, resumePositionMs = null, showLoading = false)
+        } else {
+            playerManager.seekTo(0)
         }
     }
 
