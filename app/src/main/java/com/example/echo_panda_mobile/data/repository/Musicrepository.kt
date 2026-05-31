@@ -232,26 +232,74 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
 
     // ── Artists ───────────────────────────────────────────────────────────────
 
-    suspend fun getPopularArtists(): MusicResult<List<Artist>> = withContext(Dispatchers.IO) {
+    suspend fun getPopularArtists(limit: Int = 20): MusicResult<List<Artist>> = withContext(Dispatchers.IO) {
         if (apiService == null) return@withContext MusicResult.Error("API service not initialized")
         try {
-            val response = apiService.getArtists()
+            val response = apiService.getMbPopularArtists(limit = limit)
             if (response.isSuccessful) {
-                val artistDtos = response.body()?.data ?: emptyList()
-                
-                // Fetch signed URLs for artist images
-                val artists = artistDtos.map { dto ->
-                    async { enrichArtist(dto.toDomain()) }
-                }.awaitAll()
-                
-                MusicResult.Success(artists)
+                val artists = mapArtistDtos(response.body()?.data.orEmpty())
+                if (artists.isNotEmpty()) {
+                    return@withContext MusicResult.Success(artists)
+                }
             } else {
-                MusicResult.Error("Failed to fetch artists: ${response.code()}")
+                android.util.Log.w(
+                    "MusicRepository",
+                    "mb/artists/popular failed (${response.code()}), falling back to /artists"
+                )
             }
+            fetchArtistsFromPublicCatalog()
         } catch (e: Exception) {
-            MusicResult.Error(e.localizedMessage ?: "Network error")
+            android.util.Log.e("MusicRepository", "getPopularArtists error", e)
+            fetchArtistsFromPublicCatalog()
         }
     }
+
+    suspend fun getRandomArtists(limit: Int = 8): MusicResult<List<Artist>> = withContext(Dispatchers.IO) {
+        if (apiService == null) return@withContext MusicResult.Error("API service not initialized")
+        try {
+            val response = apiService.getMbRandomArtists(limit = limit)
+            if (response.isSuccessful) {
+                val artists = mapArtistDtos(response.body()?.data.orEmpty())
+                if (artists.isNotEmpty()) {
+                    return@withContext MusicResult.Success(artists)
+                }
+            } else {
+                android.util.Log.w(
+                    "MusicRepository",
+                    "mb/artists/random failed (${response.code()}), using local shuffle fallback"
+                )
+            }
+            when (val popular = getPopularArtists(limit = 50)) {
+                is MusicResult.Success -> MusicResult.Success(popular.data.shuffled().take(limit))
+                is MusicResult.Error -> popular
+                else -> MusicResult.Success(emptyList())
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MusicRepository", "getRandomArtists error", e)
+            when (val popular = getPopularArtists(limit = 50)) {
+                is MusicResult.Success -> MusicResult.Success(popular.data.shuffled().take(limit))
+                is MusicResult.Error -> popular
+                else -> MusicResult.Success(emptyList())
+            }
+        }
+    }
+
+    private suspend fun fetchArtistsFromPublicCatalog(): MusicResult<List<Artist>> {
+        val response = apiService?.getArtists()
+            ?: return MusicResult.Error("API service not initialized")
+        return if (response.isSuccessful) {
+            MusicResult.Success(mapArtistDtos(response.body()?.data.orEmpty()))
+        } else {
+            MusicResult.Error("Failed to fetch artists: ${response.code()}")
+        }
+    }
+
+    private suspend fun mapArtistDtos(artistDtos: List<ArtistDto>): List<Artist> =
+        coroutineScope {
+            artistDtos.map { dto ->
+                async { enrichArtist(dto.toDomain()) }
+            }.awaitAll()
+        }
 
     suspend fun getArtistById(artistId: String): MusicResult<Artist> = withContext(Dispatchers.IO) {
         android.util.Log.d("MusicRepository", "getArtistById entry for ID: $artistId")
@@ -658,7 +706,7 @@ class MusicRepository(private val apiService: MusicApiService? = null) {
     }
 
     suspend fun getFeaturedArtist(): MusicResult<FeaturedArtist> = withContext(Dispatchers.IO) {
-        val artists = getPopularArtists()
+        val artists = getPopularArtists(limit = 1)
         if (artists is MusicResult.Success && artists.data.isNotEmpty()) {
             val artist = artists.data.first()
             MusicResult.Success(FeaturedArtist(

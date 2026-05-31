@@ -286,6 +286,18 @@ interface MusicApiService {
         @Query("limit") limit: Int? = 50
     ): Response<BaseResponse<List<MbRecentItemDto>>>
 
+    /** Mobile-only: artists ranked by streams + listen history (not the public /artists list). */
+    @GET("mb/artists/popular")
+    suspend fun getMbPopularArtists(
+        @Query("limit") limit: Int? = 20
+    ): Response<BaseResponse<List<ArtistDto>>>
+
+    /** Mobile-only: random active artists for home discovery. */
+    @GET("mb/artists/random")
+    suspend fun getMbRandomArtists(
+        @Query("limit") limit: Int? = 8
+    ): Response<BaseResponse<List<ArtistDto>>>
+
     @POST("playback/progress")
     suspend fun trackPlaybackProgress(
         @Body request: PlaybackProgressRequest

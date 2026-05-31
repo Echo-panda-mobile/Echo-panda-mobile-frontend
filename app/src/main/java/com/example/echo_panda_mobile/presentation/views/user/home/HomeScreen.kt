@@ -202,6 +202,32 @@ fun HomeScreen(
                         Spacer(Modifier.height(32.dp))
                     }
 
+                    // ── Random Artists ─────────────────────────────────────────────
+                    if (state.randomArtists.isNotEmpty()) {
+                        SectionHeader(
+                            fullTitle = "Random Artists",
+                            highlightPart = "Artists",
+                            highlightColor = EchoPandaColors.AccentBlue,
+                            onViewAll = { onNavigateToBrowse(BrowseSection.POPULAR_ARTISTS) }
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            state.randomArtists.forEach { artist ->
+                                ArtistCircleCard(
+                                    artist = artist,
+                                    onClick = { onNavigateToArtist(artist.id) }
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(32.dp))
+                    }
+
                     // ── Based on your recent listening ────────────────────────────
                     if (state.recentListening.isNotEmpty()) {
                         Text(
