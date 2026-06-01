@@ -23,8 +23,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.echo_panda_mobile.data.remote.GenreData
+import com.example.echo_panda_mobile.data.remote.TagData
 import com.example.echo_panda_mobile.presentation.components.AdminBottomBar
 import com.example.echo_panda_mobile.presentation.components.AdminTopBar
+import com.example.echo_panda_mobile.presentation.viewsmodel.AdminLibraryUiState
+import com.example.echo_panda_mobile.presentation.viewsmodel.AdminLibraryViewModel
 
 private val BgDark = Color(0xFF05070D)
 private val CardBg = Color(0xFF161C24)
@@ -42,11 +47,13 @@ fun AdminLibraryScreen(
     onNavigateToCategoryDetail: (String) -> Unit = {},
     onNavigateToCategoryAlbums: (String) -> Unit = {},
     onProfileClick: () -> Unit = {},
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    viewModel: AdminLibraryViewModel = viewModel()
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf("Category") }
     val filters = listOf("Category", "Tag")
+    val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
@@ -68,6 +75,35 @@ fun AdminLibraryScreen(
                 .padding(horizontal = 20.dp)
         ) {
             Spacer(modifier = Modifier.height(16.dp))
+
+            if (uiState.isLoading) {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = AccentPurple)
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            uiState.errorMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = Color(0xFFFF5252),
+                    fontSize = 14.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                )
+            }
+
+            uiState.successMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = AccentPurple,
+                    fontSize = 14.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                )
+            }
 
             // Filter Chips
             Row(
@@ -101,26 +137,48 @@ fun AdminLibraryScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             when (selectedFilter) {
-                "Tag" -> CollectionTagsSection(onNavigateToTagDetail, onNavigateToTagAlbums)
-                "Category" -> CategoryLibrarySection(onNavigateToCategoryDetail, onNavigateToCategoryAlbums)
+                "Tag" -> CollectionTagsSection(
+                    tags = uiState.tags,
+                    onNavigateToTagDetail = onNavigateToTagDetail,
+                    onNavigateToTagAlbums = onNavigateToTagAlbums,
+                    onCreateTag = { viewModel.createTag(it) },
+                    onDeleteTag = { viewModel.deleteTag(it) },
+                    onUpdateTag = { id, name -> viewModel.updateTag(id, name) }
+                )
+                "Category" -> CategoryLibrarySection(
+                    genres = uiState.genres,
+                    onNavigateToCategoryDetail = onNavigateToCategoryDetail,
+                    onNavigateToCategoryAlbums = onNavigateToCategoryAlbums,
+                    onCreateCategory = { viewModel.createGenre(it) },
+                    onDeleteCategory = { viewModel.deleteGenre(it) },
+                    onUpdateCategory = { id, name -> viewModel.updateGenre(id, name) }
+                )
             }
         }
     }
 }
 
 @Composable
-fun CategoryLibrarySection(onNavigateToCategoryDetail: (String) -> Unit, onNavigateToCategoryAlbums: (String) -> Unit) {
+fun CategoryLibrarySection(
+    genres: List<GenreData>,
+    onNavigateToCategoryDetail: (String) -> Unit,
+    onNavigateToCategoryAlbums: (String) -> Unit,
+    onCreateCategory: (String) -> Unit,
+    onDeleteCategory: (Int) -> Unit,
+    onUpdateCategory: (Int, String) -> Unit
+) {
     var listSearchQuery by remember { mutableStateOf("") }
     var showCreateDialog by remember { mutableStateOf(false) }
     var newCategoryName by remember { mutableStateOf("") }
-    
-    val mockCategories = listOf(
-        AdminCategoryRecord("1", "Pop", true, 1),
-        AdminCategoryRecord("2", "Rock", true, 2),
-        AdminCategoryRecord("3", "Jazz", false, 3),
-        AdminCategoryRecord("4", "Classical", true, 4),
-        AdminCategoryRecord("5", "Lo-fi", true, 5)
-    )
+    var categoryToDelete by remember { mutableStateOf<GenreData?>(null) }
+    var categoryToEdit by remember { mutableStateOf<GenreData?>(null) }
+    var editedCategoryName by remember { mutableStateOf("") }
+
+    val filteredGenres = remember(genres, listSearchQuery) {
+        genres.filter {
+            it.name.contains(listSearchQuery, ignoreCase = true) || (it.slug?.contains(listSearchQuery, ignoreCase = true) == true)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -150,7 +208,6 @@ fun CategoryLibrarySection(onNavigateToCategoryDetail: (String) -> Unit, onNavig
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Search Bar for Categories
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -223,6 +280,7 @@ fun CategoryLibrarySection(onNavigateToCategoryDetail: (String) -> Unit, onNavig
                     Button(
                         onClick = {
                             showCreateDialog = false
+                            onCreateCategory(newCategoryName)
                             newCategoryName = ""
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
@@ -238,6 +296,71 @@ fun CategoryLibrarySection(onNavigateToCategoryDetail: (String) -> Unit, onNavig
             )
         }
 
+        if (categoryToEdit != null) {
+            AlertDialog(
+                onDismissRequest = { categoryToEdit = null },
+                containerColor = CardBg,
+                title = { Text("Edit Category", color = Color.White) },
+                text = {
+                    OutlinedTextField(
+                        value = editedCategoryName,
+                        onValueChange = { editedCategoryName = it },
+                        label = { Text("Category Name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = AccentPurple,
+                            unfocusedBorderColor = TextMuted,
+                            focusedLabelColor = AccentPurple,
+                            unfocusedLabelColor = TextMuted
+                        )
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            categoryToEdit?.let { onUpdateCategory(it.id, editedCategoryName) }
+                            categoryToEdit = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
+                    ) {
+                        Text("Save", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { categoryToEdit = null }) {
+                        Text("Cancel", color = Color.White)
+                    }
+                }
+            )
+        }
+
+        if (categoryToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { categoryToDelete = null },
+                containerColor = CardBg,
+                title = { Text("Delete Category", color = Color.White) },
+                text = { Text("Are you sure you want to delete '${categoryToDelete?.name}'? This action cannot be undone.", color = Color.White.copy(alpha = 0.7f)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            categoryToDelete?.let { onDeleteCategory(it.id) }
+                            categoryToDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252))
+                    ) {
+                        Text("Delete", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { categoryToDelete = null }) {
+                        Text("Cancel", color = Color.White)
+                    }
+                }
+            )
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
 
         Surface(
@@ -247,7 +370,6 @@ fun CategoryLibrarySection(onNavigateToCategoryDetail: (String) -> Unit, onNavig
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
         ) {
             Column {
-                // Table Header
                 Row(
                     modifier = Modifier
                         .padding(horizontal = 16.dp, vertical = 16.dp)
@@ -258,16 +380,25 @@ fun CategoryLibrarySection(onNavigateToCategoryDetail: (String) -> Unit, onNavig
                     Text("STATUS", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.5f), textAlign = TextAlign.Center)
                     Text("ACTION", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
                 }
-                
+
                 HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
-                
+
                 LazyColumn(
                     modifier = Modifier.heightIn(max = 500.dp),
                     contentPadding = PaddingValues(bottom = 8.dp)
                 ) {
-                    items(mockCategories) { category ->
-                        CategoryRowItem(category, onNavigateToCategoryDetail, onNavigateToCategoryAlbums)
-                        if (category != mockCategories.last()) {
+                    items(filteredGenres) { genre ->
+                        CategoryRowItem(
+                            genre = genre,
+                            onNavigateToCategoryDetail = onNavigateToCategoryDetail,
+                            onNavigateToCategoryAlbums = onNavigateToCategoryAlbums,
+                            onDelete = { categoryToDelete = genre },
+                            onEdit = { 
+                                categoryToEdit = genre
+                                editedCategoryName = genre.name
+                            }
+                        )
+                        if (genre != filteredGenres.last()) {
                             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(alpha = 0.03f))
                         }
                     }
@@ -278,8 +409,14 @@ fun CategoryLibrarySection(onNavigateToCategoryDetail: (String) -> Unit, onNavig
 }
 
 @Composable
-fun CategoryRowItem(category: AdminCategoryRecord, onNavigateToCategoryDetail: (String) -> Unit, onNavigateToCategoryAlbums: (String) -> Unit) {
-    var isChecked by remember { mutableStateOf(category.isActive) }
+fun CategoryRowItem(
+    genre: GenreData,
+    onNavigateToCategoryDetail: (String) -> Unit,
+    onNavigateToCategoryAlbums: (String) -> Unit,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
+) {
+    var isChecked by remember { mutableStateOf(true) }
     var showMenu by remember { mutableStateOf(false) }
 
     Row(
@@ -288,16 +425,14 @@ fun CategoryRowItem(category: AdminCategoryRecord, onNavigateToCategoryDetail: (
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // NAME Column
         Text(
-            text = category.name,
+            text = genre.name,
             color = Color.White,
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.weight(3f)
         )
-        
-        // STATUS Column
+
         Box(modifier = Modifier.weight(1.5f), contentAlignment = Alignment.Center) {
             Switch(
                 checked = isChecked,
@@ -312,37 +447,47 @@ fun CategoryRowItem(category: AdminCategoryRecord, onNavigateToCategoryDetail: (
                 modifier = Modifier.scale(0.8f)
             )
         }
-        
-        // ACTION Column
+
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
             IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
                 Icon(Icons.Default.MoreVert, contentDescription = "Actions", tint = TextMuted, modifier = Modifier.size(20.dp))
             }
-            
+
             DropdownMenu(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false },
                 modifier = Modifier.background(CardBg)
             ) {
                 DropdownMenuItem(
-                    text = { Text("View Detail", color = Color.White) },
-                    onClick = { 
-                        showMenu = false 
-                        onNavigateToCategoryDetail(category.id)
+                    text = { Text("Edit Category", color = Color.White) },
+                    onClick = {
+                        showMenu = false
+                        onEdit()
                     },
-                    leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null, tint = Color(0xFF64B5F6), modifier = Modifier.size(18.dp)) }
+                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFF64B5F6), modifier = Modifier.size(18.dp)) }
+                )
+                DropdownMenuItem(
+                    text = { Text("View Detail", color = Color.White) },
+                    onClick = {
+                        showMenu = false
+                        onNavigateToCategoryDetail(genre.id.toString())
+                    },
+                    leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp)) }
                 )
                 DropdownMenuItem(
                     text = { Text("Manage Albums", color = Color.White) },
-                    onClick = { 
-                        showMenu = false 
-                        onNavigateToCategoryAlbums(category.id)
+                    onClick = {
+                        showMenu = false
+                        onNavigateToCategoryAlbums(genre.id.toString())
                     },
                     leadingIcon = { Icon(Icons.Default.Album, contentDescription = null, tint = AccentPurple, modifier = Modifier.size(18.dp)) }
                 )
                 DropdownMenuItem(
                     text = { Text("Delete Category", color = Color(0xFFFF5252)) },
-                    onClick = { showMenu = false },
+                    onClick = {
+                        showMenu = false
+                        onDelete()
+                    },
                     leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFFF5252), modifier = Modifier.size(18.dp)) }
                 )
             }
@@ -351,15 +496,26 @@ fun CategoryRowItem(category: AdminCategoryRecord, onNavigateToCategoryDetail: (
 }
 
 @Composable
-fun CollectionTagsSection(onNavigateToTagDetail: (String) -> Unit, onNavigateToTagAlbums: (String) -> Unit) {
+fun CollectionTagsSection(
+    tags: List<TagData>,
+    onNavigateToTagDetail: (String) -> Unit,
+    onNavigateToTagAlbums: (String) -> Unit,
+    onCreateTag: (String) -> Unit,
+    onDeleteTag: (Int) -> Unit,
+    onUpdateTag: (Int, String) -> Unit
+) {
     var listSearchQuery by remember { mutableStateOf("") }
     var showCreateDialog by remember { mutableStateOf(false) }
     var newTagName by remember { mutableStateOf("") }
-    
-    val mockTags = listOf(
-        CollectionTag("1", "korean song", "Active", "No description", 1, true),
-        CollectionTag("2", "KPOP song", "Active", "No description", 2, true)
-    )
+    var tagToDelete by remember { mutableStateOf<TagData?>(null) }
+    var tagToEdit by remember { mutableStateOf<TagData?>(null) }
+    var editedTagName by remember { mutableStateOf("") }
+
+    val filteredTags = remember(tags, listSearchQuery) {
+        tags.filter {
+            it.name.contains(listSearchQuery, ignoreCase = true) || (it.slug?.contains(listSearchQuery, ignoreCase = true) == true)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -398,7 +554,6 @@ fun CollectionTagsSection(onNavigateToTagDetail: (String) -> Unit, onNavigateToT
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Search Bar for Tags
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -471,6 +626,7 @@ fun CollectionTagsSection(onNavigateToTagDetail: (String) -> Unit, onNavigateToT
                     Button(
                         onClick = {
                             showCreateDialog = false
+                            onCreateTag(newTagName)
                             newTagName = ""
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
@@ -486,6 +642,71 @@ fun CollectionTagsSection(onNavigateToTagDetail: (String) -> Unit, onNavigateToT
             )
         }
 
+        if (tagToEdit != null) {
+            AlertDialog(
+                onDismissRequest = { tagToEdit = null },
+                containerColor = CardBg,
+                title = { Text("Edit Tag", color = Color.White) },
+                text = {
+                    OutlinedTextField(
+                        value = editedTagName,
+                        onValueChange = { editedTagName = it },
+                        label = { Text("Tag Name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = AccentPurple,
+                            unfocusedBorderColor = TextMuted,
+                            focusedLabelColor = AccentPurple,
+                            unfocusedLabelColor = TextMuted
+                        )
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            tagToEdit?.let { onUpdateTag(it.id, editedTagName) }
+                            tagToEdit = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
+                    ) {
+                        Text("Save", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { tagToEdit = null }) {
+                        Text("Cancel", color = Color.White)
+                    }
+                }
+            )
+        }
+
+        if (tagToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { tagToDelete = null },
+                containerColor = CardBg,
+                title = { Text("Delete Tag", color = Color.White) },
+                text = { Text("Are you sure you want to delete '${tagToDelete?.name}'? This action cannot be undone.", color = Color.White.copy(alpha = 0.7f)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            tagToDelete?.let { onDeleteTag(it.id) }
+                            tagToDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252))
+                    ) {
+                        Text("Delete", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { tagToDelete = null }) {
+                        Text("Cancel", color = Color.White)
+                    }
+                }
+            )
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
 
         Surface(
@@ -495,7 +716,6 @@ fun CollectionTagsSection(onNavigateToTagDetail: (String) -> Unit, onNavigateToT
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
         ) {
             Column {
-                // Table Header
                 Row(
                     modifier = Modifier
                         .padding(horizontal = 16.dp, vertical = 16.dp)
@@ -506,16 +726,25 @@ fun CollectionTagsSection(onNavigateToTagDetail: (String) -> Unit, onNavigateToT
                     Text("STATUS", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.5f), textAlign = TextAlign.Center)
                     Text("ACTION", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
                 }
-                
+
                 HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
-                
+
                 LazyColumn(
                     modifier = Modifier.heightIn(max = 500.dp),
                     contentPadding = PaddingValues(bottom = 8.dp)
                 ) {
-                    items(mockTags) { tag ->
-                        CollectionTagRow(tag, onNavigateToTagDetail, onNavigateToTagAlbums)
-                        if (tag != mockTags.last()) {
+                    items(filteredTags) { tag ->
+                        CollectionTagRow(
+                            tag = tag,
+                            onNavigateToTagDetail = onNavigateToTagDetail,
+                            onNavigateToTagAlbums = onNavigateToTagAlbums,
+                            onDelete = { tagToDelete = tag },
+                            onEdit = {
+                                tagToEdit = tag
+                                editedTagName = tag.name
+                            }
+                        )
+                        if (tag != filteredTags.last()) {
                             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(alpha = 0.03f))
                         }
                     }
@@ -526,8 +755,14 @@ fun CollectionTagsSection(onNavigateToTagDetail: (String) -> Unit, onNavigateToT
 }
 
 @Composable
-fun CollectionTagRow(tag: CollectionTag, onNavigateToTagDetail: (String) -> Unit, onNavigateToTagAlbums: (String) -> Unit) {
-    var isChecked by remember { mutableStateOf(tag.isActive) }
+fun CollectionTagRow(
+    tag: TagData,
+    onNavigateToTagDetail: (String) -> Unit,
+    onNavigateToTagAlbums: (String) -> Unit,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
+) {
+    var isChecked by remember { mutableStateOf(true) }
     var showMenu by remember { mutableStateOf(false) }
 
     Row(
@@ -536,7 +771,6 @@ fun CollectionTagRow(tag: CollectionTag, onNavigateToTagDetail: (String) -> Unit
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // NAME Column
         Text(
             text = tag.name,
             color = Color.White,
@@ -544,8 +778,7 @@ fun CollectionTagRow(tag: CollectionTag, onNavigateToTagDetail: (String) -> Unit
             fontWeight = FontWeight.Medium,
             modifier = Modifier.weight(3f)
         )
-        
-        // STATUS Column
+
         Box(modifier = Modifier.weight(1.5f), contentAlignment = Alignment.Center) {
             Switch(
                 checked = isChecked,
@@ -560,51 +793,50 @@ fun CollectionTagRow(tag: CollectionTag, onNavigateToTagDetail: (String) -> Unit
                 modifier = Modifier.scale(0.8f)
             )
         }
-        
-        // ACTION Column
+
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
             IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
                 Icon(Icons.Default.MoreVert, contentDescription = "Actions", tint = TextMuted, modifier = Modifier.size(20.dp))
             }
-            
+
             DropdownMenu(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false },
                 modifier = Modifier.background(CardBg)
             ) {
                 DropdownMenuItem(
-                    text = { Text("View Detail", color = Color.White) },
-                    onClick = { 
+                    text = { Text("Edit Tag", color = Color.White) },
+                    onClick = {
                         showMenu = false
-                        onNavigateToTagDetail(tag.id)
+                        onEdit()
                     },
-                    leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null, tint = Color(0xFF64B5F6), modifier = Modifier.size(18.dp)) }
+                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFF64B5F6), modifier = Modifier.size(18.dp)) }
+                )
+                DropdownMenuItem(
+                    text = { Text("View Detail", color = Color.White) },
+                    onClick = {
+                        showMenu = false
+                        onNavigateToTagDetail(tag.id.toString())
+                    },
+                    leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp)) }
                 )
                 DropdownMenuItem(
                     text = { Text("Manage Albums", color = Color.White) },
-                    onClick = { 
+                    onClick = {
                         showMenu = false
-                        onNavigateToTagAlbums(tag.id)
+                        onNavigateToTagAlbums(tag.id.toString())
                     },
                     leadingIcon = { Icon(Icons.Default.Album, contentDescription = null, tint = AccentPurple, modifier = Modifier.size(18.dp)) }
                 )
                 DropdownMenuItem(
                     text = { Text("Delete Tag", color = Color(0xFFFF5252)) },
-                    onClick = { showMenu = false },
+                    onClick = {
+                        showMenu = false
+                        onDelete()
+                    },
                     leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFFF5252), modifier = Modifier.size(18.dp)) }
                 )
             }
         }
     }
 }
-
-data class CollectionTag(
-    val id: String,
-    val name: String,
-    val status: String,
-    val description: String,
-    val order: Int,
-    val isActive: Boolean
-)
-
-data class AdminCategoryRecord(val id: String, val name: String, val isActive: Boolean, val order: Int)

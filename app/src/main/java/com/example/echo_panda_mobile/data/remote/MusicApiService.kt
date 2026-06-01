@@ -186,120 +186,120 @@ data class PlayHistoryDto(
 
 interface MusicApiService {
 
-    @GET("artists")
+    @GET("api/artists")
     suspend fun getArtists(): Response<BaseResponse<List<ArtistDto>>>
 
-    @GET("artists/{id}")
+    @GET("api/artists/{id}")
     suspend fun getArtistDetail(
         @Path("id") artistId: String
     ): Response<ArtistDto>
 
-    @GET("artists/{artist}/image-url")
+    @GET("api/artists/{artist}/image-url")
     suspend fun getArtistImageUrl(
         @Path("artist") artistId: String
     ): Response<ArtistImageUrlResponse>
 
-    @GET("albums")
+    @GET("api/albums")
     suspend fun getAlbums(
         @Query("search") search: String? = null,
         @Query("sort_by") sortBy: String? = "latest",
         @Query("per_page") perPage: Int? = null
     ): Response<PaginatedResponse<AlbumDto>>
 
-    @GET("albums/{id}")
+    @GET("api/albums/{id}")
     suspend fun getAlbumDetail(
         @Path("id") albumId: String
     ): Response<AlbumDto>
 
-    @GET("songs")
+    @GET("api/songs")
     suspend fun getSongs(
         @Query("search") search: String? = null,
         @Query("album_id") albumId: Int? = null
     ): Response<PaginatedResponse<SongDto>>
 
-    @GET("songs/{id}")
+    @GET("api/songs/{id}")
     suspend fun getSongDetail(
         @Path("id") songId: String
     ): Response<SongDto>
 
-    @GET("songs/{id}/cover-url")
+    @GET("api/songs/{id}/cover-url")
     suspend fun getSongCoverUrl(
         @Path("id") songId: String
     ): Response<SongCoverUrlResponse>
 
-    @GET("albums/{id}/cover-url")
+    @GET("api/albums/{id}/cover-url")
     suspend fun getAlbumCoverUrl(
         @Path("id") albumId: String
     ): Response<SongCoverUrlResponse>
 
-    @GET("songs/{id}/signed-url")
+    @GET("api/songs/{id}/signed-url")
     suspend fun getStreamTicket(
         @Path("id") songId: String
     ): Response<StreamTicketResponse>
 
-    @GET("playback/recent")
+    @GET("api/playback/recent")
     suspend fun getRecentlyPlayed(): Response<BaseResponse<List<SongDto>>>
 
-    @GET("favorites")
+    @GET("api/favorites")
     suspend fun getFavorites(): Response<PaginatedResponse<FavoriteItemDto>>
 
-    @GET("playlists/{playlist}/songs")
+    @GET("api/playlists/{playlist}/songs")
     suspend fun getPlaylistSongs(
         @Path("playlist") playlistId: String,
         @Query("per_page") perPage: Int? = null
     ): Response<PaginatedResponse<SongDto>>
 
     // Playlists endpoints
-    @GET("playlists")
+    @GET("api/playlists")
     suspend fun getPlaylists(
         @Query("per_page") perPage: Int? = null
     ): Response<PaginatedResponse<PlaylistDto>>
 
-    @POST("playlists")
+    @POST("api/playlists")
     suspend fun createPlaylist(
         @Body request: CreatePlaylistRequest
     ): Response<BaseResponse<PlaylistDto>>
 
-    @POST("playlists/{playlist}/songs")
+    @POST("api/playlists/{playlist}/songs")
     suspend fun addSongToPlaylist(
         @Path("playlist") playlistId: String,
         @Body request: AddSongToPlaylistRequest
     ): Response<Unit>
 
-    @GET("playback/continue")
+    @GET("api/playback/continue")
     suspend fun getContinueListening(): Response<BaseResponse<List<PlayHistoryDto>>>
 
-    @GET("listen-history")
+    @GET("api/listen-history")
     suspend fun getListenHistory(
         @Query("per_page") perPage: Int? = null
     ): Response<PaginatedResponse<ListenHistoryDto>>
 
-    @POST("favorites/songs")
+    @POST("api/favorites/songs")
     suspend fun toggleFavorite(
         @Body request: CheckFavoriteRequest
     ): Response<Unit>
 
-    @POST("favorites/songs/remove")
+    @POST("api/favorites/songs/remove")
     suspend fun removeFavorite(
         @Body request: CheckFavoriteRequest
     ): Response<Unit>
 
-    @POST("favorites/songs/check")
+    @POST("api/favorites/songs/check")
     suspend fun checkIsFavorite(
         @Body request: CheckFavoriteRequest
     ): Response<CheckFavoriteResponse>
 
-    @POST("listen-history")
+    @POST("api/listen-history")
     suspend fun addToListenHistory(
         @Body request: ListenHistoryRequest
     ): Response<Unit>
 
-    @GET("stats/most-played-albums")
+    @GET("api/stats/most-played-albums")
     suspend fun getMostPlayedAlbums(
         @Query("limit") limit: Int? = 10
     ): Response<BaseResponse<List<MostPlayedAlbumDto>>>
 
-    @GET("stats/most-played-songs")
+    @GET("api/stats/most-played-songs")
     suspend fun getMostPlayedSongs(
         @Query("limit") limit: Int? = 10
     ): Response<BaseResponse<List<MostPlayedSongDto>>>

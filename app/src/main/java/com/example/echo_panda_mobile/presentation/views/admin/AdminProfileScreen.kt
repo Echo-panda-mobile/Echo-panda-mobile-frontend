@@ -21,7 +21,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.echo_panda_mobile.presentation.viewsmodel.AdminProfileViewModel
 
 private val BgDark = Color(0xFF05070D)
 private val CardBg = Color(0xFF161C24)
@@ -32,10 +33,14 @@ private val TextMuted = Color.White.copy(alpha = 0.5f)
 @Composable
 fun AdminProfileScreen(
     onBack: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    viewModel: AdminProfileViewModel = viewModel()
 ) {
+    val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
     var showLogoutDialog by remember { mutableStateOf(false) }
+    val user = uiState.user
+    val roleLabel = user?.role?.replaceFirstChar { it.uppercaseChar() } ?: "System Administrator"
 
     if (showLogoutDialog) {
         AlertDialog(
@@ -83,7 +88,6 @@ fun AdminProfileScreen(
         ) {
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Profile Image Placeholder
             Box(
                 modifier = Modifier
                     .size(120.dp)
@@ -102,26 +106,26 @@ fun AdminProfileScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Admin User",
+                text = user?.name ?: "Admin User",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
             Text(
-                text = "admin@echopanda.com",
+                text = user?.email ?: "admin@echopanda.com",
                 fontSize = 14.sp,
                 color = TextMuted
             )
 
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Surface(
                 color = AccentPurple.copy(alpha = 0.1f),
                 shape = RoundedCornerShape(16.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, AccentPurple.copy(alpha = 0.2f))
             ) {
                 Text(
-                    text = "System Administrator",
+                    text = roleLabel,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     color = AccentPurple,
                     fontSize = 12.sp,
@@ -129,16 +133,30 @@ fun AdminProfileScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Admin Info Sections
+            if (uiState.isLoading) {
+                CircularProgressIndicator(color = AccentPurple)
+            }
+
+            uiState.errorMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = Color(0xFFFF5252),
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             AdminProfileActionItem(
                 icon = Icons.Default.Security,
                 title = "Security Settings",
                 subtitle = "Manage password and 2FA",
                 onClick = {}
             )
-            
+
             Spacer(modifier = Modifier.height(12.dp))
 
             AdminProfileActionItem(
@@ -159,7 +177,6 @@ fun AdminProfileScreen(
 
             Spacer(modifier = Modifier.height(40.dp))
 
-            // Logout Button
             Button(
                 onClick = { showLogoutDialog = true },
                 modifier = Modifier

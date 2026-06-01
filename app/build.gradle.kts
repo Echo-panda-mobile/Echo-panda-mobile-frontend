@@ -22,13 +22,13 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Production API. Override in debug for local backend (emulator → host machine).
-        buildConfigField("String", "API_BASE_URL", "\"https://api.echopanda.me/api/\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://api.echopanda.me/\"")
     }
 
     buildTypes {
         debug {
             // Same production API as release (web + mobile both use api.echopanda.me).
-            buildConfigField("String", "API_BASE_URL", "\"https://api.echopanda.me/api/\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://api.echopanda.me/\"")
         }
         release {
             isMinifyEnabled = false

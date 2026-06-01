@@ -1,15 +1,49 @@
 package com.example.echo_panda_mobile.presentation.views.admin
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,7 +58,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.example.echo_panda_mobile.presentation.components.AdminTopBar
+import com.example.echo_panda_mobile.data.model.Album
 
 private val BgDark = Color(0xFF05070D)
 private val CardBg = Color(0xFF161C24)
@@ -40,12 +74,23 @@ fun AdminTagAlbumsScreen(
     var searchQuery by remember { mutableStateOf("") }
     var showCreateDialog by remember { mutableStateOf(false) }
     var newTagName by remember { mutableStateOf("") }
-    
-    // Mock data for albums in this tag
-    val mockAlbums = listOf(
-        AdminAlbumRecord("Happier Than Ever", "Billie Eilish", "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_p_Q5F5W4zX2N8E4_6Xz7R6U4z_5y_8z9w&s"),
-        AdminAlbumRecord("Speak Now", "Taylor Swift", "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_p_Q5F5W4zX2N8E4_6Xz7R6U4z_5y_8z9w&s")
-    )
+
+    val albums = listOf(
+        Album(
+            id = "1",
+            title = "Happier Than Ever",
+            artist = "Billie Eilish",
+            imageUrl = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_p_Q5F5W4zX2N8E4_6Xz7R6U4z_5y_8z9w&s"
+        ),
+        Album(
+            id = "2",
+            title = "Speak Now",
+            artist = "Taylor Swift",
+            imageUrl = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_p_Q5F5W4zX2N8E4_6Xz7R6U4z_5y_8z9w&s"
+        )
+    ).filter {
+        it.title.contains(searchQuery, ignoreCase = true) || it.artist.contains(searchQuery, ignoreCase = true)
+    }
 
     Scaffold(
         topBar = {
@@ -62,7 +107,7 @@ fun AdminTagAlbumsScreen(
         containerColor = BgDark,
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { /* Handle Add Album to Tag */ },
+                onClick = { showCreateDialog = true },
                 containerColor = AccentPurple,
                 contentColor = Color.White,
                 shape = RoundedCornerShape(16.dp)
@@ -93,7 +138,6 @@ fun AdminTagAlbumsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Search Bar with Add Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -107,14 +151,7 @@ fun AdminTagAlbumsScreen(
                         .height(48.dp)
                         .clip(RoundedCornerShape(12.dp)),
                     placeholder = { Text("Search albums...", color = TextMuted, fontSize = 14.sp) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = null,
-                            tint = TextMuted,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.White.copy(alpha = 0.05f),
                         unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
@@ -131,13 +168,11 @@ fun AdminTagAlbumsScreen(
                     modifier = Modifier
                         .size(48.dp)
                         .background(
-                            Brush.horizontalGradient(
-                                colors = listOf(Color(0xFF8E24AA), Color(0xFFFF4081))
-                            ),
+                            Brush.horizontalGradient(colors = listOf(Color(0xFF8E24AA), Color(0xFFFF4081))),
                             shape = RoundedCornerShape(12.dp)
                         )
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Create Tag", tint = Color.White)
+                    Icon(Icons.Default.Add, contentDescription = "Add Album", tint = Color.White)
                 }
             }
 
@@ -165,7 +200,6 @@ fun AdminTagAlbumsScreen(
                     confirmButton = {
                         Button(
                             onClick = {
-                                // Handle creation logic here
                                 showCreateDialog = false
                                 newTagName = ""
                             },
@@ -203,11 +237,9 @@ fun AdminTagAlbumsScreen(
                     }
                     HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                        items(mockAlbums) { album ->
+                        items(albums, key = { it.id }) { album ->
                             TagAlbumRow(album)
-                            if (album != mockAlbums.last()) {
-                                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(alpha = 0.03f))
-                            }
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(alpha = 0.03f))
                         }
                     }
                 }
@@ -217,7 +249,7 @@ fun AdminTagAlbumsScreen(
 }
 
 @Composable
-fun TagAlbumRow(album: AdminAlbumRecord) {
+private fun TagAlbumRow(album: Album) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -232,8 +264,13 @@ fun TagAlbumRow(album: AdminAlbumRecord) {
                     .background(Color.White.copy(alpha = 0.05f)),
                 contentAlignment = Alignment.Center
             ) {
-                if (album.imageUrl.isNotEmpty()) {
-                    AsyncImage(model = album.imageUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                if (!album.imageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = album.imageUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
                 } else {
                     Icon(Icons.Default.Album, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp))
                 }

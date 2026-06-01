@@ -1,43 +1,68 @@
 package com.example.echo_panda_mobile.presentation.views.admin
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.runtime.*
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.echo_panda_mobile.data.remote.BackendUser
 import com.example.echo_panda_mobile.presentation.components.AdminBottomBar
 import com.example.echo_panda_mobile.presentation.components.AdminTopBar
+import com.example.echo_panda_mobile.presentation.viewsmodel.AdminUserManagementViewModel
 
 private val BgDark = Color(0xFF05070D)
 private val CardBg = Color(0xFF161C24)
 private val AccentPurple = Color(0xFFFF00FF)
 private val TextMuted = Color.White.copy(alpha = 0.5f)
-
-data class AdminUserRecord(
-    val id: String,
-    val name: String,
-    val email: String,
-    val joinedDate: String,
-    val status: String,
-    val role: String // "User", "Artist", "Admin"
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,26 +71,23 @@ fun AdminUserManagementScreen(
     onNavSelect: (Int) -> Unit,
     onNavigateToDetail: (String, String) -> Unit,
     onNavigateToAddArtist: () -> Unit,
-    onProfileClick: () -> Unit
+    onProfileClick: () -> Unit,
+    viewModel: AdminUserManagementViewModel = viewModel()
 ) {
+    val uiState by viewModel.uiState.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf("Users") }
     val filters = listOf("Users", "Artists", "Admins")
 
-    val mockUsers = listOf(
-        AdminUserRecord("CeSwfxPJ...", "Pory Morokot", "morokotpory@gmail.com", "May 24, 2026", "ACTIVE", "User"),
-        AdminUserRecord("qcHqjVPg...", "Unknown User", "xiximocha@gmail.com", "May 24, 2026", "BANNED", "User")
-    )
-
-    val mockArtists = listOf(
-        AdminUserRecord("art1...", "Artist Panda", "panda@echo.com", "Jan 10, 2026", "ACTIVE", "Artist"),
-        AdminUserRecord("art2...", "Neon Vibes", "neon@echo.com", "Feb 15, 2026", "ACTIVE", "Artist")
-    )
-
-    val mockAdmins = listOf(
-        AdminUserRecord("adm1...", "Super Admin", "admin@echo.com", "Dec 01, 2025", "ACTIVE", "Admin"),
-        AdminUserRecord("adm2...", "Staff Member", "staff@echo.com", "Mar 20, 2026", "ACTIVE", "Admin")
-    )
+    val visibleUsers = when (selectedFilter) {
+        "Artists" -> uiState.artistUsers
+        "Admins" -> uiState.adminUsers
+        else -> uiState.users
+    }.filter { user ->
+        listOf(user.name, user.email, user.role)
+            .joinToString(" ")
+            .contains(searchQuery, ignoreCase = true)
+    }
 
     Scaffold(
         topBar = {
@@ -88,7 +110,6 @@ fun AdminUserManagementScreen(
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Filter Chips
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -119,10 +140,36 @@ fun AdminUserManagementScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            when (selectedFilter) {
-                "Users" -> UserListSection("User", mockUsers, onNavigateToDetail, {})
-                "Artists" -> UserListSection("Artist", mockArtists, onNavigateToDetail, onNavigateToAddArtist)
-                "Admins" -> UserListSection("Admin", mockAdmins, onNavigateToDetail, {})
+            if (uiState.isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = AccentPurple)
+                }
+            } else {
+                uiState.errorMessage?.let { message ->
+                    Text(message, color = Color(0xFFFF6B6B), fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                when (selectedFilter) {
+                    "Users" -> UserListSection(
+                        roleName = "User",
+                        users = visibleUsers,
+                        onNavigateToDetail = onNavigateToDetail,
+                        onAddClick = {}
+                    )
+                    "Artists" -> UserListSection(
+                        roleName = "Artist",
+                        users = visibleUsers,
+                        onNavigateToDetail = onNavigateToDetail,
+                        onAddClick = onNavigateToAddArtist
+                    )
+                    else -> UserListSection(
+                        roleName = "Admin",
+                        users = visibleUsers,
+                        onNavigateToDetail = onNavigateToDetail,
+                        onAddClick = {}
+                    )
+                }
             }
         }
     }
@@ -130,19 +177,17 @@ fun AdminUserManagementScreen(
 
 @Composable
 fun UserListSection(
-    roleName: String, 
-    users: List<AdminUserRecord>, 
+    roleName: String,
+    users: List<BackendUser>,
     onNavigateToDetail: (String, String) -> Unit,
     onAddClick: () -> Unit
 ) {
-    var listSearchQuery by remember { mutableStateOf("") }
-
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Header Text
         Column {
             Text(
                 text = buildAnnotatedString {
-                    append("$roleName ")
+                    append(roleName)
+                    append(" ")
                     withStyle(style = SpanStyle(color = AccentPurple)) {
                         append("List")
                     }
@@ -152,7 +197,7 @@ fun UserListSection(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Manage registered $roleName accounts".lowercase(),
+                text = "Manage registered $roleName accounts",
                 color = TextMuted,
                 fontSize = 14.sp
             )
@@ -160,26 +205,24 @@ fun UserListSection(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Search Bar and Add Button Row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Inline Search Bar
             TextField(
-                value = listSearchQuery,
-                onValueChange = { listSearchQuery = it },
+                value = "",
+                onValueChange = {},
                 modifier = Modifier
                     .weight(1f)
                     .height(44.dp)
                     .clip(RoundedCornerShape(12.dp)),
-                placeholder = { 
+                placeholder = {
                     Text(
-                        "Search by name or email...", 
+                        "Search is available from the top bar",
                         color = Color.White.copy(alpha = 0.3f),
                         fontSize = 12.sp
-                    ) 
+                    )
                 },
                 leadingIcon = {
                     Icon(
@@ -189,19 +232,22 @@ fun UserListSection(
                         modifier = Modifier.size(18.dp)
                     )
                 },
+                enabled = false,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = CardBg,
                     unfocusedContainerColor = CardBg,
+                    disabledContainerColor = CardBg,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
                     focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+                    unfocusedTextColor = Color.White,
+                    disabledTextColor = Color.White
                 ),
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
 
-            // Add Button
             if (roleName == "Artist") {
                 Button(
                     onClick = onAddClick,
@@ -219,18 +265,13 @@ fun UserListSection(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Add",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(text = "Add", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Table Header
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = Color.White.copy(alpha = 0.05f),
@@ -243,26 +284,36 @@ fun UserListSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 HeaderText("USER", Modifier.weight(3f))
-                HeaderText("JOINED", Modifier.weight(1.5f))
-                HeaderText("STATUS", Modifier.weight(1f))
+                HeaderText("EMAIL", Modifier.weight(2f))
+                HeaderText("ROLE", Modifier.weight(1f))
                 HeaderText("ACTIONS", Modifier.weight(1f), textAlign = TextAlign.End)
             }
         }
 
-        // Table Body
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = Color.White.copy(alpha = 0.02f),
             shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
         ) {
-            LazyColumn {
-                items(users) { user ->
-                    UserRow(user, onNavigateToDetail)
-                    if (user != users.last()) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = Color.White.copy(alpha = 0.05f)
-                        )
+            if (users.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No $roleName records found.", color = TextMuted)
+                }
+            } else {
+                LazyColumn {
+                    items(users, key = { it.id }) { user ->
+                        UserRow(user, onNavigateToDetail)
+                        if (user != users.last()) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = Color.White.copy(alpha = 0.05f)
+                            )
+                        }
                     }
                 }
             }
@@ -271,7 +322,11 @@ fun UserListSection(
 }
 
 @Composable
-private fun HeaderText(text: String, modifier: Modifier = Modifier, textAlign: TextAlign = TextAlign.Start) {
+private fun HeaderText(
+    text: String,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign = TextAlign.Start
+) {
     Text(
         text = text,
         color = TextMuted,
@@ -284,9 +339,8 @@ private fun HeaderText(text: String, modifier: Modifier = Modifier, textAlign: T
 }
 
 @Composable
-fun UserRow(user: AdminUserRecord, onNavigateToDetail: (String, String) -> Unit) {
+fun UserRow(user: BackendUser, onNavigateToDetail: (String, String) -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
-    var showDialog by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
@@ -294,7 +348,6 @@ fun UserRow(user: AdminUserRecord, onNavigateToDetail: (String, String) -> Unit)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // User Info (Avatar + Name/ID/Email)
         Column(modifier = Modifier.weight(3f), verticalArrangement = Arrangement.Center) {
             Box(
                 modifier = Modifier
@@ -312,44 +365,28 @@ fun UserRow(user: AdminUserRecord, onNavigateToDetail: (String, String) -> Unit)
             }
             Spacer(modifier = Modifier.height(10.dp))
             Text(user.name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text(user.email, color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
             Text("ID: ${user.id}", color = TextMuted, fontSize = 9.sp)
         }
 
-        // Joined Date
-        Row(modifier = Modifier.weight(1.5f), verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Default.CalendarToday,
-                contentDescription = null,
-                tint = AccentPurple.copy(alpha = 0.6f),
-                modifier = Modifier.size(12.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(user.joinedDate, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+        Column(modifier = Modifier.weight(2f)) {
+            Text(user.email, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+            user.artist?.let { artist ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Linked artist: ${artist.name}", color = TextMuted, fontSize = 11.sp)
+            }
         }
 
-        // Status (Icon based)
-        Box(
-            modifier = Modifier.weight(1f),
-            contentAlignment = Alignment.Center
-        ) {
-            val isActive = user.status == "ACTIVE"
-            Icon(
-                imageVector = if (isActive) Icons.Default.CheckCircle else Icons.Default.Block,
-                contentDescription = user.status,
-                tint = if (isActive) Color(0xFF00C853) else Color(0xFFFF5252),
-                modifier = Modifier.size(20.dp)
+        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = user.role.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 13.sp
             )
         }
 
-        // Actions
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
             IconButton(onClick = { showMenu = true }) {
-                Icon(
-                    Icons.Default.MoreVert,
-                    contentDescription = "Actions",
-                    tint = TextMuted
-                )
+                Icon(Icons.Default.MoreVert, contentDescription = "Actions", tint = TextMuted)
             }
 
             DropdownMenu(
@@ -361,49 +398,10 @@ fun UserRow(user: AdminUserRecord, onNavigateToDetail: (String, String) -> Unit)
                     text = { Text("View Detail", color = Color.White, fontSize = 14.sp) },
                     onClick = {
                         showMenu = false
-                        onNavigateToDetail(user.id, user.role)
-                    }
-                )
-
-                val actionText = if (user.status == "ACTIVE") "Ban this account?" else "Unban this account?"
-                DropdownMenuItem(
-                    text = { Text(actionText, color = Color.White, fontSize = 14.sp) },
-                    onClick = {
-                        showMenu = false
-                        showDialog = true
+                        onNavigateToDetail(user.id.toString(), user.role)
                     }
                 )
             }
         }
-    }
-
-    if (showDialog) {
-        val isActive = user.status == "ACTIVE"
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            containerColor = CardBg,
-            title = { 
-                Text(
-                    if (isActive) "Confirm Ban" else "Confirm Unban", 
-                    color = Color.White 
-                ) 
-            },
-            text = { 
-                Text(
-                    "Are you sure you want to ${if (isActive) "ban" else "unban"} ${user.name}?", 
-                    color = TextMuted 
-                ) 
-            },
-            confirmButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text(if (isActive) "Ban" else "Unban", color = if (isActive) Color(0xFFFF5252) else Color(0xFF00C853))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("Cancel", color = Color.White)
-                }
-            }
-        )
     }
 }

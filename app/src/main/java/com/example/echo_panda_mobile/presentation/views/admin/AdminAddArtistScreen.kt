@@ -104,6 +104,82 @@ fun AdminAddArtistScreen(
                 placeholder = "Min. 8 characters (mobile login)",
                 isPassword = true
             )
+            ArtistInputField(
+                label = "Artist slug (URL-friendly name)",
+                value = uiState.slug,
+                onValueChange = viewModel::onSlugChange,
+                placeholder = "auto-generated from name"
+            )
+            ArtistInputField(
+                label = "Bio (optional)",
+                value = uiState.bio,
+                onValueChange = viewModel::onBioChange,
+                placeholder = "Short biography",
+                isMultiline = true
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                "Verification & Status",
+                color = AccentPurple,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Verification Status
+            Text(
+                "Verification Status",
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Row(
+                modifier = Modifier.padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                listOf("pending", "approved", "rejected").forEach { status ->
+                    RoleChip(
+                        status.replaceFirstChar { it.uppercase() },
+                        uiState.verificationStatus == status
+                    ) {
+                        viewModel.onVerificationStatusChange(status)
+                    }
+                }
+            }
+
+            ArtistInputField(
+                label = "Verification Reason (optional)",
+                value = uiState.verificationReason,
+                onValueChange = viewModel::onVerificationReasonChange,
+                placeholder = "Why this artist was approved/rejected",
+                isMultiline = true
+            )
+
+            // Is Active Toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "Start artist as active",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Switch(
+                    checked = uiState.isActive,
+                    onCheckedChange = viewModel::onIsActiveChange,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = AccentPurple,
+                        checkedTrackColor = AccentPurple.copy(alpha = 0.3f)
+                    )
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -210,7 +286,8 @@ fun ArtistInputField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
-    isPassword: Boolean = false
+    isPassword: Boolean = false,
+    isMultiline: Boolean = false
 ) {
     Column(modifier = Modifier.padding(vertical = 8.dp)) {
         Text(label, color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
@@ -220,7 +297,8 @@ fun ArtistInputField(
             onValueChange = onValueChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp)),
+                .clip(RoundedCornerShape(12.dp))
+                .then(if (isMultiline) Modifier.heightIn(min = 100.dp) else Modifier),
             placeholder = {
                 Text(placeholder, color = Color.White.copy(alpha = 0.3f), fontSize = 14.sp)
             },
@@ -232,7 +310,8 @@ fun ArtistInputField(
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White
             ),
-            singleLine = true,
+            singleLine = !isMultiline,
+            maxLines = if (isMultiline) 5 else 1,
             visualTransformation = if (isPassword) {
                 PasswordVisualTransformation()
             } else {
