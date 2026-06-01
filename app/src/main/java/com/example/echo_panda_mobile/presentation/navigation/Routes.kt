@@ -4,8 +4,8 @@ object Routes {
     // Auth
     const val LOGIN             = "login"
     const val SIGNUP            = "signup"
-    const val VERIFY_EMAIL      = "verify_email"
     const val FORGOT_PASSWORD   = "forgot_password"
+    const val VERIFY_EMAIL      = "verify_email"
 
     // Intro
     const val INTRO = "intro"
