@@ -1,5 +1,7 @@
 package com.example.echo_panda_mobile.data.remote
 
+import com.google.gson.annotations.SerializedName
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -41,6 +43,12 @@ data class MeResponse(
     val user: BackendUser
 )
 
+data class ResetPasswordRequest(
+    val email: String,
+    val password: String,
+    @SerializedName("password_confirmation") val passwordConfirmation: String
+)
+
 interface AuthApiService {
     @POST("firebase/session")
     suspend fun firebaseSession(@Body body: FirebaseSessionRequest): FirebaseSessionResponse
@@ -50,4 +58,7 @@ interface AuthApiService {
 
     @POST("logout")
     suspend fun logout()
+
+    @POST("password/reset-without-token")
+    suspend fun resetPassword(@Body body: ResetPasswordRequest): Response<Unit>
 }
