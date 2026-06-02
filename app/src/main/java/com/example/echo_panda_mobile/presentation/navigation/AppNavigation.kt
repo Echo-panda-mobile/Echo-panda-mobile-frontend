@@ -19,9 +19,12 @@ import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.TokenStorage
 import com.example.echo_panda_mobile.presentation.components.MiniPlayer
 import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
+import com.example.echo_panda_mobile.presentation.views.auth.ForgotPasswordScreen
 import com.example.echo_panda_mobile.presentation.views.auth.LoginScreen
 import com.example.echo_panda_mobile.presentation.views.auth.SignUpScreen
+import com.example.echo_panda_mobile.presentation.views.auth.SuccessAccountScreen
 import com.example.echo_panda_mobile.presentation.views.intro.EchoPandaOnboardingView
+import com.example.echo_panda_mobile.presentation.viewsmodel.ForgotPasswordViewModel
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
@@ -153,16 +156,37 @@ fun AppNavigation() {
                 )
             }
 
-            composable(Routes.FORGOT_PASSWORD) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    androidx.compose.material3.Text("Forgot Password Screen")
-                }
+            composable(Routes.VERIFY_EMAIL) {
+                SuccessAccountScreen(
+                    onGoHome = {
+                        // After successful signup, we navigate to the home route based on role
+                        scope.launch {
+                            val profile = authRepo.getCurrentUserProfile()
+                            val nextRoute = Routes.getHomeRoute(profile?.role)
+                            navController.navigate(nextRoute) {
+                                popUpTo(Routes.VERIFY_EMAIL) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+                )
             }
 
-            composable(Routes.VERIFY_EMAIL) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    androidx.compose.material3.Text("Verify Email Screen")
+            composable(Routes.FORGOT_PASSWORD) { backStackEntry ->
+                val forgotPasswordViewModel: ForgotPasswordViewModel = viewModel()
+                val uiState by forgotPasswordViewModel.uiState.collectAsState()
+
+                LaunchedEffect(uiState.navigateTo) {
+                    uiState.navigateTo?.let { route ->
+                        navController.navigate(route)
+                        forgotPasswordViewModel.onNavigationHandled()
+                    }
                 }
+
+                ForgotPasswordScreen(
+                    onBack = { navController.popBackStack() },
+                    viewModel = forgotPasswordViewModel
+                )
             }
 
             // ── Role-based graphs ─────────────────────────────────────────────
