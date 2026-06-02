@@ -38,17 +38,18 @@ private val Outline = Color(0xFF202024)
 @Composable
 fun ForgotPasswordScreen(
     onBack: () -> Unit,
-    onPasswordResetSent: () -> Unit,
+    onPasswordResetSent: () -> Unit = {}, // Default empty if not used, or keep for navigation
     viewModel: ForgotPasswordViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
 
-    LaunchedEffect(uiState.isEmailSent) {
-        if (uiState.isEmailSent) {
-            onPasswordResetSent()
-        }
-    }
+    // We don't necessarily want to navigate away immediately if we want to show the success message
+    // LaunchedEffect(uiState.isEmailSent) {
+    //    if (uiState.isEmailSent) {
+    //        onPasswordResetSent()
+    //    }
+    // }
 
     Box(modifier = Modifier
         .fillMaxSize()
@@ -107,7 +108,7 @@ fun ForgotPasswordScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "Reset Password",
+                text = "Forget Password",
                 color = TextPrimary,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
@@ -115,7 +116,7 @@ fun ForgotPasswordScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Enter your email and we'll send you a link to reset your password.",
+                text = "Enter your email, we'll  reset your password and you can add new password .",
                 color = TextMuted,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Normal,
@@ -170,7 +171,13 @@ fun ForgotPasswordScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             Button(
-                onClick = viewModel::onResetPasswordClick,
+                onClick = {
+                    if (uiState.isEmailSent) {
+                        onBack()
+                    } else {
+                        viewModel.onResetPasswordClick()
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -179,7 +186,7 @@ fun ForgotPasswordScreen(
                     containerColor = Accent,
                     contentColor = Color.Black
                 ),
-                enabled = !uiState.isLoading && uiState.email.isNotBlank()
+                enabled = !uiState.isLoading && (uiState.email.isNotBlank() || uiState.isEmailSent)
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(
@@ -189,7 +196,7 @@ fun ForgotPasswordScreen(
                     )
                 } else {
                     Text(
-                        text = "Send Reset Link",
+                        text = if (uiState.isEmailSent) "Done" else "Reset Password",
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )
