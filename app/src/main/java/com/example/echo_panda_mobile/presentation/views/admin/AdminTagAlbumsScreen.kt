@@ -60,6 +60,13 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.echo_panda_mobile.data.model.Album
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material3.LinearProgressIndicator
+import com.example.echo_panda_mobile.data.remote.AlbumDto
+import com.example.echo_panda_mobile.presentation.viewsmodel.AdminTagAlbumsViewModel
+
 private val BgDark = Color(0xFF05070D)
 private val CardBg = Color(0xFF161C24)
 private val AccentPurple = Color(0xFFFF00FF)
@@ -69,27 +76,22 @@ private val TextMuted = Color.White.copy(alpha = 0.5f)
 @Composable
 fun AdminTagAlbumsScreen(
     tagId: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: AdminTagAlbumsViewModel = viewModel()
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var showCreateDialog by remember { mutableStateOf(false) }
     var newTagName by remember { mutableStateOf("") }
+    
+    val uiState by viewModel.uiState.collectAsState()
 
-    val albums = listOf(
-        Album(
-            id = "1",
-            title = "Happier Than Ever",
-            artist = "Billie Eilish",
-            imageUrl = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_p_Q5F5W4zX2N8E4_6Xz7R6U4z_5y_8z9w&s"
-        ),
-        Album(
-            id = "2",
-            title = "Speak Now",
-            artist = "Taylor Swift",
-            imageUrl = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_p_Q5F5W4zX2N8E4_6Xz7R6U4z_5y_8z9w&s"
-        )
-    ).filter {
-        it.title.contains(searchQuery, ignoreCase = true) || it.artist.contains(searchQuery, ignoreCase = true)
+    LaunchedEffect(tagId) {
+        viewModel.loadAlbums(tagId)
+    }
+
+    val albums = uiState.albums.filter {
+        it.title.contains(searchQuery, ignoreCase = true) || 
+        (it.artistName?.contains(searchQuery, ignoreCase = true) ?: it.artist?.name?.contains(searchQuery, ignoreCase = true) ?: false)
     }
 
     Scaffold(
@@ -123,6 +125,10 @@ fun AdminTagAlbumsScreen(
                 .padding(horizontal = 20.dp)
         ) {
             Spacer(modifier = Modifier.height(16.dp))
+            
+            if (uiState.isLoading) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = AccentPurple)
+            }
 
             Text(
                 text = buildAnnotatedString {
@@ -137,6 +143,10 @@ fun AdminTagAlbumsScreen(
             )
 
             Spacer(modifier = Modifier.height(24.dp))
+            
+            uiState.errorMessage?.let {
+                Text(it, color = Color.Red, modifier = Modifier.padding(bottom = 16.dp))
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -201,6 +211,9 @@ fun AdminTagAlbumsScreen(
                         Button(
                             onClick = {
                                 showCreateDialog = false
+                                if (newTagName.isNotBlank()) {
+                                    viewModel.createTag(newTagName)
+                                }
                                 newTagName = ""
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
@@ -238,7 +251,7 @@ fun AdminTagAlbumsScreen(
                     HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
                         items(albums, key = { it.id }) { album ->
-                            TagAlbumRow(album)
+                            TagAlbumRow(album, tagId, viewModel)
                             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(alpha = 0.03f))
                         }
                     }
@@ -249,7 +262,7 @@ fun AdminTagAlbumsScreen(
 }
 
 @Composable
-private fun TagAlbumRow(album: Album) {
+private fun TagAlbumRow(album: AlbumDto, tagId: String, viewModel: AdminTagAlbumsViewModel) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -264,9 +277,9 @@ private fun TagAlbumRow(album: Album) {
                     .background(Color.White.copy(alpha = 0.05f)),
                 contentAlignment = Alignment.Center
             ) {
-                if (!album.imageUrl.isNullOrBlank()) {
+                if (!album.coverUrl.isNullOrBlank()) {
                     AsyncImage(
-                        model = album.imageUrl,
+                        model = album.coverUrl,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -279,10 +292,10 @@ private fun TagAlbumRow(album: Album) {
             Text(album.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
 
-        Text(album.artist, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp, modifier = Modifier.weight(2f))
+        Text(album.artistName ?: album.artist?.name ?: "Unknown", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp, modifier = Modifier.weight(2f))
 
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-            IconButton(onClick = { /* Remove from tag */ }, modifier = Modifier.size(24.dp)) {
+            IconButton(onClick = { viewModel.removeFromTag(album.id, tagId.toIntOrNull() ?: -1) }, modifier = Modifier.size(24.dp)) {
                 Icon(Icons.Default.Delete, contentDescription = "Remove", tint = Color(0xFFFF5252), modifier = Modifier.size(18.dp))
             }
         }

@@ -47,6 +47,10 @@ data class GenreResponse(
     val data: List<GenreData> = emptyList()
 )
 
+data class AlbumResponse(
+    val data: List<AlbumDto> = emptyList()
+)
+
 data class GenreData(
     val id: Int,
     val name: String,
@@ -94,12 +98,31 @@ data class CreateAdminArtistResponse(
     val artist: CreatedAdminArtist
 )
 
+data class AdminAnalyticsResponse(
+    val data: List<AnalyticsPoint> = emptyList()
+)
+
+data class AnalyticsPoint(
+    val date: String,
+    val count: Int
+)
+
 interface AdminApiService {
+    @GET("admin/analytics")
+    suspend fun getAnalytics(): AdminAnalyticsResponse
+
+    // Admin tags and genres (Note: These are WEB routes, session-auth only)
     @GET("admin/tags")
     suspend fun getTags(): TagResponse
 
     @GET("admin/genres")
     suspend fun getGenres(): GenreResponse
+
+    @GET("admin/albums")
+    suspend fun getAlbums(
+        @Query("tag_id") tagId: Int? = null,
+        @Query("genre_id") genreId: Int? = null
+    ): AlbumResponse
 
     @POST("admin/artists")
     suspend fun createArtist(@Body body: CreateAdminArtistRequest): CreateAdminArtistResponse
@@ -115,6 +138,9 @@ interface AdminApiService {
 
     @DELETE("admin/tags/{tag}")
     suspend fun deleteTag(@Path("tag") tagId: Int): Response<Unit>
+
+    @PUT("admin/albums/{album}")
+    suspend fun updateAlbum(@Path("album") albumId: Int, @Body body: Map<String, @JvmSuppressWildcards Any>): AlbumDto
 
     @PUT("admin/genres/{genre}")
     suspend fun updateGenre(@Path("genre") genreId: Int, @Body body: CreateGenreRequest): GenreData

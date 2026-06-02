@@ -43,8 +43,8 @@ class AdminDashboardViewModel(application: Application) : AndroidViewModel(appli
             try {
                 // Fetch data from multiple sources
                 val directoryResult = adminRepository.getAdminDirectory()
-                val tags = adminRepository.getTags()
-                val genres = adminRepository.getGenres()
+                val tagsResult = adminRepository.getTags()
+                val genresResult = adminRepository.getGenres()
                 
                 // Fetch songs and albums counts
                 val songsResult = musicRepository.getAllSongs()
@@ -59,6 +59,9 @@ class AdminDashboardViewModel(application: Application) : AndroidViewModel(appli
                     is MusicResult.Success -> albumsResult.data.size
                     else -> 0
                 }
+
+                val tags = if (tagsResult is com.example.echo_panda_mobile.data.repository.AdminResult.Success) tagsResult.data else emptyList()
+                val genres = if (genresResult is com.example.echo_panda_mobile.data.repository.AdminResult.Success) genresResult.data else emptyList()
                 
                 // Compose dashboard stats
                 val stats = when (directoryResult) {

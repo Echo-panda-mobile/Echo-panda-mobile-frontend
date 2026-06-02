@@ -5,6 +5,17 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 class TokenStorage(context: Context) {
+    companion object {
+        @Volatile
+        private var instance: TokenStorage? = null
+
+        fun getInstance(context: Context): TokenStorage {
+            return instance ?: synchronized(this) {
+                instance ?: TokenStorage(context.applicationContext).also { instance = it }
+            }
+        }
+    }
+
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()

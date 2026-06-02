@@ -18,6 +18,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.echo_panda_mobile.presentation.viewsmodel.AdminCategoryDetailViewModel
+
 private val BgDark = Color(0xFF05070D)
 private val CardBg = Color(0xFF161C24)
 private val AccentPurple = Color(0xFFFF00FF)
@@ -27,15 +30,32 @@ private val TextMuted = Color.White.copy(alpha = 0.5f)
 @Composable
 fun AdminCategoryDetailScreen(
     categoryId: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: AdminCategoryDetailViewModel = viewModel()
 ) {
+    val uiState by viewModel.uiState.collectAsState()
+
     // State for editing mode
     var isEditing by remember { mutableStateOf(false) }
     
     // Values that can be edited
-    var editedName by remember { mutableStateOf("Pop") }
-    var editedOrderId by remember { mutableStateOf(categoryId) }
-    var isActive by remember { mutableStateOf(true) }
+    var editedName by remember { mutableStateOf("") }
+
+    LaunchedEffect(categoryId) {
+        viewModel.loadCategory(categoryId)
+    }
+
+    LaunchedEffect(uiState.genre) {
+        uiState.genre?.let {
+            editedName = it.name
+        }
+    }
+
+    LaunchedEffect(uiState.isDeleted) {
+        if (uiState.isDeleted) {
+            onBack()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -60,6 +80,18 @@ fun AdminCategoryDetailScreen(
                 .verticalScroll(scrollState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            if (uiState.isLoading) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = AccentPurple)
+            }
+
+            uiState.errorMessage?.let {
+                Text(it, color = Color.Red, modifier = Modifier.padding(8.dp))
+            }
+
+            uiState.successMessage?.let {
+                Text(it, color = AccentPurple, modifier = Modifier.padding(8.dp))
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
             
             // Icon Header
@@ -94,57 +126,18 @@ fun AdminCategoryDetailScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
-                Text(editedName, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Text(uiState.genre?.name ?: "Loading...", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
             }
             
             Spacer(modifier = Modifier.height(8.dp))
             
-            if (isEditing) {
-                TextField(
-                    value = editedOrderId,
-                    onValueChange = { editedOrderId = it },
-                    label = { Text("Order ID") },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.White.copy(alpha = 0.05f),
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            } else {
-                Text("Order ID: $editedOrderId", color = TextMuted, fontSize = 14.sp)
-            }
+            Text("Order ID: ${uiState.genre?.id ?: categoryId}", color = TextMuted, fontSize = 14.sp)
 
             Spacer(modifier = Modifier.height(40.dp))
 
             // Info items
-            if (isEditing) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Category Visibility", color = Color.White)
-                    Switch(
-                        checked = isActive,
-                        onCheckedChange = { isActive = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF00C853)
-                        )
-                    )
-                }
-            } else {
-                DetailItem("Name", editedName, Icons.Default.Category)
-                DetailItem("Order ID", editedOrderId, Icons.Default.Numbers)
-                DetailItem(
-                    label = "Status",
-                    value = if (isActive) "Active" else "Inactive",
-                    icon = if (isActive) Icons.Default.CheckCircle else Icons.Default.Block,
-                    color = if (isActive) Color(0xFF00C853) else Color(0xFFFF5252)
-                )
-            }
+            DetailItem("Slug", uiState.genre?.slug ?: "-", Icons.Default.Link)
+            DetailItem("Songs Count", uiState.genre?.songsCount?.toString() ?: "0", Icons.Default.MusicNote)
 
             Spacer(modifier = Modifier.height(48.dp))
 
@@ -156,7 +149,7 @@ fun AdminCategoryDetailScreen(
                 Button(
                     onClick = { 
                         if (isEditing) {
-                            // Handle Save Logic here
+                            uiState.genre?.let { viewModel.updateCategory(it.id, editedName) }
                             isEditing = false
                         } else {
                             isEditing = true
@@ -166,7 +159,8 @@ fun AdminCategoryDetailScreen(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isEditing) Color(0xFF00C853) else Color(0xFF1E88E5)
                     ),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    enabled = !uiState.isLoading
                 ) {
                     Icon(
                         if (isEditing) Icons.Default.Save else Icons.Default.Edit, 
@@ -188,11 +182,12 @@ fun AdminCategoryDetailScreen(
                     }
                 } else {
                     Button(
-                        onClick = { /* Handle Delete */ },
+                        onClick = { uiState.genre?.let { viewModel.deleteCategory(it.id) } },
                         modifier = Modifier.weight(1f).height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252).copy(alpha = 0.1f)),
                         shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF5252))
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF5252)),
+                        enabled = !uiState.isLoading
                     ) {
                         Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFFF5252), modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))

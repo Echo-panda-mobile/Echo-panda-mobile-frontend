@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -422,7 +423,8 @@ fun CategoryRowItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(16.dp)
+            .clickable { onNavigateToCategoryAlbums(genre.id.toString()) },
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -768,7 +770,8 @@ fun CollectionTagRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(16.dp)
+            .clickable { onNavigateToTagAlbums(tag.id.toString()) },
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(

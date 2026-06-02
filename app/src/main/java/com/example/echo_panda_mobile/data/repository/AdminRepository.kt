@@ -11,6 +11,8 @@ import com.example.echo_panda_mobile.data.remote.TagData
 import com.example.echo_panda_mobile.data.remote.BackendUser
 import com.example.echo_panda_mobile.data.remote.AuthApiService
 import com.example.echo_panda_mobile.data.remote.RetrofitClient
+import com.example.echo_panda_mobile.data.remote.AnalyticsPoint
+import com.example.echo_panda_mobile.data.remote.AlbumDto
 import retrofit2.HttpException
 
 sealed class AdminResult<out T> {
@@ -190,8 +192,8 @@ class AdminRepository(private val tokenStorage: TokenStorage) {
 
     suspend fun getDashboard() = try {
         val directoryResult = getAdminDirectory()
-        val tags = getTags()
-        val genres = getGenres()
+        val tagsResult = getTags()
+        val genresResult = getGenres()
 
         if (directoryResult is AdminResult.Success) {
             val allUsers = directoryResult.data
@@ -199,13 +201,16 @@ class AdminRepository(private val tokenStorage: TokenStorage) {
             val artistUsers = allUsers.artistUsers
             val adminUsers = allUsers.adminUsers
 
+            val tagsCount = if (tagsResult is AdminResult.Success) tagsResult.data.size else 0
+            val genresCount = if (genresResult is AdminResult.Success) genresResult.data.size else 0
+
             // Compose dashboard stats from directory data and content counts
             com.example.echo_panda_mobile.data.remote.DashboardStats(
                 totalUsers = normalUsers.size,
                 activeArtists = artistUsers.size,
                 totalAdmins = adminUsers.size,
-                totalTags = tags.size,
-                totalGenres = genres.size,
+                totalTags = tagsCount,
+                totalGenres = genresCount,
                 flaggedContent = 0, // Not exposed in current API
                 pendingReports = 0  // Not exposed in current API
             )
@@ -216,10 +221,36 @@ class AdminRepository(private val tokenStorage: TokenStorage) {
         null
     }
 
-    suspend fun getTags() = try {
-        api.getTags().data
+    suspend fun getAnalytics(): AdminResult<List<AnalyticsPoint>> = try {
+        AdminResult.Success(api.getAnalytics().data)
+    } catch (e: HttpException) {
+        AdminResult.Error(parseHttpError(e))
     } catch (e: Exception) {
-        emptyList()
+        AdminResult.Error(e.message ?: "Could not load analytics.")
+    }
+
+    suspend fun getTags(): AdminResult<List<TagData>> = try {
+        AdminResult.Success(api.getTags().data)
+    } catch (e: HttpException) {
+        AdminResult.Error(parseHttpError(e))
+    } catch (e: Exception) {
+        AdminResult.Error(e.message ?: "Could not load tags.")
+    }
+
+    suspend fun getAlbumsByTag(tagId: Int): AdminResult<List<AlbumDto>> = try {
+        AdminResult.Success(api.getAlbums(tagId = tagId).data)
+    } catch (e: HttpException) {
+        AdminResult.Error(parseHttpError(e))
+    } catch (e: Exception) {
+        AdminResult.Error(e.message ?: "Could not load albums.")
+    }
+
+    suspend fun getAlbumsByGenre(genreId: Int): AdminResult<List<AlbumDto>> = try {
+        AdminResult.Success(api.getAlbums(genreId = genreId).data)
+    } catch (e: HttpException) {
+        AdminResult.Error(parseHttpError(e))
+    } catch (e: Exception) {
+        AdminResult.Error(e.message ?: "Could not load albums.")
     }
 
     suspend fun createTag(name: String): AdminResult<TagData> {
@@ -259,10 +290,48 @@ class AdminRepository(private val tokenStorage: TokenStorage) {
         }
     }
 
-    suspend fun getGenres() = try {
-        api.getGenres().data
+    suspend fun updateAlbum(albumId: Int, body: Map<String, Any>): AdminResult<AlbumDto> {
+        return try {
+            val response = api.updateAlbum(albumId, body)
+            AdminResult.Success(response)
+        } catch (e: HttpException) {
+            AdminResult.Error(parseHttpError(e))
+        } catch (e: Exception) {
+            AdminResult.Error(e.message ?: "Could not update album.")
+        }
+    }
+
+    suspend fun removeAlbumFromTag(albumId: Int, tagId: Int): AdminResult<Boolean> {
+        return try {
+            // Best-effort payload; backend may expect a different field name.
+            val response = updateAlbum(albumId, mapOf("remove_tag_id" to tagId))
+            when (response) {
+                is AdminResult.Success -> AdminResult.Success(true)
+                is AdminResult.Error -> AdminResult.Error(response.message)
+            }
+        } catch (e: Exception) {
+            AdminResult.Error(e.message ?: "Could not remove tag from album.")
+        }
+    }
+
+    suspend fun removeAlbumFromGenre(albumId: Int, genreId: Int): AdminResult<Boolean> {
+        return try {
+            val response = updateAlbum(albumId, mapOf("remove_genre_id" to genreId))
+            when (response) {
+                is AdminResult.Success -> AdminResult.Success(true)
+                is AdminResult.Error -> AdminResult.Error(response.message)
+            }
+        } catch (e: Exception) {
+            AdminResult.Error(e.message ?: "Could not remove category from album.")
+        }
+    }
+
+    suspend fun getGenres(): AdminResult<List<GenreData>> = try {
+        AdminResult.Success(api.getGenres().data)
+    } catch (e: HttpException) {
+        AdminResult.Error(parseHttpError(e))
     } catch (e: Exception) {
-        emptyList()
+        AdminResult.Error(e.message ?: "Could not load categories.")
     }
 
     suspend fun createGenre(name: String): AdminResult<GenreData> {

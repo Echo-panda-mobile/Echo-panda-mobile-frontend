@@ -1,5 +1,6 @@
 package com.example.echo_panda_mobile.data.remote
 
+import com.google.gson.annotations.SerializedName
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -41,13 +42,22 @@ data class MeResponse(
     val user: BackendUser
 )
 
+data class UsersByRoleResponse(
+    @SerializedName("normal_users") val normalUsers: List<BackendUser> = emptyList(),
+    @SerializedName("artist_users") val artistUsers: List<BackendUser> = emptyList(),
+    @SerializedName("admin_users") val adminUsers: List<BackendUser> = emptyList()
+)
+
 interface AuthApiService {
-    @POST("firebase/session")
+    @POST("api/firebase/session")
     suspend fun firebaseSession(@Body body: FirebaseSessionRequest): FirebaseSessionResponse
 
-    @GET("me")
+    @GET("api/me")
     suspend fun me(): MeResponse
 
-    @POST("logout")
+    @GET("api/users/by-role")
+    suspend fun usersByRole(): UsersByRoleResponse
+
+    @POST("api/logout")
     suspend fun logout()
 }

@@ -37,17 +37,27 @@ class AdminLibraryViewModel(application: Application) : AndroidViewModel(applica
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             
             try {
-                // We run them sequentially to avoid concurrency issues with the state for now, 
-                // or use async if preferred. Sequential is safer for debugging real API.
-                val tags = adminRepository.getTags()
-                val genres = adminRepository.getGenres()
+                val tagsResult = adminRepository.getTags()
+                val genresResult = adminRepository.getGenres()
 
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    tags = tags,
-                    genres = genres,
-                    errorMessage = if (tags.isEmpty() && genres.isEmpty()) "No data found on server." else null
-                )
+                if (tagsResult is AdminResult.Success && genresResult is AdminResult.Success) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        tags = tagsResult.data,
+                        genres = genresResult.data,
+                        errorMessage = if (tagsResult.data.isEmpty() && genresResult.data.isEmpty()) "No data found on server." else null
+                    )
+                } else {
+                    val error = when {
+                        tagsResult is AdminResult.Error -> tagsResult.message
+                        genresResult is AdminResult.Error -> genresResult.message
+                        else -> "Unknown error"
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error
+                    )
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

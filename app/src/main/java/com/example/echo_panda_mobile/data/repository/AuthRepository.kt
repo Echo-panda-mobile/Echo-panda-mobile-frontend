@@ -6,7 +6,6 @@ import com.example.echo_panda_mobile.data.model.LoginRequest
 import com.example.echo_panda_mobile.data.model.RegisterRequest
 import com.example.echo_panda_mobile.data.model.User
 import com.example.echo_panda_mobile.data.remote.FirebaseSessionRequest
-import com.example.echo_panda_mobile.data.remote.ResetPasswordRequest
 import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import androidx.core.net.toUri
 import com.google.firebase.auth.FirebaseAuth
@@ -41,43 +40,22 @@ class AuthRepository(
             return AuthResult.Error("Email and password are required.")
         }
 
-        tokenStorage.clearSession()
+        // Fresh start: Clear everything before attempting login
+        logoutLocally()
 
         return try {
-            // 1. Try normal Firebase Auth login
             val result = firebaseAuth.signInWithEmailAndPassword(email, password).await()
             val firebaseUser = result.user
                 ?: return AuthResult.Error("Login failed. User data not available.")
 
             syncBackendSession(firebaseUser, provider = "password")
         } catch (e: Exception) {
-            // 2. If login fails, check if the password was changed via our "Forgot Password" (Firestore)
-            try {
-                val querySnapshot = firestore.collection("users")
-                    .whereEqualTo("email", email)
-                    .get()
-                    .await()
-                
-                if (!querySnapshot.isEmpty) {
-                    val dbPassword = querySnapshot.documents[0].getString("password")
-                    if (dbPassword != null && dbPassword == password) {
-                        // The user entered the new password we saved in Firestore!
-                        // We must update the actual Firebase Auth password to match it so they can log in.
-                        // This only works if we can sign them in or if we have a way to update it.
-                        // For demo: We'll show a helpful message.
-                        return AuthResult.Error("Password reset successful in DB. Please use the 'Reset Link' method for real Firebase Auth sync, or contact admin.")
-                    }
-                }
-            } catch (firestoreError: Exception) {
-                // Ignore firestore errors and return the original auth error
-            }
-
             AuthResult.Error(mapFirebaseAuthError(e))
         }
     }
 
     suspend fun signInWithGoogle(idToken: String): AuthResult<AuthResponse> {
-        tokenStorage.clearSession()
+        logoutLocally()
 
         return try {
             if (idToken.isBlank()) {
@@ -119,11 +97,16 @@ class AuthRepository(
                 request.password != request.passwordConfirmation -> return AuthResult.Error("Passwords do not match.")
             }
 
-            val normalizedEmail = request.email.trim()
+            if (request.role.equals("artist", ignoreCase = true) ||
+                request.role.equals("admin", ignoreCase = true)
+            ) {
+                return AuthResult.Error(
+                    "This role cannot be self-registered. Please contact support."
+                )
+            }
 
-            // 1. Create in Firebase Auth first (This is the most important part)
             val result = firebaseAuth.createUserWithEmailAndPassword(
-                normalizedEmail,
+                request.email.trim(),
                 request.password
             ).await()
             val firebaseUser = result.user
@@ -134,23 +117,15 @@ class AuthRepository(
                 .build()
             firebaseUser.updateProfile(profileUpdates).await()
 
-            // 2. Try to save to Firestore, but DON'T fail the whole registration if rules block it
-            try {
-                saveUserProfile(firebaseUser.uid, request.name, normalizedEmail, "user")
-            } catch (firestoreError: Exception) {
-                android.util.Log.e("AuthRepository", "Firestore save failed (Rules?), but Auth succeeded", firestoreError)
-            }
-            
-            try {
-                firebaseUser.sendEmailVerification().await()
-            } catch (_: Exception) {}
+            saveUserProfile(firebaseUser.uid, request.name, request.email.trim(), "user")
+            firebaseUser.sendEmailVerification().await()
 
-            // 3. Sync with Laravel Backend
             syncBackendSession(firebaseUser, provider = "password")
         } catch (e: Exception) {
             val msg = when {
                 e.message?.contains("already in use") == true -> "Email is already registered. Please log in."
                 e.message?.contains("invalid email") == true -> "Invalid email format."
+                e.message?.contains("password is too weak") == true -> "Password must be at least 8 characters."
                 else -> e.message ?: "Sign-up failed. Please try again."
             }
             AuthResult.Error(msg)
@@ -239,137 +214,65 @@ class AuthRepository(
         } catch (_: Exception) {
             // Proceed with local logout even if the backend call fails.
         } finally {
-            firebaseAuth.signOut()
-            tokenStorage.clearSession()
+            logoutLocally()
         }
     }
 
-    suspend fun updatePassword(newPassword: String): AuthResult<Unit> {
+    private fun logoutLocally() {
+        firebaseAuth.signOut()
+        tokenStorage.clearSession()
+        RetrofitClient.clearInstances()
+    }
+
+    suspend fun sendPasswordResetEmail(email: String): AuthResult<Unit> {
         return try {
-            val user = firebaseAuth.currentUser
-                ?: return AuthResult.Error("No user signed in. Please log in again.")
-            
-            user.updatePassword(newPassword).await()
+            if (email.isBlank()) return AuthResult.Error("Email is required.")
+            firebaseAuth.sendPasswordResetEmail(email.trim()).await()
             AuthResult.Success(Unit)
         } catch (e: Exception) {
             val msg = when {
-                e.message?.contains("requires-recent-login", ignoreCase = true) == true ->
-                    "For security, please log in again before changing your password."
-                else -> e.message ?: "Failed to update password."
+                e.message?.contains("no user record") == true -> "No account found with this email."
+                e.message?.contains("invalid email") == true -> "Invalid email format."
+                e.message?.contains("too many requests") == true -> "Too many reset requests. Try again later."
+                else -> e.message ?: "Failed to send reset email. Please try again."
             }
             AuthResult.Error(msg)
         }
     }
 
-    /**
-     * Stores the new password in Firestore for demo purposes.
-     * Note: In a real app, you would use a backend Admin SDK to update Firebase Auth.
-     */
+    suspend fun checkEmailExistsInFirestore(email: String): Boolean {
+        return try {
+            val query = firestore.collection("users")
+                .whereEqualTo("email", email.trim())
+                .get()
+                .await()
+            !query.isEmpty
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     suspend fun storeNewPasswordInFirestore(email: String, newPassword: String): AuthResult<Unit> {
         return try {
-            val trimmedEmail = email.trim()
-            
-            // 1. Find the user document by email
-            val querySnapshot = firestore.collection("users")
-                .whereEqualTo("email", trimmedEmail)
+            val query = firestore.collection("users")
+                .whereEqualTo("email", email.trim())
                 .get()
                 .await()
 
-            if (querySnapshot.isEmpty) {
-                return AuthResult.Error("User not found in database.")
+            if (query.isEmpty) {
+                return AuthResult.Error("User not found in Firestore.")
             }
 
-            val docId = querySnapshot.documents[0].id
-
-            // 2. Update the password field in Firestore
-            // We store it here so the login flow can potentially check it 
-            // if you customize your login to use Firestore passwords.
+            val docId = query.documents[0].id
+            // Note: Storing raw passwords in Firestore is generally not recommended for production.
+            // This is implemented as requested by the ViewModel logic.
             firestore.collection("users").document(docId)
                 .update("password", newPassword)
                 .await()
 
             AuthResult.Success(Unit)
         } catch (e: Exception) {
-            AuthResult.Error(e.message ?: "Failed to save new password to database.")
-        }
-    }
-
-    /**
-     * Resets password using backend API (Admin SDK required on server).
-     * This bypasses the need for a token/link for demo purposes.
-     */
-    suspend fun resetPasswordWithoutToken(email: String, newPassword: String): AuthResult<Unit> {
-        return try {
-            val response = authApi.resetPassword(
-                ResetPasswordRequest(
-                    email = email.trim(),
-                    password = newPassword,
-                    passwordConfirmation = newPassword
-                )
-            )
-
-            if (response.isSuccessful) {
-                AuthResult.Success(Unit)
-            } else {
-                val errorMsg = response.errorBody()?.string() ?: "Failed to reset password."
-                AuthResult.Error(errorMsg)
-            }
-        } catch (e: Exception) {
-            AuthResult.Error(e.message ?: "Could not connect to server to reset password.")
-        }
-    }
-
-    suspend fun checkEmailExistsInFirestore(email: String): Boolean {
-        val trimmedEmail = email.trim()
-        return try {
-            // Check in "users" collection (case-sensitive)
-            val querySnapshot = firestore.collection("users")
-                .whereEqualTo("email", trimmedEmail)
-                .get()
-                .await()
-            
-            if (!querySnapshot.isEmpty) return true
-
-            // Fallback: Check in Authentication if Firestore check fails or returns empty
-            // This handles cases where the user exists in Auth but hasn't been synced to Firestore yet.
-            val methods = firebaseAuth.fetchSignInMethodsForEmail(trimmedEmail).await().signInMethods
-            !methods.isNullOrEmpty()
-        } catch (e: Exception) {
-            android.util.Log.e("AuthRepository", "Verification failed for $trimmedEmail", e)
-            // If the error is about enumeration protection, we fallback to a "best guess" 
-            // by attempting to send a reset email. If it doesn't throw "no user record", it exists.
-            try {
-                firebaseAuth.sendPasswordResetEmail(trimmedEmail).await()
-                true
-            } catch (resetError: Exception) {
-                !resetError.message?.contains("no user record", ignoreCase = true)!!
-            }
-        }
-    }
-
-    suspend fun sendPasswordResetEmail(email: String): AuthResult<Unit> {
-        return try {
-            val trimmedEmail = email.trim()
-            if (trimmedEmail.isBlank()) return AuthResult.Error("Email is required.")
-            
-            android.util.Log.d("AuthRepository", "DEBUG: Requesting reset for |$trimmedEmail|")
-            
-            firebaseAuth.sendPasswordResetEmail(trimmedEmail).await()
-            
-            android.util.Log.d("AuthRepository", "DEBUG: Firebase reported SUCCESS for |$trimmedEmail|")
-            AuthResult.Success(Unit)
-        } catch (e: Exception) {
-            // DETAILED LOGGING to find the hidden cause
-            val errorCode = (e as? com.google.firebase.auth.FirebaseAuthException)?.errorCode ?: "Unknown"
-            android.util.Log.e("AuthRepository", "DEBUG: Reset FAILED for |$email|", e)
-            android.util.Log.e("AuthRepository", "DEBUG: Error Code: $errorCode | Message: ${e.message}")
-
-            val msg = when {
-                errorCode == "ERROR_USER_NOT_FOUND" -> "This email is not registered in the 'Users' list."
-                errorCode == "ERROR_TOO_MANY_REQUESTS" -> "Too many attempts. Wait 10 minutes."
-                else -> e.message ?: "Failed to send reset email. Check console settings."
-            }
-            AuthResult.Error(msg)
+            AuthResult.Error(e.message ?: "Failed to update password in Firestore.")
         }
     }
 
@@ -391,6 +294,10 @@ class AuthRepository(
             )
 
             val normalizedRole = response.user.role.trim().lowercase()
+
+            // After successful session creation, clear any cached interceptors
+            // to ensure they pick up the fresh token from TokenStorage.
+            RetrofitClient.clearInstances()
 
             tokenStorage.saveToken(response.token)
             tokenStorage.saveRole(normalizedRole)
@@ -437,15 +344,15 @@ class AuthRepository(
 
     private fun mapFirebaseAuthError(e: Exception): String = when {
         e is FirebaseAuthInvalidCredentialsException &&
-            e.errorCode == "ERROR_INVALID_EMAIL" -> "Invalid email format."
+                e.errorCode == "ERROR_INVALID_EMAIL" -> "Invalid email format."
         e is FirebaseAuthInvalidCredentialsException &&
-            e.errorCode == "ERROR_WRONG_PASSWORD" -> incorrectFirebaseCredentialsMessage()
+                e.errorCode == "ERROR_WRONG_PASSWORD" -> incorrectFirebaseCredentialsMessage()
         e is FirebaseAuthInvalidCredentialsException &&
-            (e.errorCode == "ERROR_INVALID_CREDENTIAL" ||
-                e.message?.contains("incorrect, malformed or has expired", ignoreCase = true) == true) ->
+                (e.errorCode == "ERROR_INVALID_CREDENTIAL" ||
+                        e.message?.contains("incorrect, malformed or has expired", ignoreCase = true) == true) ->
             incorrectFirebaseCredentialsMessage()
         e is FirebaseAuthInvalidCredentialsException &&
-            e.errorCode == "ERROR_INVALID_CUSTOM_TOKEN" -> "Invalid or expired credentials."
+                e.errorCode == "ERROR_INVALID_CUSTOM_TOKEN" -> "Invalid or expired credentials."
         e is FirebaseAuthInvalidUserException -> incorrectFirebaseCredentialsMessage()
         e.message?.contains("no user record", ignoreCase = true) == true -> incorrectFirebaseCredentialsMessage()
         e.message?.contains("password is invalid", ignoreCase = true) == true -> "Incorrect password."
@@ -460,7 +367,7 @@ class AuthRepository(
 
     private fun incorrectFirebaseCredentialsMessage(): String =
         "Wrong email or password for Firebase. The web admin password is separate — " +
-            "create this email in Firebase Console (project echo-panda-auth) or reset the password there."
+                "create this email in Firebase Console (project echo-panda-auth) or reset the password there."
 
     private fun com.example.echo_panda_mobile.data.remote.BackendUser.toUser(
         firebaseUser: FirebaseUser

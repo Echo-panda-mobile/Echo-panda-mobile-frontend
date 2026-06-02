@@ -29,13 +29,18 @@ class AdminTagDetailViewModel(application: Application) : AndroidViewModel(appli
     fun loadTag(tagId: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            val tags = repository.getTags()
-            val tag = tags.find { it.id.toString() == tagId }
-            
-            if (tag != null) {
-                _uiState.value = _uiState.value.copy(isLoading = false, tag = tag)
-            } else {
-                _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Tag not found")
+            when (val result = repository.getTags()) {
+                is AdminResult.Success -> {
+                    val tag = result.data.find { it.id.toString() == tagId }
+                    if (tag != null) {
+                        _uiState.value = _uiState.value.copy(isLoading = false, tag = tag)
+                    } else {
+                        _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Tag not found")
+                    }
+                }
+                is AdminResult.Error -> {
+                    _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = result.message)
+                }
             }
         }
     }

@@ -29,13 +29,18 @@ class AdminCategoryDetailViewModel(application: Application) : AndroidViewModel(
     fun loadCategory(categoryId: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            val genres = repository.getGenres()
-            val genre = genres.find { it.id.toString() == categoryId }
-            
-            if (genre != null) {
-                _uiState.value = _uiState.value.copy(isLoading = false, genre = genre)
-            } else {
-                _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Category not found")
+            when (val result = repository.getGenres()) {
+                is AdminResult.Success -> {
+                    val genre = result.data.find { it.id.toString() == categoryId }
+                    if (genre != null) {
+                        _uiState.value = _uiState.value.copy(isLoading = false, genre = genre)
+                    } else {
+                        _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Category not found")
+                    }
+                }
+                is AdminResult.Error -> {
+                    _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = result.message)
+                }
             }
         }
     }

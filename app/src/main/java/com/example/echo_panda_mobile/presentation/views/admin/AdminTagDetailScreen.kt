@@ -19,6 +19,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.echo_panda_mobile.presentation.viewsmodel.AdminTagDetailViewModel
+
 private val BgDark = Color(0xFF05070D)
 private val CardBg = Color(0xFF161C24)
 private val AccentPurple = Color(0xFFFF00FF)
@@ -28,16 +31,32 @@ private val TextMuted = Color.White.copy(alpha = 0.5f)
 @Composable
 fun AdminTagDetailScreen(
     tagId: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: AdminTagDetailViewModel = viewModel()
 ) {
+    val uiState by viewModel.uiState.collectAsState()
+    
     // State for editing mode
     var isEditing by remember { mutableStateOf(false) }
     
     // Values that can be edited
-    var editedName by remember { mutableStateOf("korean song") }
-    var editedOrderId by remember { mutableStateOf(tagId) }
-    var editedDescription by remember { mutableStateOf("This collection contains all popular and trending Korean music tracks.") }
-    var isActive by remember { mutableStateOf(true) }
+    var editedName by remember { mutableStateOf("") }
+    
+    LaunchedEffect(tagId) {
+        viewModel.loadTag(tagId)
+    }
+    
+    LaunchedEffect(uiState.tag) {
+        uiState.tag?.let {
+            editedName = it.name
+        }
+    }
+    
+    LaunchedEffect(uiState.isDeleted) {
+        if (uiState.isDeleted) {
+            onBack()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -62,6 +81,18 @@ fun AdminTagDetailScreen(
                 .verticalScroll(scrollState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            if (uiState.isLoading) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = AccentPurple)
+            }
+            
+            uiState.errorMessage?.let {
+                Text(it, color = Color.Red, modifier = Modifier.padding(8.dp))
+            }
+            
+            uiState.successMessage?.let {
+                Text(it, color = AccentPurple, modifier = Modifier.padding(8.dp))
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
             
             // Tag Icon Header
@@ -96,72 +127,18 @@ fun AdminTagDetailScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
-                Text(editedName, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Text(uiState.tag?.name ?: "Loading...", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
             }
             
             Spacer(modifier = Modifier.height(8.dp))
             
-            if (isEditing) {
-                TextField(
-                    value = editedOrderId,
-                    onValueChange = { editedOrderId = it },
-                    label = { Text("Order ID") },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.White.copy(alpha = 0.05f),
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            } else {
-                Text("Order ID: $editedOrderId", color = TextMuted, fontSize = 14.sp)
-            }
+            Text("Order ID: ${uiState.tag?.id ?: tagId}", color = TextMuted, fontSize = 14.sp)
 
             Spacer(modifier = Modifier.height(40.dp))
 
             // Info items
-            if (isEditing) {
-                TextField(
-                    value = editedDescription,
-                    onValueChange = { editedDescription = it },
-                    label = { Text("Description") },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.White.copy(alpha = 0.05f),
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
-                    singleLine = false
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Tag Visibility", color = Color.White)
-                    Switch(
-                        checked = isActive,
-                        onCheckedChange = { isActive = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF00C853)
-                        )
-                    )
-                }
-            } else {
-                DetailItem("Display Name", editedName, Icons.AutoMirrored.Filled.Label)
-                DetailItem("Description", editedDescription, Icons.Default.Description)
-                DetailItem("Order ID", editedOrderId, Icons.Default.Numbers)
-                DetailItem(
-                    label = "Status",
-                    value = if (isActive) "Active" else "Inactive",
-                    icon = if (isActive) Icons.Default.CheckCircle else Icons.Default.Block,
-                    color = if (isActive) Color(0xFF00C853) else Color(0xFFFF5252)
-                )
-            }
+            DetailItem("Slug", uiState.tag?.slug ?: "-", Icons.Default.Link)
+            DetailItem("Songs Count", uiState.tag?.songsCount?.toString() ?: "0", Icons.Default.MusicNote)
 
             Spacer(modifier = Modifier.height(48.dp))
 
@@ -173,7 +150,7 @@ fun AdminTagDetailScreen(
                 Button(
                     onClick = { 
                         if (isEditing) {
-                            // Handle Save Logic here
+                            uiState.tag?.let { viewModel.updateTag(it.id, editedName) }
                             isEditing = false
                         } else {
                             isEditing = true
@@ -183,7 +160,8 @@ fun AdminTagDetailScreen(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isEditing) Color(0xFF00C853) else Color(0xFF1E88E5)
                     ),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    enabled = !uiState.isLoading
                 ) {
                     Icon(
                         if (isEditing) Icons.Default.Save else Icons.Default.Edit, 
@@ -205,11 +183,12 @@ fun AdminTagDetailScreen(
                     }
                 } else {
                     Button(
-                        onClick = { /* Handle Delete */ },
+                        onClick = { uiState.tag?.let { viewModel.deleteTag(it.id) } },
                         modifier = Modifier.weight(1f).height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252).copy(alpha = 0.1f)),
                         shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF5252))
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF5252)),
+                        enabled = !uiState.isLoading
                     ) {
                         Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFFF5252), modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
