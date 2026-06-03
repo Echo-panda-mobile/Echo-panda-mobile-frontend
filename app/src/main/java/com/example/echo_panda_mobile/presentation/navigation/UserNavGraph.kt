@@ -35,8 +35,10 @@ fun NavGraphBuilder.userNavGraph(
                     navController.navigate(Routes.USER_PROFILE) 
                 },
                 onNavigateToAlbum = { albumId ->
+                    android.util.Log.d("NAVIGATION", "━━━━ NAVIGATING TO ALBUM DETAIL ━━━━")
+                    android.util.Log.d("NAVIGATION", "Album ID: $albumId")
                     val route = Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId)
-                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
+                    android.util.Log.d("NAVIGATION", "Route: $route")
                     navController.navigate(route)
                 },
                 onNavigateToPlayer = { trackId, _ ->
@@ -62,8 +64,10 @@ fun NavGraphBuilder.userNavGraph(
                     navController.navigate(route)
                 },
                 onNavigateToAlbum = { albumId ->
+                    android.util.Log.d("NAVIGATION", "━━━━ NAVIGATING TO ALBUM DETAIL ━━━━")
+                    android.util.Log.d("NAVIGATION", "Album ID: $albumId")
                     val route = Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId)
-                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
+                    android.util.Log.d("NAVIGATION", "Route: $route")
                     navController.navigate(route)
                 },
                 onNavigateToSong = { trackId, _ ->
@@ -88,8 +92,10 @@ fun NavGraphBuilder.userNavGraph(
                     navController.navigate(route)
                 },
                 onNavigateToAlbum = { albumId ->
+                    android.util.Log.d("NAVIGATION", "━━━━ NAVIGATING TO ALBUM DETAIL ━━━━")
+                    android.util.Log.d("NAVIGATION", "Album ID: $albumId")
                     val route = Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId)
-                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
+                    android.util.Log.d("NAVIGATION", "Route: $route")
                     navController.navigate(route)
                 },
                 onNavigateToPlayer = { trackId, _ ->
@@ -186,8 +192,10 @@ fun NavGraphBuilder.userNavGraph(
                 artistId = artistId,
                 onBack = { navController.popBackStack() },
                 onNavigateToAlbum = { albumId ->
+                    android.util.Log.d("NAVIGATION", "━━━━ NAVIGATING TO ALBUM DETAIL ━━━━")
+                    android.util.Log.d("NAVIGATION", "Album ID: $albumId")
                     val route = Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId)
-                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
+                    android.util.Log.d("NAVIGATION", "Route: $route")
                     navController.navigate(route)
                 },
                 onNavigateToPlayer = { trackId, _ ->

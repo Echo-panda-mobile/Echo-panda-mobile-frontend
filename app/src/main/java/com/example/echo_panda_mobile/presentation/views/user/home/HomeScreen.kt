@@ -106,25 +106,8 @@ fun HomeScreen(
                                             playlist = playlist,
                                             modifier = Modifier.weight(1f),
                                             onClick = { 
-                                                val track = com.example.echo_panda_mobile.data.model.Track(
-                                                    id = playlist.id,
-                                                    title = playlist.title,
-                                                    artist = playlist.labelOverlay ?: "Various Artists",
-                                                    imageUrl = playlist.imageUrl,
-                                                    placeholderColors = playlist.placeholderColors
-                                                )
-                                                // If it's a "Continue Listening" for a single track, we can create a queue from the whole list
-                                                val tracks = state.recentPlaylists.map { p ->
-                                                    com.example.echo_panda_mobile.data.model.Track(
-                                                        id = p.id,
-                                                        title = p.title,
-                                                        artist = p.labelOverlay ?: "Various Artists",
-                                                        imageUrl = p.imageUrl,
-                                                        placeholderColors = p.placeholderColors
-                                                    )
-                                                }
-                                                globalPlayerViewModel.setQueue(tracks, tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0))
-                                                onNavigateToPlayer(track.id, playlist.resumePositionMs)
+                                                android.util.Log.d("HomeScreen", "Continue Listening: Navigating to Album ID ${playlist.id}")
+                                                onNavigateToAlbum(playlist.id)
                                             }
                                         )
                                     }
@@ -178,7 +161,10 @@ fun HomeScreen(
                         state.topAlbums.forEach { album ->
                             AlbumCard(
                                 album = album,
-                                onClick = { onNavigateToAlbum(album.id) }
+                                onClick = { 
+                                    android.util.Log.d("HomeScreen", "Clicking Album: ${album.title} (ID: ${album.id})")
+                                    onNavigateToAlbum(album.id) 
+                                }
                             )
                         }
                     }
@@ -219,24 +205,8 @@ fun HomeScreen(
                                     size = 160.dp,
                                     cornerRadius = 16.dp,
                                     onClick = { 
-                                        val track = com.example.echo_panda_mobile.data.model.Track(
-                                            id = playlist.id,
-                                            title = playlist.title,
-                                            artist = playlist.labelOverlay ?: "Various Artists",
-                                            imageUrl = playlist.imageUrl,
-                                            placeholderColors = playlist.placeholderColors
-                                        )
-                                        val tracks = state.recentListening.map { p ->
-                                            com.example.echo_panda_mobile.data.model.Track(
-                                                id = p.id,
-                                                title = p.title,
-                                                artist = p.labelOverlay ?: "Various Artists",
-                                                imageUrl = p.imageUrl,
-                                                placeholderColors = p.placeholderColors
-                                            )
-                                        }
-                                        globalPlayerViewModel.setQueue(tracks, tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0))
-                                        onNavigateToPlayer(track.id, playlist.resumePositionMs)
+                                        android.util.Log.d("HomeScreen", "Recent Listening: Navigating to Album ID ${playlist.id}")
+                                        onNavigateToAlbum(playlist.id)
                                     }
                                 )
                             }

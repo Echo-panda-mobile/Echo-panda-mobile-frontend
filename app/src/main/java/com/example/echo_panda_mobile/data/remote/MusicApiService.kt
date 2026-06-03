@@ -125,23 +125,7 @@ data class AlbumDto(
     @SerializedName("songs_count") val songsCount: Int? = null,
     @SerializedName("cover_image") val coverImage: String? = null
 ) {
-    fun getDisplayCoverUrl(): String? {
-        val raw = coverUrl ?: coverImage ?: coverKey ?: return null
-        if (raw.startsWith("http")) return raw
-        
-        // Base URL logic: strip "/api/" from the end of API_BASE_URL
-        val apiBase = com.example.echo_panda_mobile.BuildConfig.API_BASE_URL
-        val domainBase = apiBase.replace("/api/", "/")
-        
-        val cleanPath = if (raw.startsWith("/")) raw.substring(1) else raw
-        
-        // If the path doesn't already contain 'storage/', and it's a local path from backend
-        return if (!cleanPath.contains("storage/") && !cleanPath.startsWith("http")) {
-            "${domainBase}storage/$cleanPath"
-        } else {
-            "$domainBase$cleanPath"
-        }
-    }
+    fun getDisplayCoverUrl(): String? = coverUrl ?: coverImage ?: coverKey
 }
 
 data class ArtistAlbumsResponse(
@@ -190,21 +174,7 @@ data class SongDto(
     @SerializedName("album") val album: AlbumDto? = null,
     @SerializedName("is_favorited") val isFavorite: Boolean? = null
 ) {
-    fun getDisplayCoverUrl(): String? {
-        val raw = coverUrl ?: album?.getDisplayCoverUrl() ?: coverKey ?: return null
-        if (raw.startsWith("http")) return raw
-        
-        val apiBase = com.example.echo_panda_mobile.BuildConfig.API_BASE_URL
-        val domainBase = apiBase.replace("/api/", "/")
-        
-        val cleanPath = if (raw.startsWith("/")) raw.substring(1) else raw
-        
-        return if (!cleanPath.contains("storage/") && !cleanPath.startsWith("http")) {
-            "${domainBase}storage/$cleanPath"
-        } else {
-            "$domainBase$cleanPath"
-        }
-    }
+    fun getDisplayCoverUrl(): String? = coverUrl ?: coverKey ?: album?.getDisplayCoverUrl()
 }
 
 data class FavoriteItemDto(
@@ -222,21 +192,7 @@ data class FavoriteItemDto(
     @SerializedName("album") val album: AlbumDto? = null,
     @SerializedName("is_favorited") val isFavorite: Boolean? = null
 ) {
-    fun getDisplayCoverUrl(): String? {
-        val raw = coverUrl ?: album?.getDisplayCoverUrl() ?: coverKey ?: return null
-        if (raw.startsWith("http")) return raw
-        
-        val apiBase = com.example.echo_panda_mobile.BuildConfig.API_BASE_URL
-        val domainBase = apiBase.replace("/api/", "/")
-        
-        val cleanPath = if (raw.startsWith("/")) raw.substring(1) else raw
-        
-        return if (!cleanPath.contains("storage/") && !cleanPath.startsWith("http")) {
-            "${domainBase}storage/$cleanPath"
-        } else {
-            "$domainBase$cleanPath"
-        }
-    }
+    fun getDisplayCoverUrl(): String? = coverUrl ?: coverKey ?: album?.getDisplayCoverUrl()
 }
 
 data class PlaylistDto(

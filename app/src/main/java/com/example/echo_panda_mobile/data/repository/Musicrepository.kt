@@ -1,5 +1,6 @@
 package com.example.echo_panda_mobile.data.repository
 
+import android.util.Log
 import androidx.compose.ui.graphics.Color
 import com.example.echo_panda_mobile.data.model.*
 import com.example.echo_panda_mobile.data.remote.*
@@ -21,19 +22,23 @@ class MusicRepository(
     private val defaultColors = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26))
 
     private fun directImageUrl(url: String?): String? {
-        val raw = url?.takeIf { it.isNotBlank() } ?: return null
-        if (raw.startsWith("http") || raw.startsWith("content://") || raw.startsWith("file://")) return raw
+        val raw = url?.takeIf { it.isNotBlank() && it != "null" } ?: return null
+        if (raw.startsWith("http") || raw.startsWith("content://") || raw.startsWith("file://")) {
+            return raw
+        }
         
         val apiBase = com.example.echo_panda_mobile.BuildConfig.API_BASE_URL
         val domainBase = apiBase.replace("/api/", "/")
-        
         val cleanPath = if (raw.startsWith("/")) raw.substring(1) else raw
         
-        return if (!cleanPath.contains("storage/") && !cleanPath.startsWith("http")) {
+        val finalUrl = if (!cleanPath.contains("storage/") && !cleanPath.startsWith("http")) {
             "${domainBase}storage/$cleanPath"
         } else {
             "$domainBase$cleanPath"
         }
+        
+        Log.d("MusicRepository", "Generated URL: $finalUrl (from raw: $raw)")
+        return finalUrl
     }
 
     private suspend fun fetchSignedArtistImageUrl(artistId: String): String? {
@@ -41,8 +46,8 @@ class MusicRepository(
         return try {
             val response = apiService.getArtistImageUrl(artistId)
             if (response.isSuccessful) {
-                val signed = response.body()?.signedUrl ?: response.body()?.url
-                if (!signed.isNullOrBlank() && signed.startsWith("http")) signed else null
+                val raw = response.body()?.signedUrl ?: response.body()?.url
+                directImageUrl(raw)
             } else null
         } catch (e: Exception) {
             null
@@ -54,8 +59,8 @@ class MusicRepository(
         return try {
             val response = apiService.getAlbumCoverUrl(albumId)
             if (response.isSuccessful) {
-                val signed = response.body()?.signedUrl ?: response.body()?.url
-                if (!signed.isNullOrBlank() && signed.startsWith("http")) signed else null
+                val raw = response.body()?.signedUrl ?: response.body()?.url
+                directImageUrl(raw)
             } else null
         } catch (e: Exception) {
             null
@@ -78,8 +83,8 @@ class MusicRepository(
         return try {
             val response = apiService.getSongCoverUrl(songId)
             if (response.isSuccessful) {
-                val signed = response.body()?.signedUrl ?: response.body()?.url
-                if (!signed.isNullOrBlank() && signed.startsWith("http")) signed else null
+                val raw = response.body()?.signedUrl ?: response.body()?.url
+                directImageUrl(raw)
             } else null
         } catch (e: Exception) {
             null
@@ -92,14 +97,8 @@ class MusicRepository(
         coverUrl: String?,
         albumCoverUrl: String?
     ): String? {
-        // If we already have a full URL, use it immediately to avoid extra network calls
+        fetchSignedSongCoverUrl(songId)?.let { return it }
         if (!coverUrl.isNullOrBlank() && coverUrl.startsWith("http")) return coverUrl
-        if (!albumCoverUrl.isNullOrBlank() && albumCoverUrl.startsWith("http")) return albumCoverUrl
-
-        // Try to fetch signed URL only if needed (this is slow if done in a loop)
-        // fetchSignedSongCoverUrl(songId)?.let { return it }
-        // albumId?.let { fetchSignedAlbumCoverUrl(it)?.let { signed -> return signed } }
-        
         return directImageUrl(coverUrl ?: albumCoverUrl)
     }
 
@@ -143,23 +142,25 @@ class MusicRepository(
                 val playlists = historyDtos.map { history ->
                     async {
                         val dto = history.song
+                        val albumId = dto.albumId?.toString() ?: dto.album?.id?.toString() ?: dto.resolvedId()
+                        
                         val imageUrl = resolveTrackCoverUrl(
                             songId = dto.resolvedId(),
-                            albumId = dto.albumId?.toString() ?: dto.album?.id?.toString(),
+                            albumId = albumId,
                             coverUrl = dto.coverUrl,
                             albumCoverUrl = dto.album?.coverUrl
                         )
 
                         Playlist(
-                            id = dto.resolvedId(),
-                            title = dto.resolvedTitle(),
+                            id = albumId,
+                            title = dto.album?.title ?: dto.resolvedTitle(),
                             imageUrl = imageUrl,
                             labelOverlay = dto.artistName ?: dto.artist?.name,
-                            placeholderColors = getColorsForId(dto.resolvedId()),
+                            placeholderColors = getColorsForId(albumId),
                             resumePositionMs = history.progressSeconds * 1000L
                         )
                     }
-                }.awaitAll()
+                }.awaitAll().distinctBy { it.id }
                 MusicResult.Success(playlists)
             } else {
                 getNewAlbumsAsPlaylists()
@@ -302,13 +303,7 @@ class MusicRepository(
     suspend fun getTopAlbums(): MusicResult<List<Album>> = withContext(Dispatchers.IO) {
         val api = apiService ?: return@withContext MusicResult.Error("API service not initialized")
         try {
-            android.util.Log.d("ALBUM_API", "━━━ FETCH TOP ALBUMS START ━━━")
             val response = api.getMostPlayedAlbums(limit = 10)
-            
-            val request = response.raw().request
-            android.util.Log.d("ALBUM_API", "Request URL: ${request.url}")
-            android.util.Log.d("ALBUM_API", "Response Code: ${response.code()}")
-
             if (response.isSuccessful) {
                 val mostPlayedDtos = response.body()?.data ?: emptyList()
                 val albums = mostPlayedDtos.map { dto ->
@@ -316,11 +311,9 @@ class MusicRepository(
                 }.awaitAll()
                 MusicResult.Success(albums)
             } else {
-                android.util.Log.w("ALBUM_API", "⚠️ Top albums failed (Code ${response.code()}), falling back to new albums.")
                 getNewAlbums()
             }
         } catch (e: Exception) {
-            android.util.Log.e("ALBUM_API", "❌ Top albums exception: ${e.message}")
             getNewAlbums()
         }
     }
@@ -328,16 +321,7 @@ class MusicRepository(
     suspend fun getNewAlbums(): MusicResult<List<Album>> = withContext(Dispatchers.IO) {
         val api = apiService ?: return@withContext MusicResult.Error("API service not initialized")
         try {
-            android.util.Log.d("ALBUM_API", "━━━ FETCH NEW ALBUMS START ━━━")
             val response = api.getAlbums(sortBy = "latest", perPage = 10)
-            
-            val request = response.raw().request
-            val token = tokenStorage?.getToken()
-            android.util.Log.d("ALBUM_API", "URL: ${request.url}")
-            android.util.Log.d("ALBUM_API", "Status: ${response.code()}")
-            android.util.Log.d("ALBUM_API", "Token from Storage: ${if (token.isNullOrBlank()) "MISSING" else "PRESENT"}")
-            android.util.Log.d("ALBUM_API", "Auth Header: ${request.header("Authorization")}")
-
             if (response.isSuccessful) {
                 val albumDtos = response.body()?.data ?: emptyList()
                 val albums = albumDtos.map { dto ->
@@ -345,12 +329,9 @@ class MusicRepository(
                 }.awaitAll()
                 MusicResult.Success(albums)
             } else {
-                val errorMsg = response.errorBody()?.string() ?: response.message()
-                android.util.Log.e("ALBUM_API", "❌ Error: $errorMsg")
-                MusicResult.Error("Failed to fetch new albums: $errorMsg")
+                MusicResult.Error("Failed to fetch new albums")
             }
         } catch (e: Exception) {
-            android.util.Log.e("ALBUM_API", "❌ Exception: ${e.message}", e)
             MusicResult.Error(e.localizedMessage ?: "Network error")
         }
     }
@@ -358,29 +339,17 @@ class MusicRepository(
     suspend fun getAllAlbums(perPage: Int = 50): MusicResult<List<Album>> = withContext(Dispatchers.IO) {
         if (apiService == null) return@withContext MusicResult.Error("API service not initialized")
         try {
-            android.util.Log.d("ALBUM_API", "━━━ FETCH ALL ALBUMS START ━━━")
             val response = apiService.getAlbums(sortBy = "latest", perPage = perPage)
-            
-            // Log Full URL
-            val fullUrl = response.raw().request.url.toString()
-            android.util.Log.d("ALBUM_API", "FULL URL REQUESTED: $fullUrl")
-            android.util.Log.d("ALBUM_API", "Status Code: ${response.code()}")
-            
             if (response.isSuccessful) {
-                val body = response.body()
-                android.util.Log.d("ALBUM_API", "✓ Success Body: $body")
-                val albumDtos = body?.data ?: emptyList()
+                val albumDtos = response.body()?.data ?: emptyList()
                 val albums = albumDtos.map { dto ->
                     async { enrichAlbumDto(dto) }
                 }.awaitAll()
                 MusicResult.Success(albums)
             } else {
-                val errorBody = response.errorBody()?.string()
-                android.util.Log.e("ALBUM_API", "❌ Error Body: $errorBody")
-                MusicResult.Error("Failed to fetch albums: ${response.code()} ${response.message()}")
+                MusicResult.Error("Failed to fetch albums")
             }
         } catch (e: Exception) {
-            android.util.Log.e("ALBUM_API", "❌ Exception: ${e.message}", e)
             MusicResult.Error(e.localizedMessage ?: "Network error")
         }
     }
@@ -410,12 +379,25 @@ class MusicRepository(
             if (!albumResponse.isSuccessful) return@withContext MusicResult.Error("Album not found")
             val albumDto = albumResponse.body() ?: return@withContext MusicResult.Error("Empty response body")
 
+            val resolvedAlbumCover = resolveAlbumCoverUrl(albumDto.id.toString(), albumDto.getDisplayCoverUrl())
             val songsResponse = api.getSongs(albumId = albumDto.id)
+            
             val tracks = if (songsResponse.isSuccessful) {
-                songsResponse.body()?.data?.map {
-                    it.toDomain(albumDto.artist?.name ?: albumDto.artistName ?: "Unknown")
-                } ?: emptyList()
+                // Fetch all song covers in parallel to fix the 403 issue and show unique images
+                songsResponse.body()?.data?.map { dto ->
+                    async {
+                        val domainTrack = dto.toDomain(albumDto.artist?.name ?: albumDto.artistName ?: "Unknown")
+                        val coverUrl = resolveTrackCoverUrl(
+                            songId = dto.id.toString(),
+                            albumId = dto.albumId?.toString(),
+                            coverUrl = dto.coverUrl,
+                            albumCoverUrl = albumDto.getDisplayCoverUrl()
+                        )
+                        domainTrack.copy(imageUrl = coverUrl ?: resolvedAlbumCover)
+                    }
+                }?.awaitAll() ?: emptyList()
             } else emptyList()
+
             val tracksWithFavorites = mergeFavoriteStatus(tracks)
 
             val album = enrichAlbum(
@@ -448,14 +430,9 @@ class MusicRepository(
     suspend fun getTrackById(id: String): MusicResult<Track> = withContext(Dispatchers.IO) {
         if (apiService == null) return@withContext MusicResult.Error("API service not initialized")
         try {
-            android.util.Log.d("MusicRepository", "Fetching track details for ID: $id")
             val response = apiService.getSongDetail(id)
-            android.util.Log.d("MusicRepository", "Response code: ${response.code()}")
-            
             if (response.isSuccessful) {
                 val songDto = response.body() ?: return@withContext MusicResult.Error("Empty response body")
-                android.util.Log.d("MusicRepository", "Song DTO: $songDto")
-
                 var track = songDto.toDomain("Unknown")
                 val coverUrl = resolveTrackCoverUrl(
                     songId = id,
@@ -493,7 +470,7 @@ class MusicRepository(
                 val body = response.body() ?: return@withContext MusicResult.Error("Empty body")
                 MusicResult.Success(body)
             } else {
-                MusicResult.Error("Failed to get stream ticket: ${response.code()} ${response.message()}")
+                MusicResult.Error("Failed to get stream ticket")
             }
         } catch (e: Exception) {
             MusicResult.Error(e.localizedMessage ?: "Network error")
@@ -543,7 +520,7 @@ class MusicRepository(
         id = id.toString(),
         title = title,
         artist = artist?.name ?: artistName ?: "Unknown",
-        imageUrl = getDisplayCoverUrl(),
+        imageUrl = directImageUrl(getDisplayCoverUrl()),
         placeholderColors = getColorsForId(id.toString())
     )
 
@@ -559,7 +536,7 @@ class MusicRepository(
             title = resolvedTitle(),
             artist = resolvedArtist,
             durationMs = (durationSeconds ?: 0) * 1000L,
-            imageUrl = getDisplayCoverUrl(),
+            imageUrl = directImageUrl(getDisplayCoverUrl()),
             album = album?.title ?: (if (resolvedArtist != "Unknown") resolvedArtist else null),
             placeholderColors = getColorsForId(resolvedId()),
             isFavorite = isFavorite ?: false
@@ -576,18 +553,11 @@ class MusicRepository(
             title = resolvedTitle,
             artist = artistName ?: "Unknown",
             durationMs = (durationSeconds ?: 0) * 1000L,
-            imageUrl = getDisplayCoverUrl(),
+            imageUrl = directImageUrl(getDisplayCoverUrl()),
             album = album?.title,
             placeholderColors = getColorsForId(idStr),
             isFavorite = true
         )
-    }
-
-    suspend fun getTopMixes(): MusicResult<List<Playlist>> = withContext(Dispatchers.IO) {
-        MusicResult.Success(listOf(
-            Playlist("m1", "Trending Music", labelOverlay = "TRENDING", placeholderColors = listOf(Color(0xFF1565C0), Color(0xFF0D47A1))),
-            Playlist("m2", "Weekly Top Songs", labelOverlay = "WEEKLY TOP", placeholderColors = listOf(Color(0xFFF9A825), Color(0xFFF57F17)))
-        ))
     }
 
     suspend fun getRecentListening(): MusicResult<List<Playlist>> = withContext(Dispatchers.IO) {
@@ -599,22 +569,23 @@ class MusicRepository(
                 val playlists = historyDtos.map { dto ->
                     async {
                         val song = dto.song
+                        val albumId = song.albumId?.toString() ?: song.album?.id?.toString() ?: song.resolvedId()
                         val imageUrl = resolveTrackCoverUrl(
                             songId = song.resolvedId(),
-                            albumId = song.albumId?.toString() ?: song.album?.id?.toString(),
+                            albumId = albumId,
                             coverUrl = song.coverUrl,
                             albumCoverUrl = song.album?.coverUrl
                         )
 
                         Playlist(
-                            id = song.resolvedId(),
-                            title = song.resolvedTitle(),
+                            id = albumId,
+                            title = song.album?.title ?: song.resolvedTitle(),
                             imageUrl = imageUrl,
                             labelOverlay = song.artistName ?: song.artist?.name,
-                            placeholderColors = getColorsForId(song.resolvedId())
+                            placeholderColors = getColorsForId(albumId)
                         )
                     }
-                }.awaitAll()
+                }.awaitAll().distinctBy { it.id }
                 MusicResult.Success(playlists)
             } else {
                 getRecentPlaylists()
@@ -729,8 +700,12 @@ class MusicRepository(
     }
 
     private suspend fun enrichTrackCovers(tracks: List<Track>): List<Track> {
-        // Skip heavy enrichment if we already have URLs or to avoid too many requests
-        return tracks
+        if (tracks.isEmpty()) return tracks
+        return tracks.map { track ->
+            if (track.imageUrl.isNullOrBlank()) {
+                track.copy(imageUrl = directImageUrl(null)) 
+            } else track
+        }
     }
 
     suspend fun toggleFavorite(trackId: String, isFavorite: Boolean): MusicResult<Boolean> = withContext(Dispatchers.IO) {
