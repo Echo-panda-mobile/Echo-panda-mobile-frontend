@@ -1,7 +1,6 @@
 package com.example.echo_panda_mobile.presentation.viewsmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.User
 import com.example.echo_panda_mobile.data.repository.AuthRepository
@@ -17,13 +16,13 @@ data class UserProfileUiState(
     val user: User? = null,
     val playlists: List<String> = emptyList(),
     val likedSongsCount: Int = 0,
-    val followingCount: Int = 0, // Placeholder for future feature
+    val followingCount: Int = 0, 
     val errorMessage: String? = null
 )
 
-class UserProfileViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val authRepository = AuthRepository(TokenStorage(application))
+class UserProfileViewModel(
+    private val authRepository: AuthRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(UserProfileUiState())
     val uiState: StateFlow<UserProfileUiState> = _uiState.asStateFlow()
@@ -36,7 +35,7 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                val user = authRepository.getCurrentUser()
+                val user = authRepository.getCurrentUserProfile()
                 val playlists = authRepository.getUserPlaylists()
                 val likedSongs = authRepository.getUserLikedSongs()
                 
@@ -45,7 +44,7 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
                     user = user,
                     playlists = playlists,
                     likedSongsCount = likedSongs.size,
-                    followingCount = 0 // Update this when following logic is implemented
+                    followingCount = 0 
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -91,5 +90,17 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
                 )
             }
         }
+    }
+}
+
+class UserProfileViewModelFactory(private val context: android.content.Context) : androidx.lifecycle.ViewModelProvider.Factory {
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(UserProfileViewModel::class.java)) {
+            val tokenStorage = TokenStorage.getInstance(context.applicationContext)
+            val repository = AuthRepository(tokenStorage)
+            @Suppress("UNCHECKED_CAST")
+            return UserProfileViewModel(repository) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

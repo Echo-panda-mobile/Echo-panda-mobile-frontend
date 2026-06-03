@@ -110,7 +110,7 @@ fun AlbumDetailScreen(
                             track = track,
                             isPlaying = index == 0,
                             onClick = {
-                                globalPlayerViewModel.playTrack(track)
+                                globalPlayerViewModel.setQueue(album.tracks, index)
                                 onNavigateToPlayer(track.id, track.resumePositionMs)
                             },
                             onAddToFavorites = {

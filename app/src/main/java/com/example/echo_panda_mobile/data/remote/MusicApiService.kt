@@ -5,6 +5,8 @@ import com.google.gson.JsonDeserializer
 import com.google.gson.JsonElement
 import com.google.gson.annotations.JsonAdapter
 import com.google.gson.annotations.SerializedName
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.*
 import java.lang.reflect.Type
@@ -12,7 +14,8 @@ import java.lang.reflect.Type
 // ─── Base Response Wrapper ──────────────────────────────────────────────────
 
 data class BaseResponse<T>(
-    @SerializedName("data") val data: T
+    @SerializedName("data") val data: T,
+    @SerializedName("message") val message: String? = null
 )
 
 data class PaginatedResponse<T>(
@@ -25,9 +28,11 @@ data class PaginatedResponse<T>(
 // ─── Artist DTOs ──────────────────────────────────────────────────────────────
 
 data class ArtistDto(
-    @SerializedName("id") val id: String,
+    @SerializedName("id") val id: Int,
     @SerializedName("name") val name: String,
     @SerializedName("image_url") val imageUrl: String? = null,
+    @SerializedName("cover_image_url") val coverImageUrl: String? = null,
+    @SerializedName("bio") val bio: String? = null,
     @SerializedName("monthly_listeners") val monthlyListeners: String? = null
 )
 
@@ -69,7 +74,6 @@ data class StreamTicketResponse(
 
 // ─── Album DTOs ───────────────────────────────────────────────────────────────
 
-/** API may return artist as a string (lists) or nested object (album detail). */
 data class AlbumArtistField(
     val id: String? = null,
     val name: String = "Unknown"
@@ -115,7 +119,56 @@ data class AlbumDto(
     val artist: AlbumArtistField? = null,
     @SerializedName("release_date") val releaseDate: String? = null,
     @SerializedName("description") val description: String? = null,
-    @SerializedName("cover_url") val coverUrl: String? = null
+    @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("cover_key") val coverKey: String? = null,
+    @SerializedName("release_status") val releaseStatus: String? = "published",
+    @SerializedName("songs_count") val songsCount: Int? = null,
+    @SerializedName("cover_image") val coverImage: String? = null
+) {
+    fun getDisplayCoverUrl(): String? {
+        val raw = coverUrl ?: coverImage ?: coverKey ?: return null
+        if (raw.startsWith("http")) return raw
+        
+        // Base URL logic: strip "/api/" from the end of API_BASE_URL
+        val apiBase = com.example.echo_panda_mobile.BuildConfig.API_BASE_URL
+        val domainBase = apiBase.replace("/api/", "/")
+        
+        val cleanPath = if (raw.startsWith("/")) raw.substring(1) else raw
+        
+        // If the path doesn't already contain 'storage/', and it's a local path from backend
+        return if (!cleanPath.contains("storage/") && !cleanPath.startsWith("http")) {
+            "${domainBase}storage/$cleanPath"
+        } else {
+            "$domainBase$cleanPath"
+        }
+    }
+}
+
+data class ArtistAlbumsResponse(
+    @SerializedName("success") val success: Boolean? = null,
+    @SerializedName("data") val data: List<AlbumDto>? = null,
+    @SerializedName("albums") val albums: List<AlbumDto>? = null
+) {
+    val allAlbums: List<AlbumDto> get() = data ?: albums ?: emptyList()
+}
+
+data class ArtistSongsResponse(
+    @SerializedName("success") val success: Boolean? = null,
+    @SerializedName("data") val data: List<SongDto>? = null,
+    @SerializedName("songs") val songs: List<SongDto>? = null,
+    @SerializedName("tracks") val tracks: List<SongDto>? = null
+) {
+    val allSongs: List<SongDto> get() = data ?: songs ?: tracks ?: emptyList()
+}
+
+data class CreateAlbumRequest(
+    @SerializedName("title") val title: String,
+    @SerializedName("artist") val artist: String,
+    @SerializedName("artist_id") val artistId: Int? = null,
+    @SerializedName("description") val description: String? = null,
+    @SerializedName("cover_key") val coverKey: String? = null,
+    @SerializedName("release_date") val releaseDate: String? = null,
+    @SerializedName("release_status") val releaseStatus: String? = "published"
 )
 
 // ─── Song DTOs ────────────────────────────────────────────────────────────────
@@ -125,15 +178,35 @@ data class SongDto(
     @SerializedName("title") val title: String? = null,
     @SerializedName("name") val name: String? = null,
     @SerializedName("artist_name") val artistName: String? = null,
+    @SerializedName("artist")
+    @JsonAdapter(AlbumArtistFieldAdapter::class)
+    val artist: AlbumArtistField? = null,
     @SerializedName("duration") val durationSeconds: Int? = null,
     @SerializedName("track_number") val trackNumber: Int? = null,
     @SerializedName("album_id") val albumId: Int? = null,
     @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("cover_key") val coverKey: String? = null,
+    @SerializedName("audio_url") val audioUrl: String? = null,
     @SerializedName("album") val album: AlbumDto? = null,
     @SerializedName("is_favorited") val isFavorite: Boolean? = null
-)
+) {
+    fun getDisplayCoverUrl(): String? {
+        val raw = coverUrl ?: album?.getDisplayCoverUrl() ?: coverKey ?: return null
+        if (raw.startsWith("http")) return raw
+        
+        val apiBase = com.example.echo_panda_mobile.BuildConfig.API_BASE_URL
+        val domainBase = apiBase.replace("/api/", "/")
+        
+        val cleanPath = if (raw.startsWith("/")) raw.substring(1) else raw
+        
+        return if (!cleanPath.contains("storage/") && !cleanPath.startsWith("http")) {
+            "${domainBase}storage/$cleanPath"
+        } else {
+            "$domainBase$cleanPath"
+        }
+    }
+}
 
-/** Favorites may return a flat song or `{ "song": { ... } }` — this DTO handles both. */
 data class FavoriteItemDto(
     @SerializedName("song") val song: SongDto? = null,
     @SerializedName("song_id") val songId: Int? = null,
@@ -145,11 +218,27 @@ data class FavoriteItemDto(
     @SerializedName("track_number") val trackNumber: Int? = null,
     @SerializedName("album_id") val albumId: Int? = null,
     @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("cover_key") val coverKey: String? = null,
     @SerializedName("album") val album: AlbumDto? = null,
     @SerializedName("is_favorited") val isFavorite: Boolean? = null
-)
+) {
+    fun getDisplayCoverUrl(): String? {
+        val raw = coverUrl ?: album?.getDisplayCoverUrl() ?: coverKey ?: return null
+        if (raw.startsWith("http")) return raw
+        
+        val apiBase = com.example.echo_panda_mobile.BuildConfig.API_BASE_URL
+        val domainBase = apiBase.replace("/api/", "/")
+        
+        val cleanPath = if (raw.startsWith("/")) raw.substring(1) else raw
+        
+        return if (!cleanPath.contains("storage/") && !cleanPath.startsWith("http")) {
+            "${domainBase}storage/$cleanPath"
+        } else {
+            "$domainBase$cleanPath"
+        }
+    }
+}
 
-// Playlist DTOs
 data class PlaylistDto(
     @SerializedName("id") val id: String,
     @SerializedName("name") val name: String?,
@@ -182,6 +271,71 @@ data class PlayHistoryDto(
     @SerializedName("song") val song: SongDto
 )
 
+data class CreateSongRequest(
+    @SerializedName("album_id") val albumId: Int? = null,
+    @SerializedName("title") val title: String,
+    @SerializedName("duration") val duration: Int,
+    @SerializedName("track_number") val trackNumber: Int,
+    @SerializedName("genre") val genre: String? = null,
+    @SerializedName("lyrics") val lyrics: String? = null,
+    @SerializedName("original_key") val originalKey: String? = null, 
+    @SerializedName("cover_key") val coverKey: String? = null,
+    @SerializedName("preview_key") val previewKey: String? = null
+)
+
+data class UploadResponse(
+    @SerializedName("key") val key: String,
+    @SerializedName("url") val url: String
+)
+
+data class PresignedUrlResponse(
+    @SerializedName("message") val message: String?,
+    @SerializedName("purpose") val purpose: String?,
+    @SerializedName("key") val key: String,
+    @SerializedName("url") val url: String?,
+    @SerializedName("upload_url") val uploadUrl: String,
+    @SerializedName("headers") val headers: Map<String, String>?
+)
+
+data class PresignUploadRequest(
+    @SerializedName("purpose") val purpose: String,
+    @SerializedName("filename") val fileName: String,
+    @SerializedName("content_type") val contentType: String,
+    @SerializedName("size") val size: Long
+)
+
+data class ArtistAnalyticsDto(
+    @SerializedName("stats") val stats: DashboardStatsDto,
+    @SerializedName("top_track") val topTrack: SongDto?,
+    @SerializedName("recent_activities") val recentActivities: List<ActivityDto>
+)
+
+data class DashboardStatsDto(
+    @SerializedName("monthly_revenue") val monthlyRevenue: Double,
+    @SerializedName("revenue_growth") val revenueGrowth: Double,
+    @SerializedName("streams") val streams: String,
+    @SerializedName("listeners") val listeners: String,
+    @SerializedName("followers") val followers: String,
+    @SerializedName("published_songs") val publishedSongs: Int,
+    @SerializedName("total_albums") val totalAlbums: Int,
+    @SerializedName("total_likes") val totalLikes: String
+)
+
+data class ActivityDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("text") val text: String,
+    @SerializedName("timestamp") val timestamp: Long
+)
+
+data class NotificationDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("title") val title: String,
+    @SerializedName("message") val message: String,
+    @SerializedName("type") val type: String,
+    @SerializedName("timestamp") val timestamp: Long,
+    @SerializedName("is_read") val isRead: Boolean
+)
+
 // ─── Service Interface ────────────────────────────────────────────────────────
 
 interface MusicApiService {
@@ -199,6 +353,7 @@ interface MusicApiService {
         @Path("artist") artistId: String
     ): Response<ArtistImageUrlResponse>
 
+    // ─── Albums ───
     @GET("api/albums")
     suspend fun getAlbums(
         @Query("search") search: String? = null,
@@ -211,6 +366,23 @@ interface MusicApiService {
         @Path("id") albumId: String
     ): Response<AlbumDto>
 
+    @POST("api/albums")
+    suspend fun createAlbum(
+        @Body request: CreateAlbumRequest
+    ): Response<BaseResponse<AlbumDto>>
+
+    @PUT("api/albums/{id}")
+    suspend fun updateAlbum(
+        @Path("id") albumId: String,
+        @Body request: CreateAlbumRequest
+    ): Response<BaseResponse<AlbumDto>>
+
+    @DELETE("api/albums/{id}")
+    suspend fun deleteAlbum(
+        @Path("id") albumId: String
+    ): Response<BaseResponse<Unit>>
+
+    // ─── Songs ───
     @GET("api/songs")
     suspend fun getSongs(
         @Query("search") search: String? = null,
@@ -221,6 +393,22 @@ interface MusicApiService {
     suspend fun getSongDetail(
         @Path("id") songId: String
     ): Response<SongDto>
+
+    @POST("api/songs")
+    suspend fun createSong(
+        @Body request: CreateSongRequest
+    ): Response<BaseResponse<SongDto>>
+
+    @PUT("api/songs/{id}")
+    suspend fun updateSong(
+        @Path("id") songId: String,
+        @Body request: CreateSongRequest
+    ): Response<BaseResponse<SongDto>>
+
+    @DELETE("api/songs/{id}")
+    suspend fun deleteSong(
+        @Path("id") songId: String
+    ): Response<BaseResponse<Unit>>
 
     @GET("api/songs/{id}/cover-url")
     suspend fun getSongCoverUrl(
@@ -293,6 +481,41 @@ interface MusicApiService {
     suspend fun addToListenHistory(
         @Body request: ListenHistoryRequest
     ): Response<Unit>
+
+    @Multipart
+    @POST("api/upload/media")
+    suspend fun uploadMedia(
+        @Part file: MultipartBody.Part,
+        @Part("purpose") purpose: RequestBody 
+    ): Response<UploadResponse>
+
+    @POST("api/upload/media/presign")
+    suspend fun getUploadUrl(
+        @Body request: PresignUploadRequest
+    ): Response<PresignedUrlResponse>
+
+    @GET("api/songs")
+    suspend fun getMySongs(
+        @Query("per_page") perPage: Int = 500,
+        @Query("sort_by") sortBy: String = "latest"
+    ): Response<ArtistSongsResponse>
+
+    @GET("api/albums")
+    suspend fun getMyAlbums(
+        @Query("per_page") perPage: Int = 500,
+        @Query("sort_by") sortBy: String = "latest"
+    ): Response<ArtistAlbumsResponse>
+
+    @GET("api/artist/analytics")
+    suspend fun getArtistAnalytics(): Response<BaseResponse<ArtistAnalyticsDto>>
+
+    @PUT("api/artist/profile")
+    suspend fun updateArtistProfile(
+        @Body profile: ArtistDto
+    ): Response<BaseResponse<ArtistDto>>
+
+    @GET("api/artist/notifications")
+    suspend fun getNotifications(): Response<BaseResponse<List<NotificationDto>>>
 
     @GET("api/stats/most-played-albums")
     suspend fun getMostPlayedAlbums(

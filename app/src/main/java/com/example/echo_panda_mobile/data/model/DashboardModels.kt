@@ -3,22 +3,24 @@ package com.example.echo_panda_mobile.data.model
 // ─── Dashboard Domain Models ───────────────────────────────────────────────────
 
 data class DashboardStats(
-    val monthlyRevenue: Double = 12450.0,
-    val revenueGrowth: Double = 18.0,
-    val streams: String = "2.5M",
-    val streamsGrowth: Double = 12.0,
-    val listeners: String = "185K",
-    val listenersGrowth: Double = 8.0,
-    val followers: String = "12.5K",
-    val followersGrowth: Double = 5.0,
-    val publishedSongs: Int = 24
+    val monthlyRevenue: Double = 0.0,
+    val revenueGrowth: Double = 0.0,
+    val streams: String = "0",
+    val streamsGrowth: Double = 0.0,
+    val listeners: String = "0",
+    val listenersGrowth: Double = 0.0,
+    val followers: String = "0",
+    val followersGrowth: Double = 0.0,
+    val publishedSongs: Int = 0,
+    val totalAlbums: Int = 0,
+    val totalLikes: String = "0"
 )
 
 data class TopTrack(
     val id: String = "",
-    val title: String = "Summer Nights",
-    val streams: String = "456.2K",
-    val ranking: String = "3rd most streamed",
+    val title: String = "No track found",
+    val streams: String = "0",
+    val ranking: String = "-",
     val imageUrl: String? = null
 )
 
@@ -32,7 +34,14 @@ data class ArtistDashboardData(
     val user: User,
     val stats: DashboardStats,
     val topTrack: TopTrack,
-    val recentActivities: List<ActivityItem>
+    val recentActivities: List<ActivityItem>,
+    val globalReach: List<Pair<String, String>> = listOf(
+        "United States" to "45%",
+        "United Kingdom" to "18%",
+        "Germany" to "12%",
+        "Cambodia" to "10%",
+        "Others" to "15%"
+    )
 )
 
 // Mock data for UI testing
@@ -44,7 +53,11 @@ object DashboardMockData {
         streamsGrowth = 12.0,
         listeners = "185K",
         listenersGrowth = 8.0,
-        publishedSongs = 24
+        followers = "12.5K",
+        followersGrowth = 5.0,
+        publishedSongs = 24,
+        totalAlbums = 5,
+        totalLikes = "85K"
     )
 
     fun getMockTopTrack() = TopTrack(

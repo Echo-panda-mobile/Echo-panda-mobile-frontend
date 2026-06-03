@@ -1,61 +1,48 @@
 package com.example.echo_panda_mobile.presentation.navigation
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.example.echo_panda_mobile.data.repository.TokenStorage
-import kotlinx.coroutines.launch
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
 import com.example.echo_panda_mobile.data.repository.AuthRepository
-import com.example.echo_panda_mobile.presentation.views.admin.AdminAddArtistScreen
-import com.example.echo_panda_mobile.presentation.views.admin.AdminAlbumDetailScreen
-import com.example.echo_panda_mobile.presentation.views.admin.AdminCategoryAlbumsScreen
-import com.example.echo_panda_mobile.presentation.views.admin.AdminCategoryDetailScreen
-import com.example.echo_panda_mobile.presentation.views.admin.AdminDashboardScreen
-import com.example.echo_panda_mobile.presentation.views.admin.AdminLibraryScreen
-import com.example.echo_panda_mobile.presentation.views.admin.AdminMusicScreen
-import com.example.echo_panda_mobile.presentation.views.admin.AdminProfileScreen
-import com.example.echo_panda_mobile.presentation.views.admin.AdminSongDetailScreen
-import com.example.echo_panda_mobile.presentation.views.admin.AdminTagAlbumsScreen
-import com.example.echo_panda_mobile.presentation.views.admin.AdminTagDetailScreen
-import com.example.echo_panda_mobile.presentation.views.admin.AdminUserDetailScreen
-import com.example.echo_panda_mobile.presentation.views.admin.AdminUserManagementScreen
+import com.example.echo_panda_mobile.data.repository.TokenStorage
+import com.example.echo_panda_mobile.presentation.views.admin.*
+import kotlinx.coroutines.launch
 
 fun NavGraphBuilder.adminNavGraph(
     navController: NavController,
     selectedNav: Int,
-    onNavSelect: (Int) -> Unit
+    onNavSelect: (Int) -> Unit,
+    tokenStorage: TokenStorage
 ) {
     navigation(
         startDestination = Routes.ADMIN_DASHBOARD,
         route = "admin_graph"
     ) {
         composable(Routes.ADMIN_DASHBOARD) {
-            val context = LocalContext.current
-            val authRepo = remember { AuthRepository(TokenStorage(context)) }
+            val authRepo = remember { AuthRepository(tokenStorage) }
             val scope = rememberCoroutineScope()
-
             AdminDashboardScreen(
                 selectedNav = selectedNav,
                 onNavSelect = onNavSelect,
                 onLogout = {
                     scope.launch {
                         authRepo.logout()
+                        android.util.Log.d("NAVIGATION", "Admin Logout. Navigating to: ${Routes.LOGIN}")
                         navController.navigate(Routes.LOGIN) {
                             popUpTo(0) { inclusive = true }
                         }
                     }
                 },
                 onProfileClick = {
+                    android.util.Log.d("NAVIGATION", "Navigating to: ${Routes.ADMIN_PROFILE}")
                     navController.navigate(Routes.ADMIN_PROFILE)
                 }
             )
@@ -66,16 +53,18 @@ fun NavGraphBuilder.adminNavGraph(
                 selectedNav = selectedNav,
                 onNavSelect = onNavSelect,
                 onNavigateToDetail = { userId, role ->
-                    navController.navigate(
-                        Routes.ADMIN_USER_DETAIL
+                    val route = Routes.ADMIN_USER_DETAIL
                             .replace("{userId}", userId)
                             .replace("{role}", role)
-                    )
+                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
+                    navController.navigate(route)
                 },
                 onNavigateToAddArtist = {
+                    android.util.Log.d("NAVIGATION", "Navigating to: ${Routes.ADMIN_ADD_ARTIST}")
                     navController.navigate(Routes.ADMIN_ADD_ARTIST)
                 },
                 onProfileClick = {
+                    android.util.Log.d("NAVIGATION", "Navigating to: ${Routes.ADMIN_PROFILE}")
                     navController.navigate(Routes.ADMIN_PROFILE)
                 }
             )
@@ -118,13 +107,17 @@ fun NavGraphBuilder.adminNavGraph(
                 selectedNav = selectedNav,
                 onNavSelect = onNavSelect,
                 onNavigateToSongDetail = { songId ->
-                    navController.navigate(Routes.ADMIN_SONG_DETAIL.replace("{songId}", songId))
+                    val route = Routes.ADMIN_SONG_DETAIL.replace("{songId}", songId)
+                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
+                    navController.navigate(route)
                 },
                 onNavigateToAlbumDetail = { albumId ->
-                    // Assuming you will create AdminAlbumDetailScreen later
-                    navController.navigate(Routes.ADMIN_ALBUM_DETAIL.replace("{albumId}", albumId))
+                    val route = Routes.ADMIN_ALBUM_DETAIL.replace("{albumId}", albumId)
+                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
+                    navController.navigate(route)
                 },
                 onProfileClick = {
+                    android.util.Log.d("NAVIGATION", "Navigating to: ${Routes.ADMIN_PROFILE}")
                     navController.navigate(Routes.ADMIN_PROFILE)
                 },
                 onBack = { navController.popBackStack() }
@@ -136,18 +129,27 @@ fun NavGraphBuilder.adminNavGraph(
                 selectedNav = selectedNav,
                 onNavSelect = onNavSelect,
                 onNavigateToTagDetail = { tagId ->
-                    navController.navigate(Routes.ADMIN_TAG_DETAIL.replace("{tagId}", tagId))
+                    val route = Routes.ADMIN_TAG_DETAIL.replace("{tagId}", tagId)
+                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
+                    navController.navigate(route)
                 },
                 onNavigateToTagAlbums = { tagId ->
-                    navController.navigate(Routes.ADMIN_TAG_ALBUMS.replace("{tagId}", tagId))
+                    val route = Routes.ADMIN_TAG_ALBUMS.replace("{tagId}", tagId)
+                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
+                    navController.navigate(route)
                 },
                 onNavigateToCategoryDetail = { categoryId ->
-                    navController.navigate(Routes.ADMIN_CATEGORY_DETAIL.replace("{categoryId}", categoryId))
+                    val route = Routes.ADMIN_CATEGORY_DETAIL.replace("{categoryId}", categoryId)
+                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
+                    navController.navigate(route)
                 },
                 onNavigateToCategoryAlbums = { categoryId ->
-                    navController.navigate(Routes.ADMIN_CATEGORY_ALBUMS.replace("{categoryId}", categoryId))
+                    val route = Routes.ADMIN_CATEGORY_ALBUMS.replace("{categoryId}", categoryId)
+                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
+                    navController.navigate(route)
                 },
                 onProfileClick = {
+                    android.util.Log.d("NAVIGATION", "Navigating to: ${Routes.ADMIN_PROFILE}")
                     navController.navigate(Routes.ADMIN_PROFILE)
                 },
                 onBack = { navController.popBackStack() }
@@ -189,14 +191,14 @@ fun NavGraphBuilder.adminNavGraph(
         }
 
         composable(Routes.ADMIN_PROFILE) {
-            val context = LocalContext.current
-            val authRepo = remember { AuthRepository(TokenStorage(context)) }
+            val authRepo = remember { AuthRepository(tokenStorage) }
             val scope = rememberCoroutineScope()
             AdminProfileScreen(
                 onBack = { navController.popBackStack() },
                 onLogout = {
                     scope.launch {
                         authRepo.logout()
+                        android.util.Log.d("NAVIGATION", "Admin Logout from Profile. Navigating to: ${Routes.LOGIN}")
                         navController.navigate(Routes.LOGIN) {
                             popUpTo(0) { inclusive = true }
                         }

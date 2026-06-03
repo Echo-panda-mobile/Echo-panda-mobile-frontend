@@ -197,7 +197,7 @@ fun PlayerScreen(
                     IconButton(onClick = { /* Shuffle */ }) {
                         Icon(Icons.Default.Shuffle, contentDescription = "Shuffle", tint = Color.White.copy(alpha = 0.5f))
                     }
-                    IconButton(onClick = { /* Previous */ }) {
+                    IconButton(onClick = { viewModel.previous() }) {
                         Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(36.dp))
                     }
                     Box(
@@ -215,7 +215,7 @@ fun PlayerScreen(
                             modifier = Modifier.size(40.dp)
                         )
                     }
-                    IconButton(onClick = { /* Next */ }) {
+                    IconButton(onClick = { viewModel.next() }) {
                         Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(36.dp))
                     }
                     IconButton(onClick = { /* Visualizer */ }) {

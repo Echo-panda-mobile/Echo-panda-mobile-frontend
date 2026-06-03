@@ -7,35 +7,49 @@ import okhttp3.Response
 
 class AuthInterceptor(private val tokenStorage: TokenStorage) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val url = request.url.toString()
-        val path = request.url.encodedPath
+        val originalRequest = chain.request()
+        val url = originalRequest.url.toString()
+        val path = originalRequest.url.encodedPath
+        val token = tokenStorage.getToken()
         
-        // CRITICAL: If the URL is an AWS S3 Pre-Signed URL, we MUST NOT send the 
-        // app's Authorization header. S3 URLs are self-contained.
         val isS3 = url.contains("amazonaws.com")
-        
-        // Check path instead of full URL to avoid issues with query parameters
+        val isStorage = url.contains("/storage/")
         val isPublicAuthEndpoint = path.contains("/firebase/session")
             || path.endsWith("/login")
             || path.endsWith("/register")
 
-        val newRequestBuilder = request.newBuilder()
+        Log.d("AuthInterceptor", "━━━ REQUEST INTERCEPTOR ━━━")
+        Log.d("AuthInterceptor", "URL: $url")
+        Log.d("AuthInterceptor", "Token: ${if (token.isNullOrBlank()) "MISSING" else "PRESENT"}")
+
+        if (isS3 || isStorage || isPublicAuthEndpoint) {
+            Log.d("AuthInterceptor", "Public, S3, or Storage endpoint: Removing Auth headers")
+            val cleanRequest = originalRequest.newBuilder()
+                .removeHeader("Authorization")
+                .build()
+            return chain.proceed(cleanRequest)
+        }
+
+        val requestBuilder = originalRequest.newBuilder()
             .addHeader("Accept", "application/json")
             .addHeader("X-Requested-With", "XMLHttpRequest")
 
-        if (isS3 || isPublicAuthEndpoint) {
-            newRequestBuilder.removeHeader("Authorization")
+        if (!token.isNullOrBlank()) {
+            Log.d("AuthInterceptor", "Adding Bearer token")
+            requestBuilder.header("Authorization", "Bearer $token")
         } else {
-            val token = tokenStorage.getToken()
-            if (!token.isNullOrBlank()) {
-                // Restore sending Bearer token for ALL protected routes.
-                // We will rely on the backend being updated to use 'auth:sanctum' 
-                // for /admin/* routes, which is the best practice for mobile.
-                newRequestBuilder.header("Authorization", "Bearer $token")
-            }
+            Log.w("AuthInterceptor", "⚠️ No token found for authenticated endpoint!")
         }
         
-        return chain.proceed(newRequestBuilder.build())
+        val request = requestBuilder.build()
+        
+        try {
+            val response = chain.proceed(request)
+            Log.d("AuthInterceptor", "Response status: ${response.code} for ${request.url}")
+            return response
+        } catch (e: Exception) {
+            Log.e("AuthInterceptor", "Exception during request: ${e.message}")
+            throw e
+        }
     }
 }

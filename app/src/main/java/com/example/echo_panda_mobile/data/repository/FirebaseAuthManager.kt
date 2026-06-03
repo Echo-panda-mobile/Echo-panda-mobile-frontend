@@ -23,15 +23,16 @@ sealed class FirebaseAuthResult<out T> {
     data class Error(val message: String) : FirebaseAuthResult<Nothing>()
 }
 
-class FirebaseAuthManager(private val context: Context) {
+class FirebaseAuthManager(context: Context) {
+    private val appContext = context.applicationContext
     private val auth = FirebaseAuth.getInstance()
 
     fun getGoogleSignInClient(): GoogleSignInClient {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(context.getString(R.string.default_web_client_id))
+            .requestIdToken(appContext.getString(R.string.default_web_client_id))
             .requestEmail()
             .build()
-        return GoogleSignIn.getClient(context, gso)
+        return GoogleSignIn.getClient(appContext, gso)
     }
 
     suspend fun signInWithGoogle(data: Intent?): FirebaseAuthResult<AuthUserData> {

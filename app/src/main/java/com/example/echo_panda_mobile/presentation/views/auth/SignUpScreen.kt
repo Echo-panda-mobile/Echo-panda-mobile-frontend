@@ -61,13 +61,13 @@ fun SignUpScreen(
 
     val googleSignInOptions = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(context.getString(R.string.default_web_client_id))
+            .requestIdToken(context.applicationContext.getString(R.string.default_web_client_id))
             .requestEmail()
             .build()
     }
 
     val googleSignInClient = remember {
-        GoogleSignIn.getClient(context, googleSignInOptions)
+        GoogleSignIn.getClient(context.applicationContext, googleSignInOptions)
     }
 
     val launcher = rememberLauncherForActivityResult(

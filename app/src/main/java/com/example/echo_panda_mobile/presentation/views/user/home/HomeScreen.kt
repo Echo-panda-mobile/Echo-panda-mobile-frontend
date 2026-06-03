@@ -24,8 +24,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.echo_panda_mobile.data.model.*
 import com.example.echo_panda_mobile.presentation.components.*
-import com.example.echo_panda_mobile.presentation.viewmodel.HomeViewModel
+import com.example.echo_panda_mobile.presentation.viewsmodel.HomeViewModel
 import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 
@@ -112,7 +113,17 @@ fun HomeScreen(
                                                     imageUrl = playlist.imageUrl,
                                                     placeholderColors = playlist.placeholderColors
                                                 )
-                                                globalPlayerViewModel.playTrack(track)
+                                                // If it's a "Continue Listening" for a single track, we can create a queue from the whole list
+                                                val tracks = state.recentPlaylists.map { p ->
+                                                    com.example.echo_panda_mobile.data.model.Track(
+                                                        id = p.id,
+                                                        title = p.title,
+                                                        artist = p.labelOverlay ?: "Various Artists",
+                                                        imageUrl = p.imageUrl,
+                                                        placeholderColors = p.placeholderColors
+                                                    )
+                                                }
+                                                globalPlayerViewModel.setQueue(tracks, tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0))
                                                 onNavigateToPlayer(track.id, playlist.resumePositionMs)
                                             }
                                         )
@@ -215,7 +226,16 @@ fun HomeScreen(
                                             imageUrl = playlist.imageUrl,
                                             placeholderColors = playlist.placeholderColors
                                         )
-                                        globalPlayerViewModel.playTrack(track)
+                                        val tracks = state.recentListening.map { p ->
+                                            com.example.echo_panda_mobile.data.model.Track(
+                                                id = p.id,
+                                                title = p.title,
+                                                artist = p.labelOverlay ?: "Various Artists",
+                                                imageUrl = p.imageUrl,
+                                                placeholderColors = p.placeholderColors
+                                            )
+                                        }
+                                        globalPlayerViewModel.setQueue(tracks, tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0))
                                         onNavigateToPlayer(track.id, playlist.resumePositionMs)
                                     }
                                 )

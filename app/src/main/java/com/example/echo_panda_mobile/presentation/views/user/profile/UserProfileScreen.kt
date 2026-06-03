@@ -24,13 +24,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.echo_panda_mobile.presentation.viewsmodel.UserProfileViewModel
+import com.example.echo_panda_mobile.presentation.viewsmodel.UserProfileViewModelFactory
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 
 @Composable
@@ -39,7 +39,7 @@ fun UserProfileScreen(
     onSettings: () -> Unit,
     onEditProfile: () -> Unit,
     onLogoutSuccess: () -> Unit,
-    viewModel: UserProfileViewModel = viewModel()
+    viewModel: UserProfileViewModel = viewModel(factory = UserProfileViewModelFactory(LocalContext.current))
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()

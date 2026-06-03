@@ -1,12 +1,13 @@
 package com.example.echo_panda_mobile.presentation.viewsmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import android.content.Context
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.AuthResult
-import com.example.echo_panda_mobile.data.repository.FirebaseAuthManager
 import com.example.echo_panda_mobile.data.repository.TokenStorage
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,12 +22,10 @@ data class ForgotPasswordUiState(
     val navigateTo: String? = null
 )
 
-class ForgotPasswordViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val repository = AuthRepository(
-        tokenStorage = TokenStorage(application),
-        firebaseAuthManager = FirebaseAuthManager(application)
-    )
+class ForgotPasswordViewModel(
+    private val repository: AuthRepository,
+    private val tokenStorage: TokenStorage? = null
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ForgotPasswordUiState())
     val uiState: StateFlow<ForgotPasswordUiState> = _uiState.asStateFlow()
@@ -80,19 +79,16 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             
-            // This will now store the REAL password in your Firebase Firestore Database
             val result = repository.storeNewPasswordInFirestore(email, newPassword)
             
             if (result is AuthResult.Success) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    successMessage = "New password saved to Firebase successfully!"
+                    successMessage = "New password saved successfully!"
                 )
-                kotlinx.coroutines.delay(1500)
+                delay(1500)
                 onSuccess()
             } else if (result is AuthResult.Error) {
-                // If you see "PERMISSION_DENIED" here, follow the instructions I gave you 
-                // to update your Rules in the Firebase Console.
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     errorMessage = result.message
@@ -107,5 +103,17 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
 
     fun onBackToLogin() {
         _uiState.value = ForgotPasswordUiState()
+    }
+}
+
+class ForgotPasswordViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(ForgotPasswordViewModel::class.java)) {
+            val tokenStorage = TokenStorage.getInstance(context.applicationContext)
+            val repository = AuthRepository(tokenStorage)
+            @Suppress("UNCHECKED_CAST")
+            return ForgotPasswordViewModel(repository, tokenStorage) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

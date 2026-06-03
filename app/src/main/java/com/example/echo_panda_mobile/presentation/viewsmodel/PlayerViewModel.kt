@@ -41,68 +41,68 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             combine(
                 playerManager.isPlaying,
                 playerManager.currentPosition,
-                playerManager.duration
-            ) { playing, position, duration ->
-                Triple(playing, position, duration)
-            }.collect { (playing, position, duration) ->
+                playerManager.duration,
+                playerManager.currentTrack
+            ) { playing, position, duration, currentTrack ->
+                Quadruple(playing, position, duration, currentTrack)
+            }.collect { (playing, position, duration, currentTrack) ->
                 _uiState.update { it.copy(
                     isPlaying = playing,
                     currentPositionMs = position,
                     durationMs = duration,
-                    progress = if (duration > 0) position.toFloat() / duration else 0f
+                    track = currentTrack ?: it.track,
+                    progress = if (duration > 0) position.toFloat() / duration else 0f,
+                    isLoading = currentTrack == null && it.isLoading
                 ) }
             }
         }
     }
 
+    private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+
     fun loadTrack(trackId: String, resumePositionMs: Long? = null) {
-        android.util.Log.d("PlayerViewModel", "loadTrack called with ID: $trackId, resume: $resumePositionMs")
+        android.util.Log.d("PlayerViewModel", "loadTrack called with ID: $trackId")
+        
+        // If the track is already the current one in the manager, just update UI
+        val current = playerManager.currentTrack.value
+        if (current?.id == trackId) {
+            _uiState.update { it.copy(track = current, isLoading = false) }
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            
-            // 1. Get track metadata
-            val trackResult = musicRepository.getTrackById(trackId)
-            if (trackResult is MusicResult.Success) {
-                val track = trackResult.data
-                // Use provided resume point if available, otherwise check if metadata has one
-                val resumeAt = resumePositionMs ?: track.resumePositionMs ?: 0L
-                
-                _uiState.update { it.copy(track = track) }
-                
-                // 2. Get stream ticket
-                val ticketResult = musicRepository.getStreamTicket(trackId)
-                if (ticketResult is MusicResult.Success) {
-                    val ticket = ticketResult.data
-                    val audioUrl = ticket.signedUrl ?: ticket.streamUrl ?: ticket.url
-                    
-                    if (audioUrl != null) {
-                        _uiState.update { it.copy(
-                            streamUrl = audioUrl,
-                            streamExpiresAt = System.currentTimeMillis() + ((ticket.expiresInSeconds ?: 300) * 1000)
-                        ) }
-                        
-                        // Start playing automatically with resume point
-                        playerManager.play(audioUrl, track.title, track.artist, resumeAt)
-                        
-                        // 3. Add to listen history
-                        musicRepository.addToListenHistory(trackId)
-                    } else {
-                        _uiState.update { it.copy(errorMessage = "Stream URL not found in response") }
-                    }
-                } else if (ticketResult is MusicResult.Error) {
-                    _uiState.update { it.copy(errorMessage = ticketResult.message) }
-                }
-                
-                _uiState.update { it.copy(isLoading = false) }
-            } else if (trackResult is MusicResult.Error) {
-                _uiState.update { it.copy(isLoading = false, errorMessage = trackResult.message) }
+            val result = musicRepository.getTrackById(trackId)
+            if (result is MusicResult.Success) {
+                val track = result.data
+                // Setting the queue to this single track will trigger GlobalPlayerViewModel to play it
+                playerManager.setQueue(listOf(track), track.id)
+                _uiState.update { it.copy(track = track, isLoading = false) }
+            } else if (result is MusicResult.Error) {
+                _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
             }
         }
+    }
+
+    fun next() {
+        playerManager.next()
+    }
+
+    fun previous() {
+        playerManager.previous()
     }
 
     fun togglePlayPause() {
         val track = _uiState.value.track ?: return
         
+        // If already playing or paused (i.e., we have a loaded media item in the manager)
+        // and it's the same track, just toggle.
+        val currentInManager = playerManager.currentTrack.value
+        if (currentInManager?.id == track.id && _uiState.value.streamUrl != null) {
+            playerManager.togglePlayPause()
+            return
+        }
+
         viewModelScope.launch {
             // Check if we need a new stream ticket or if we haven't started playing yet
             val isExpired = _uiState.value.streamUrl == null || 
@@ -118,7 +118,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                             streamUrl = audioUrl,
                             streamExpiresAt = System.currentTimeMillis() + ((ticket.expiresInSeconds ?: 300) * 1000)
                         ) }
-                        playerManager.play(audioUrl, track.title, track.artist)
+                        playerManager.play(audioUrl, track.title, track.artist, track.album)
                     } else {
                         _uiState.update { it.copy(errorMessage = "Stream URL not found") }
                     }
@@ -165,5 +165,4 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
-
 }

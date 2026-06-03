@@ -2,12 +2,11 @@ package com.example.echo_panda_mobile.data.model
 
 import androidx.compose.ui.graphics.Color
 
-// ─── Music Domain Models ───────────────────────────────────────────────────────
-
 data class Artist(
     val id: String,
     val name: String,
     val imageUrl: String? = null,
+    val bio: String? = null,
     val monthlyListeners: String = "0",
     val placeholderColors: List<Color> = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26))
 )

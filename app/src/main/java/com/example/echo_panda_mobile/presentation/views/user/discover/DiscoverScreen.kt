@@ -24,6 +24,7 @@ import com.example.echo_panda_mobile.presentation.components.*
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.theme.LocalAppLanguage
 import com.example.echo_panda_mobile.presentation.viewmodel.DiscoverViewModel
+import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
 
 @Composable
 fun DiscoverScreen(
@@ -32,7 +33,8 @@ fun DiscoverScreen(
     onNavigateToArtist: (String) -> Unit = {},
     onNavigateToAlbum: (String) -> Unit = {},
     onNavigateToSong: (String, Long?) -> Unit = { _, _ -> },
-    viewModel: DiscoverViewModel = viewModel()
+    viewModel: DiscoverViewModel = viewModel(),
+    globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     
@@ -158,10 +160,13 @@ fun DiscoverScreen(
                         Column(
                             modifier = Modifier.padding(bottom = 16.dp)
                         ) {
-                            state.newReleases.take(4).forEach { track ->
+                            state.newReleases.take(4).forEachIndexed { index, track ->
                                 SongCardHorizontal(
                                     track = track,
-                                    onClick = { onNavigateToSong(track.id, track.resumePositionMs) },
+                                    onClick = { 
+                                        globalPlayerViewModel.setQueue(state.newReleases, index)
+                                        onNavigateToSong(track.id, track.resumePositionMs) 
+                                    },
                                     onFavoriteClick = { viewModel.toggleFavorite(track) }
                                 )
                             }
@@ -205,10 +210,13 @@ fun DiscoverScreen(
                         Column(
                             modifier = Modifier.padding(bottom = 16.dp)
                         ) {
-                            state.mostPlayedSongs.take(4).forEach { track ->
+                            state.mostPlayedSongs.take(4).forEachIndexed { index, track ->
                                 SongCardHorizontal(
                                     track = track,
-                                    onClick = { onNavigateToSong(track.id, track.resumePositionMs) },
+                                    onClick = { 
+                                        globalPlayerViewModel.setQueue(state.mostPlayedSongs, index)
+                                        onNavigateToSong(track.id, track.resumePositionMs) 
+                                    },
                                     onFavoriteClick = { viewModel.toggleFavorite(track) }
                                 )
                             }

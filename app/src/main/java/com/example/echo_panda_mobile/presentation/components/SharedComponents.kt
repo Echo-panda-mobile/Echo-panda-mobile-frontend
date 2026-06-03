@@ -62,7 +62,6 @@ enum class ArtistNavTab(val route: String, val icon: ImageVector, val label: Str
     DASHBOARD(Routes.ARTIST_DASHBOARD, Icons.Default.Dashboard, "Dashboard"),
     MUSIC(Routes.ARTIST_MY_MUSIC, Icons.Default.MusicNote, "Music"),
     UPLOAD(Routes.ARTIST_UPLOAD, Icons.Default.CloudUpload, "Upload"),
-    ANALYTICS(Routes.ARTIST_ANALYTICS, Icons.Default.BarChart, "Analytics"),
     PROFILE(Routes.ARTIST_PROFILE, Icons.Default.Person, "Profile"),
 }
 
@@ -794,14 +793,34 @@ fun PlaylistPickerDialog(track: Track, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun MiniPlayer(track: Track, isPlaying: Boolean, progress: Float, onTogglePlay: () -> Unit, onNext: () -> Unit, onPrevious: () -> Unit, onClick: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF121212).copy(alpha = 0.95f)).clickable { onClick() }) {
+fun MiniPlayer(
+    track: Track,
+    isPlaying: Boolean,
+    progress: Float,
+    onTogglePlay: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onClose: () -> Unit,
+    onClick: () -> Unit
+) {
+    Column(modifier = Modifier
+        .fillMaxWidth()
+        .background(Color(0xFF121212).copy(alpha = 0.95f))
+        .clickable { onClick() }) {
         LinearProgressIndicator(
-            modifier = Modifier.fillMaxWidth().height(2.dp),
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(2.dp),
             color = Color.White,
             trackColor = Color.White.copy(alpha = 0.2f)
         )
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             SquareArtCard(
                 colors = track.placeholderColors,
                 imageUrl = track.imageUrl,
@@ -810,12 +829,32 @@ fun MiniPlayer(track: Track, isPlaying: Boolean, progress: Float, onTogglePlay: 
             )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = track.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(
+                    text = track.title,
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
                 Text(text = track.artist, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
             }
-            IconButton(onClick = onPrevious) { Icon(Icons.Default.SkipPrevious, null, tint = Color.White) }
-            IconButton(onClick = onTogglePlay) { Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(28.dp)) }
-            IconButton(onClick = onNext) { Icon(Icons.Default.SkipNext, null, tint = Color.White) }
+            IconButton(onClick = onPrevious) {
+                Icon(Icons.Default.SkipPrevious, null, tint = Color.White)
+            }
+            IconButton(onClick = onTogglePlay) {
+                Icon(
+                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    null,
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            IconButton(onClick = onNext) {
+                Icon(Icons.Default.SkipNext, null, tint = Color.White)
+            }
+            IconButton(onClick = onClose) {
+                Icon(Icons.Default.Close, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
+            }
         }
     }
 }

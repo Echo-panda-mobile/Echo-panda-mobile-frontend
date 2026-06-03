@@ -15,7 +15,10 @@ data class FirebaseSessionRequest(
 data class BackendArtist(
     val id: Int,
     val name: String,
-    val image_url: String? = null
+    val image_url: String? = null,
+    val firebase_uid: String? = null,
+    val provider: String? = null,
+    val id_token: String? = null
 )
 
 data class BackendUser(
@@ -57,6 +60,9 @@ interface AuthApiService {
 
     @GET("api/users/by-role")
     suspend fun usersByRole(): UsersByRoleResponse
+
+    @POST("api/login")
+    suspend fun login(@Body body: com.example.echo_panda_mobile.data.model.LoginRequest): com.example.echo_panda_mobile.data.model.AuthResponse
 
     @POST("api/logout")
     suspend fun logout()

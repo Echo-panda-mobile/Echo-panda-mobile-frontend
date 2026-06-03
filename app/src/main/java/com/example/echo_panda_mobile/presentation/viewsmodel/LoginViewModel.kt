@@ -1,15 +1,13 @@
 package com.example.echo_panda_mobile.presentation.viewsmodel
 
-import android.app.Application
-import android.content.Intent
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import android.content.Context
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.AuthResponse
 import com.example.echo_panda_mobile.data.model.LoginRequest
-import com.example.echo_panda_mobile.data.model.UserRole
 import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.AuthResult
-import com.example.echo_panda_mobile.data.repository.FirebaseAuthManager
 import com.example.echo_panda_mobile.data.repository.TokenStorage
 import com.example.echo_panda_mobile.presentation.navigation.Routes
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,12 +24,9 @@ data class LoginUiState(
     val navigateTo: String? = null
 )
 
-class LoginViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val repository = AuthRepository(
-        tokenStorage = TokenStorage(application),
-        firebaseAuthManager = FirebaseAuthManager(application)
-    )
+class LoginViewModel(
+    private val repository: AuthRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
@@ -50,7 +45,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun onLoginClick(selectedRole: UserRole = UserRole.USER) {
+    fun onLoginClick() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
@@ -65,13 +60,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun signInWithGoogle(data: Intent?) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            handleAuthResult(repository.signInWithGoogle(data))
-        }
-    }
-
     fun onGoogleSignIn(idToken: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
@@ -79,14 +67,28 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun handleAuthResult(result: AuthResult<*>) {
+    private fun handleAuthResult(result: AuthResult<AuthResponse>) {
         when (result) {
-            is AuthResult.Success<*> -> {
-                val authResponse = result.data as? AuthResponse
-                val destination = Routes.getHomeRoute(
-                    authResponse?.user?.role,
-                    authResponse?.redirectTo
-                )
+            is AuthResult.Success -> {
+                val authResponse = result.data
+                
+                // Sanitize redirectTo from backend (remove leading slashes)
+                val rawRedirect = authResponse.redirectTo?.trim()?.removePrefix("/")
+                
+                // If it's empty or just "/", we use the role-based graph
+                val destination = if (rawRedirect.isNullOrBlank()) {
+                    Routes.getHomeRoute(authResponse.user.role)
+                } else {
+                    // Map common backend routes to Compose routes
+                    when (rawRedirect) {
+                        "admin/dashboard" -> Routes.ADMIN_GRAPH
+                        "artist/dashboard" -> Routes.ARTIST_GRAPH
+                        else -> Routes.getHomeRoute(authResponse.user.role)
+                    }
+                }
+
+                android.util.Log.d("LoginViewModel", "Navigating to: $destination (from backend: ${authResponse.redirectTo})")
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     navigateTo = destination
@@ -108,5 +110,17 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onNavigationHandled() {
         _uiState.value = _uiState.value.copy(navigateTo = null)
+    }
+}
+
+class LoginViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(LoginViewModel::class.java)) {
+            val tokenStorage = TokenStorage.getInstance(context.applicationContext)
+            val repository = AuthRepository(tokenStorage)
+            @Suppress("UNCHECKED_CAST")
+            return LoginViewModel(repository) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

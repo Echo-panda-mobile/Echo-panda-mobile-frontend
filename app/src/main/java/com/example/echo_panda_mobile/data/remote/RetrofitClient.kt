@@ -66,24 +66,20 @@ object RetrofitClient {
 
     private fun buildOkHttpClient(tokenStorage: TokenStorage): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
         }
 
         return OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
             .cookieJar(persistentCookieJar)
-            // Add logging as a NETWORK interceptor to see headers like 'Cookie' 
-            // that are added by the BridgeInterceptor after application interceptors.
             .addNetworkInterceptor(logging)
             .addInterceptor { chain ->
                 val request = chain.request()
                 val url = request.url.toString()
                 val newReqBuilder = request.newBuilder()
 
-                // If Laravel set an XSRF-TOKEN cookie, we must echo it back as a header
-                // for routes that don't start with /api/ (like /admin/*).
                 val xsrfCookie = persistentCookieJar.getCookieByName("XSRF-TOKEN")
                 if (xsrfCookie != null && !url.contains("amazonaws.com")) {
                     try {
@@ -130,10 +126,6 @@ object RetrofitClient {
 
     fun getInstance(tokenStorage: TokenStorage): AuthApiService = getAuthService(tokenStorage)
 
-    /**
-     * Clears cached service instances. Call this on logout or role change 
-     * to ensure the next request uses fresh configuration/interceptors.
-     */
     fun clearInstances() {
         synchronized(this) {
             authService = null
@@ -144,4 +136,7 @@ object RetrofitClient {
             persistentCookieJar.clear()
         }
     }
+    
+    // Alias for compatibility
+    fun resetAll() = clearInstances()
 }
