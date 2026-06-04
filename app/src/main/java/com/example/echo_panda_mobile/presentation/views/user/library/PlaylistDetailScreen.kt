@@ -9,6 +9,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +45,7 @@ fun PlaylistDetailScreen(
     val playerState by globalPlayerViewModel.playerState.collectAsState()
     val displayTitle = state.playlist?.title ?: playlistTitle
     val themeColor = state.playlist?.placeholderColors?.firstOrNull() ?: EchoPandaColors.AccentBlue
+    val ptrState = rememberPullToRefreshState()
 
     LaunchedEffect(playlistId) {
         viewModel.loadPlaylist(playlistId)
@@ -83,66 +87,82 @@ fun PlaylistDetailScreen(
             },
             bottomBar = { EchoPandaBottomBar(selectedNav, onNavSelect) }
         ) { padding ->
-            when {
-                state.isLoading -> {
-                    Box(
-                        Modifier.fillMaxSize().padding(padding),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
-                    }
+            PullToRefreshBox(
+                state = ptrState,
+                isRefreshing = state.isLoading,
+                onRefresh = { viewModel.loadPlaylist(playlistId) },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        state = ptrState,
+                        isRefreshing = state.isLoading,
+                        containerColor = Color(0xFF1A1A26),
+                        color = EchoPandaColors.AccentBlue,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
                 }
-                state.error != null && state.tracks.isEmpty() -> {
-                    Box(
-                        Modifier.fillMaxSize().padding(padding),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = state.error ?: "Could not load playlist",
-                            color = Color.White.copy(alpha = 0.6f)
-                        )
+            ) {
+                when {
+                    state.isLoading && state.tracks.isEmpty() -> {
+                        Box(
+                            Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
+                        }
                     }
-                }
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            top = padding.calculateTopPadding(),
-                            bottom = padding.calculateBottomPadding() + 16.dp
-                        )
-                    ) {
-                        item {
-                            PlaylistHeader(
-                                title = displayTitle,
-                                songCount = state.tracks.size,
-                                imageUrl = state.playlist?.imageUrl,
-                                colors = state.playlist?.placeholderColors
-                                    ?: listOf(themeColor, Color(0xFF1A1A26))
+                    state.error != null && state.tracks.isEmpty() -> {
+                        Box(
+                            Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = state.error ?: "Could not load playlist",
+                                color = Color.White.copy(alpha = 0.6f)
                             )
                         }
-
-                        if (state.tracks.isEmpty()) {
+                    }
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 16.dp)
+                        ) {
                             item {
-                                Text(
-                                    text = "No songs in this playlist yet",
-                                    color = Color.White.copy(alpha = 0.5f),
-                                    modifier = Modifier.padding(24.dp)
+                                PlaylistHeader(
+                                    title = displayTitle,
+                                    songCount = state.tracks.size,
+                                    imageUrl = state.playlist?.imageUrl,
+                                    colors = state.playlist?.placeholderColors
+                                        ?: listOf(themeColor, Color(0xFF1A1A26))
                                 )
                             }
-                        } else {
-                            itemsIndexed(state.tracks) { index, track ->
-                                val isPlaying =
-                                    playerState.currentTrack?.id == track.id && playerState.isPlaying
-                                SongRow(
-                                    index = index,
-                                    track = track,
-                                    isPlaying = isPlaying,
-                                    onClick = {
-                                        globalPlayerViewModel.playTrack(track)
-                                        onNavigateToPlayer(track.id, track.resumePositionMs)
-                                    },
-                                    onAddToFavorites = { viewModel.toggleFavorite(track) }
-                                )
+
+                            if (state.tracks.isEmpty()) {
+                                item {
+                                    Text(
+                                        text = "No songs in this playlist yet",
+                                        color = Color.White.copy(alpha = 0.5f),
+                                        modifier = Modifier.padding(24.dp)
+                                    )
+                                }
+                            } else {
+                                itemsIndexed(state.tracks) { index, track ->
+                                    val isPlaying =
+                                        playerState.currentTrack?.id == track.id && playerState.isPlaying
+                                    SongRow(
+                                        index = index,
+                                        track = track,
+                                        isPlaying = isPlaying,
+                                        onClick = {
+                                            globalPlayerViewModel.playTrack(track)
+                                            onNavigateToPlayer(track.id, track.resumePositionMs)
+                                        },
+                                        onAddToFavorites = { viewModel.toggleFavorite(track) },
+                                        onRemoveClick = { viewModel.removeFromPlaylist(track.id) }
+                                    )
+                                }
                             }
                         }
                     }

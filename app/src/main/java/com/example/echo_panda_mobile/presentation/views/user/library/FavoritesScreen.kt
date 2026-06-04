@@ -11,6 +11,9 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +30,7 @@ import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
 import com.example.echo_panda_mobile.presentation.viewsmodel.FavoritesViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoritesScreen(
     selectedNav: Int = 3,
@@ -39,6 +43,7 @@ fun FavoritesScreen(
     val state by viewModel.uiState.collectAsState()
     val playerState by globalPlayerViewModel.playerState.collectAsState()
     val themeColor = EchoPandaColors.AccentBlue
+    val ptrState = rememberPullToRefreshState()
 
     Box(
         modifier = Modifier
@@ -74,63 +79,78 @@ fun FavoritesScreen(
                 EchoPandaBottomBar(selectedIndex = selectedNav, onSelect = onNavSelect)
             }
         ) { padding ->
-            if (state.isLoading) {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
-            } else if (state.errorMessage != null && state.favoriteTracks.isEmpty()) {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = state.errorMessage ?: "Could not load liked songs",
-                        color = Color.White.copy(alpha = 0.6f)
+            PullToRefreshBox(
+                state = ptrState,
+                isRefreshing = state.isLoading,
+                onRefresh = { viewModel.loadFavorites() },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        state = ptrState,
+                        isRefreshing = state.isLoading,
+                        containerColor = Color(0xFF1A1A26),
+                        color = EchoPandaColors.AccentBlue,
+                        modifier = Modifier.align(Alignment.TopCenter)
                     )
                 }
-            } else if (state.favoriteTracks.isEmpty()) {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "No liked songs yet",
-                        color = Color.White.copy(alpha = 0.6f)
-                    )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        top = padding.calculateTopPadding(),
-                        bottom = padding.calculateBottomPadding() + 16.dp
-                    )
-                ) {
-                    item {
-                        FavoritesHeaderSection(
-                            songCount = state.favoriteTracks.size,
-                            themeColor = themeColor,
-                            onPlayAll = {
-                                if (state.favoriteTracks.isNotEmpty()) {
-                                    globalPlayerViewModel.setQueue(state.favoriteTracks, 0)
-                                    onNavigateToPlayer(state.favoriteTracks.first().id, null)
+            ) {
+                if (state.isLoading && state.favoriteTracks.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    }
+                } else if (state.errorMessage != null && state.favoriteTracks.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = state.errorMessage ?: "Could not load liked songs",
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                } else if (state.favoriteTracks.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "No liked songs yet",
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 16.dp)
+                    ) {
+                        item {
+                            FavoritesHeaderSection(
+                                songCount = state.favoriteTracks.size,
+                                themeColor = themeColor,
+                                onPlayAll = {
+                                    if (state.favoriteTracks.isNotEmpty()) {
+                                        globalPlayerViewModel.setQueue(state.favoriteTracks, 0)
+                                        onNavigateToPlayer(state.favoriteTracks.first().id, null)
+                                    }
                                 }
-                            }
-                        )
-                    }
+                            )
+                        }
 
-                    item {
-                        SongListHeader()
-                    }
+                        item {
+                            SongListHeader()
+                        }
 
-                    itemsIndexed(state.favoriteTracks) { index, track ->
-                        val isPlaying = playerState.currentTrack?.id == track.id && playerState.isPlaying
-                        SongRow(
-                            index = index,
-                            track = track,
-                            isPlaying = isPlaying,
-                            onClick = { 
-                                globalPlayerViewModel.setQueue(state.favoriteTracks, index)
-                                onNavigateToPlayer(track.id, track.resumePositionMs)
-                            },
-                            onAddToFavorites = {
-                                viewModel.toggleFavorite(track)
-                            }
-                        )
+                        itemsIndexed(state.favoriteTracks) { index, track ->
+                            val isPlaying = playerState.currentTrack?.id == track.id && playerState.isPlaying
+                            SongRow(
+                                index = index,
+                                track = track,
+                                isPlaying = isPlaying,
+                                onClick = { 
+                                    globalPlayerViewModel.setQueue(state.favoriteTracks, index)
+                                    onNavigateToPlayer(track.id, track.resumePositionMs)
+                                },
+                                onAddToFavorites = {
+                                    viewModel.toggleFavorite(track)
+                                }
+                            )
+                        }
                     }
                 }
             }

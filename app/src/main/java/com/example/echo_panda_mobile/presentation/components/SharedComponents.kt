@@ -445,7 +445,14 @@ fun AlbumListRow(
 }
 
 @Composable
-fun SongRow(index: Int, track: Track, isPlaying: Boolean = false, onClick: () -> Unit = {}, onAddToFavorites: (() -> Unit)? = null) {
+fun SongRow(
+    index: Int,
+    track: Track,
+    isPlaying: Boolean = false,
+    onClick: () -> Unit = {},
+    onAddToFavorites: (() -> Unit)? = null,
+    onRemoveClick: (() -> Unit)? = null
+) {
     var showMenu by remember { mutableStateOf(false) }
     var showPlaylistPicker by remember { mutableStateOf(false) }
     Row(
@@ -528,6 +535,13 @@ fun SongRow(index: Int, track: Track, isPlaying: Boolean = false, onClick: () ->
                                 )
                             },
                             onClick = { onAddToFavorites(); showMenu = false }
+                        )
+                    }
+                    if (onRemoveClick != null) {
+                        DropdownMenuItem(
+                            text = { Text("Remove from Playlist", color = Color.White) },
+                            leadingIcon = { Icon(Icons.Default.Delete, null, tint = Color.Gray) },
+                            onClick = { onRemoveClick(); showMenu = false }
                         )
                     }
                 }

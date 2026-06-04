@@ -3,8 +3,6 @@ package com.example.echo_panda_mobile.presentation.viewsmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.echo_panda_mobile.data.model.Album
-import com.example.echo_panda_mobile.data.model.Artist
 import com.example.echo_panda_mobile.data.model.Playlist
 import com.example.echo_panda_mobile.data.model.Track
 import com.example.echo_panda_mobile.data.remote.RetrofitClient
@@ -23,25 +21,20 @@ data class LibraryState(
     val isLoading: Boolean = false,
     val allItems: List<LibraryItem> = emptyList(),
     val filteredItems: List<LibraryItem> = emptyList(),
-    val selectedFilter: String = "All",
+    val selectedFilter: String = "Recently",
     val searchQuery: String = "",
     val isCreatePlaylistOpen: Boolean = false,
-    val isFollowArtistOpen: Boolean = false,
     val newPlaylistName: String = "",
-    val newArtistName: String = "",
     val likedSongsCount: Int = 0,
-    val errorMessage: String? = null,
-    val followArtistError: String? = null
+    val errorMessage: String? = null
 )
 
 sealed class LibraryItem {
-    data class ArtistItem(val artist: Artist) : LibraryItem()
     data class PlaylistItem(
         val playlist: Playlist,
         val trackCount: Int? = null,
         val subtitle: String? = null
     ) : LibraryItem()
-    data class AlbumItem(val album: Album) : LibraryItem()
     data class RecentTrackItem(val track: Track) : LibraryItem()
 }
 
@@ -54,10 +47,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     val uiState: StateFlow<LibraryState> = _uiState.asStateFlow()
 
     private var cachedPlaylists: List<LibraryItem.PlaylistItem> = emptyList()
-    private var cachedArtists: List<LibraryItem.ArtistItem> = emptyList()
-    private var cachedAlbums: List<LibraryItem.AlbumItem> = emptyList()
     private var cachedRecent: List<LibraryItem.RecentTrackItem> = emptyList()
-    private val pinnedArtists = mutableListOf<Artist>()
 
     init {
         loadLibrary()
@@ -69,8 +59,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             try {
                 coroutineScope {
                     val playlistsDef = async { musicRepository.getPlaylistsWithSongCounts(perPage = 50) }
-                    val artistsDef = async { musicRepository.getPopularArtists() }
-                    val albumsDef = async { musicRepository.getPopularAlbums() }
                     val recentDef = async { musicRepository.getRecentlyPlayedTracks() }
                     val favoritesDef = async { musicRepository.getFavoriteTracks() }
 
@@ -84,14 +72,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                         }
                         else -> emptyList()
                     }
-
-                    val apiArtists = (artistsDef.await() as? MusicResult.Success)?.data ?: emptyList()
-                    val mergedArtists = (pinnedArtists + apiArtists).distinctBy { it.id }
-                    cachedArtists = mergedArtists.map { LibraryItem.ArtistItem(it) }
-
-                    cachedAlbums = (albumsDef.await() as? MusicResult.Success)?.data?.map {
-                        LibraryItem.AlbumItem(it)
-                    } ?: emptyList()
 
                     cachedRecent = (recentDef.await() as? MusicResult.Success)?.data?.map {
                         LibraryItem.RecentTrackItem(it)
@@ -121,14 +101,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun buildAllItems(): List<LibraryItem> {
-        return (cachedRecent.take(8) + cachedPlaylists + cachedArtists + cachedAlbums)
+        return (cachedRecent.take(8) + cachedPlaylists)
             .distinctBy { itemKey(it) }
     }
 
     private fun itemKey(item: LibraryItem): String = when (item) {
-        is LibraryItem.ArtistItem -> "artist_${item.artist.id}"
         is LibraryItem.PlaylistItem -> "playlist_${item.playlist.id}"
-        is LibraryItem.AlbumItem -> "album_${item.album.id}"
         is LibraryItem.RecentTrackItem -> "recent_${item.track.id}"
     }
 
@@ -136,8 +114,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val base = when (filter) {
             "Recently" -> cachedRecent
             "Playlists" -> cachedPlaylists
-            "Artists" -> cachedArtists
-            "Albums" -> cachedAlbums
             else -> items
         }
 
@@ -146,11 +122,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
         return base.filter { item ->
             when (item) {
-                is LibraryItem.ArtistItem -> item.artist.name.lowercase().contains(query)
                 is LibraryItem.PlaylistItem -> item.playlist.title.lowercase().contains(query)
-                is LibraryItem.AlbumItem ->
-                    item.album.title.lowercase().contains(query) ||
-                        item.album.artist.lowercase().contains(query)
                 is LibraryItem.RecentTrackItem ->
                     item.track.title.lowercase().contains(query) ||
                         item.track.artist.lowercase().contains(query)
@@ -160,12 +132,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     fun setFilter(filter: String) {
         _uiState.update { currentState ->
-            val newFilter = if (currentState.selectedFilter == filter) "All" else filter
             val allItems = buildAllItems()
             currentState.copy(
-                selectedFilter = newFilter,
+                selectedFilter = filter,
                 allItems = allItems,
-                filteredItems = applyFilter(newFilter, currentState.searchQuery, allItems)
+                filteredItems = applyFilter(filter, currentState.searchQuery, allItems)
             )
         }
     }
@@ -184,8 +155,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun sectionTitle(filter: String): String = when (filter) {
         "Recently" -> "Recently played"
         "Playlists" -> "Your playlists"
-        "Artists" -> "Artists"
-        "Albums" -> "Albums"
         else -> "Your library"
     }
 
@@ -193,61 +162,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         _uiState.update { it.copy(isCreatePlaylistOpen = open, newPlaylistName = if (!open) "" else it.newPlaylistName) }
     }
 
-    fun toggleFollowArtistDialog(open: Boolean) {
-        _uiState.update {
-            it.copy(
-                isFollowArtistOpen = open,
-                newArtistName = if (!open) "" else it.newArtistName,
-                followArtistError = if (!open) null else it.followArtistError
-            )
-        }
-    }
-
     fun onNewPlaylistNameChange(value: String) {
         _uiState.update { it.copy(newPlaylistName = value) }
-    }
-
-    fun onNewArtistNameChange(value: String) {
-        _uiState.update { it.copy(newArtistName = value, followArtistError = null) }
-    }
-
-    fun followArtist() {
-        val name = _uiState.value.newArtistName.trim()
-        if (name.isBlank()) return
-
-        viewModelScope.launch {
-            when (val result = musicRepository.getPopularArtists()) {
-                is MusicResult.Success -> {
-                    val match = result.data.firstOrNull { it.name.equals(name, ignoreCase = true) }
-                        ?: result.data.firstOrNull { it.name.contains(name, ignoreCase = true) }
-                    if (match != null) {
-                        if (pinnedArtists.none { it.id == match.id }) {
-                            pinnedArtists.add(0, match)
-                        }
-                        val apiArtists = result.data
-                        cachedArtists = (pinnedArtists + apiArtists)
-                            .distinctBy { it.id }
-                            .map { LibraryItem.ArtistItem(it) }
-                        val allItems = buildAllItems()
-                        _uiState.update { state ->
-                            state.copy(
-                                isFollowArtistOpen = false,
-                                newArtistName = "",
-                                followArtistError = null,
-                                allItems = allItems,
-                                filteredItems = applyFilter(state.selectedFilter, state.searchQuery, allItems)
-                            )
-                        }
-                    } else {
-                        _uiState.update { it.copy(followArtistError = "Artist not found") }
-                    }
-                }
-                is MusicResult.Error -> {
-                    _uiState.update { it.copy(followArtistError = result.message) }
-                }
-                else -> {}
-            }
-        }
     }
 
     fun createPlaylist() {

@@ -98,4 +98,26 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             }
         }
     }
+
+    fun removeFromPlaylist(trackId: String) {
+        val playlistId = _uiState.value.playlist?.id ?: return
+        
+        // Optimistic UI update
+        val previousTracks = _uiState.value.tracks
+        _uiState.update { state ->
+            state.copy(tracks = state.tracks.filter { it.id != trackId })
+        }
+
+        viewModelScope.launch {
+            when (val result = musicRepository.removeFromPlaylist(trackId, playlistId)) {
+                is MusicResult.Error -> {
+                    // Rollback on error
+                    _uiState.update { it.copy(tracks = previousTracks, error = result.message) }
+                }
+                else -> {
+                    // Success, maybe show a toast or message
+                }
+            }
+        }
+    }
 }

@@ -11,6 +11,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +33,7 @@ import com.example.echo_panda_mobile.presentation.viewsmodel.HomeViewModel
 import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     selectedNav: Int = 0,
@@ -42,27 +46,40 @@ fun HomeScreen(
     globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val ptrState = rememberPullToRefreshState()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF05070D))
-    ) {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            containerColor = Color.Transparent,
-            topBar = {
-                HomeTopBar(
-                    userName = state.userName,
-                    userPhotoUrl = state.userPhotoUrl,
-                    onProfileClick = onNavigateToProfile
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = Color(0xFF05070D),
+        topBar = {
+            HomeTopBar(
+                userName = state.userName,
+                userPhotoUrl = state.userPhotoUrl,
+                onProfileClick = onNavigateToProfile
+            )
+        },
+        bottomBar = { EchoPandaBottomBar(selectedNav, onNavSelect) }
+    ) { padding ->
+        PullToRefreshBox(
+            state = ptrState,
+            isRefreshing = state.isLoading,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    state = ptrState,
+                    isRefreshing = state.isLoading,
+                    containerColor = Color(0xFF1A1A26),
+                    color = EchoPandaColors.AccentBlue,
+                    modifier = Modifier.align(Alignment.TopCenter)
                 )
-            },
-            bottomBar = { EchoPandaBottomBar(selectedNav, onNavSelect) }
-        ) { padding ->
+            }
+        ) {
             if (state.isLoading && state.recentPlaylists.isEmpty()) {
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(padding),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
@@ -71,7 +88,6 @@ fun HomeScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(padding)
                         .verticalScroll(rememberScrollState())
                 ) {
                     if (state.errorMessage != null) {

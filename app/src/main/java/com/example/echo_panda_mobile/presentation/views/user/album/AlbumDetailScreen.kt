@@ -10,6 +10,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,7 +29,9 @@ import com.example.echo_panda_mobile.presentation.components.SongRow
 import com.example.echo_panda_mobile.presentation.components.SquareArtCard
 import com.example.echo_panda_mobile.presentation.viewmodel.AlbumDetailViewModel
 import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
+import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumDetailScreen(
     albumId: String,
@@ -38,6 +43,7 @@ fun AlbumDetailScreen(
     globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val ptrState = rememberPullToRefreshState()
 
     LaunchedEffect(albumId) {
         viewModel.loadAlbum(albumId)
@@ -76,47 +82,62 @@ fun AlbumDetailScreen(
                 EchoPandaBottomBar(selectedIndex = selectedNav, onSelect = onNavSelect)
             }
         ) { padding ->
-            if (state.isLoading) {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
-            } else if (state.errorMessage != null) {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = state.errorMessage ?: "Something went wrong",
-                        color = Color.White.copy(alpha = 0.6f),
-                        fontSize = 14.sp
+            PullToRefreshBox(
+                state = ptrState,
+                isRefreshing = state.isLoading,
+                onRefresh = { viewModel.loadAlbum(albumId) },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        state = ptrState,
+                        isRefreshing = state.isLoading,
+                        containerColor = Color(0xFF1A1A26),
+                        color = EchoPandaColors.AccentBlue,
+                        modifier = Modifier.align(Alignment.TopCenter)
                     )
                 }
-            } else if (album != null) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        top = padding.calculateTopPadding(),
-                        bottom = padding.calculateBottomPadding() + 16.dp
-                    )
-                ) {
-                    item {
-                        AlbumHeaderSection(album, themeColor)
+            ) {
+                if (state.isLoading && album == null) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
                     }
-
-                    item {
-                        SongListHeader()
-                    }
-
-                    itemsIndexed(album.tracks) { index, track ->
-                        SongRow(
-                            index = index,
-                            track = track,
-                            isPlaying = index == 0,
-                            onClick = {
-                                globalPlayerViewModel.setQueue(album.tracks, index)
-                                onNavigateToPlayer(track.id, track.resumePositionMs)
-                            },
-                            onAddToFavorites = {
-                                viewModel.toggleFavorite(track)
-                            }
+                } else if (state.errorMessage != null && album == null) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = state.errorMessage ?: "Something went wrong",
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontSize = 14.sp
                         )
+                    }
+                } else if (album != null) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 16.dp)
+                    ) {
+                        item {
+                            AlbumHeaderSection(album, themeColor)
+                        }
+
+                        item {
+                            SongListHeader()
+                        }
+
+                        itemsIndexed(album.tracks) { index, track ->
+                            SongRow(
+                                index = index,
+                                track = track,
+                                isPlaying = false, // You might want to check against playerState
+                                onClick = {
+                                    globalPlayerViewModel.setQueue(album.tracks, index)
+                                    onNavigateToPlayer(track.id, track.resumePositionMs)
+                                },
+                                onAddToFavorites = {
+                                    viewModel.toggleFavorite(track)
+                                }
+                            )
+                        }
                     }
                 }
             }

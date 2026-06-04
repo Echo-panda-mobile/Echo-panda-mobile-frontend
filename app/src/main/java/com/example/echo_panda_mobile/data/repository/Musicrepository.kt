@@ -115,7 +115,7 @@ class MusicRepository(
             val response = apiService.getFavorites()
             if (!response.isSuccessful) return tracks
             val favoriteIds = response.body()?.data?.mapNotNull { item ->
-                item.song?.id ?: item.songId ?: item.id
+                item.favoritable?.id ?: item.song?.id ?: item.songId ?: item.favoritableId ?: item.id
             }?.map { it.toString() }?.toSet() ?: emptySet()
             tracks.map { it.copy(isFavorite = it.id in favoriteIds) }
         } catch (_: Exception) {
@@ -290,7 +290,21 @@ class MusicRepository(
         try {
             val response = api.getSongs(search = artistName)
             if (response.isSuccessful) {
-                val tracks = response.body()?.data?.map { it.toDomain(artistName) } ?: emptyList()
+                val data = response.body()?.data ?: emptyList()
+                val tracks = coroutineScope {
+                    data.map { dto ->
+                        async {
+                            val track = dto.toDomain(artistName)
+                            val imageUrl = resolveTrackCoverUrl(
+                                songId = dto.resolvedId(),
+                                albumId = dto.albumId?.toString() ?: dto.album?.id?.toString(),
+                                coverUrl = dto.coverUrl,
+                                albumCoverUrl = dto.album?.coverUrl
+                            )
+                            track.copy(imageUrl = imageUrl)
+                        }
+                    }.awaitAll()
+                }
                 MusicResult.Success(mergeFavoriteStatus(enrichTrackCovers(tracks)))
             } else {
                 MusicResult.Error("Failed to fetch artist songs")
@@ -417,7 +431,21 @@ class MusicRepository(
         try {
             val response = api.getSongs(search = search)
             if (response.isSuccessful) {
-                val tracks = response.body()?.data?.map { it.toDomain("Unknown") } ?: emptyList()
+                val data = response.body()?.data ?: emptyList()
+                val tracks = coroutineScope {
+                    data.map { dto ->
+                        async {
+                            val track = dto.toDomain("Unknown")
+                            val imageUrl = resolveTrackCoverUrl(
+                                songId = dto.resolvedId(),
+                                albumId = dto.albumId?.toString() ?: dto.album?.id?.toString(),
+                                coverUrl = dto.coverUrl,
+                                albumCoverUrl = dto.album?.coverUrl
+                            )
+                            track.copy(imageUrl = imageUrl)
+                        }
+                    }.awaitAll()
+                }
                 MusicResult.Success(mergeFavoriteStatus(enrichTrackCovers(tracks)))
             } else {
                 MusicResult.Error("Failed to fetch songs")
@@ -497,7 +525,22 @@ class MusicRepository(
         try {
             val response = api.getMostPlayedSongs(limit = limit)
             if (response.isSuccessful) {
-                val tracks = response.body()?.data?.map { it.song.toDomain("Unknown") } ?: emptyList()
+                val data = response.body()?.data ?: emptyList()
+                val tracks = coroutineScope {
+                    data.map { dto ->
+                        async {
+                            val songDto = dto.song
+                            val track = songDto.toDomain("Unknown")
+                            val imageUrl = resolveTrackCoverUrl(
+                                songId = songDto.resolvedId(),
+                                albumId = songDto.albumId?.toString() ?: songDto.album?.id?.toString(),
+                                coverUrl = songDto.coverUrl,
+                                albumCoverUrl = songDto.album?.coverUrl
+                            )
+                            track.copy(imageUrl = imageUrl)
+                        }
+                    }.awaitAll()
+                }
                 MusicResult.Success(mergeFavoriteStatus(enrichTrackCovers(tracks)))
             } else {
                 MusicResult.Error("Failed to fetch most played songs")
@@ -544,8 +587,9 @@ class MusicRepository(
     }
 
     private fun FavoriteItemDto.toTrack(): Track? {
+        favoritable?.let { return it.toDomain("Unknown").copy(isFavorite = true) }
         song?.let { return it.toDomain("Unknown").copy(isFavorite = true) }
-        val trackId = songId ?: id ?: return null
+        val trackId = songId ?: favoritableId ?: id ?: return null
         val idStr = trackId.toString()
         val resolvedTitle = title?.takeIf { it.isNotBlank() } ?: name?.takeIf { it.isNotBlank() } ?: "Unknown Track"
         return Track(
@@ -640,7 +684,31 @@ class MusicRepository(
         try {
             val response = apiService.getFavorites()
             if (response.isSuccessful) {
-                val tracks = response.body()?.data?.mapNotNull { it.toTrack() } ?: emptyList()
+                val data = response.body()?.data ?: emptyList()
+                val tracks = coroutineScope {
+                    data.map { dto ->
+                        async {
+                            val track = dto.toTrack() ?: return@async null
+                            val songDto = dto.favoritable ?: dto.song
+                            val imageUrl = if (songDto != null) {
+                                resolveTrackCoverUrl(
+                                    songId = songDto.resolvedId(),
+                                    albumId = songDto.albumId?.toString() ?: songDto.album?.id?.toString(),
+                                    coverUrl = songDto.coverUrl,
+                                    albumCoverUrl = songDto.album?.coverUrl
+                                )
+                            } else {
+                                resolveTrackCoverUrl(
+                                    songId = track.id,
+                                    albumId = null,
+                                    coverUrl = null,
+                                    albumCoverUrl = null
+                                )
+                            }
+                            track.copy(imageUrl = imageUrl)
+                        }
+                    }.awaitAll().filterNotNull()
+                }
                 MusicResult.Success(enrichTrackCovers(tracks))
             } else {
                 MusicResult.Error("Failed to fetch favorite tracks")
@@ -653,9 +721,24 @@ class MusicRepository(
     suspend fun getRecentlyPlayedTracks(): MusicResult<List<Track>> = withContext(Dispatchers.IO) {
         if (apiService == null) return@withContext MusicResult.Error("API service not initialized")
         try {
-            val response = apiService.getRecentlyPlayed()
+            val response = apiService.getListenHistory(perPage = 25)
             if (response.isSuccessful) {
-                val tracks = response.body()?.data?.map { it.toDomain("Unknown") } ?: emptyList()
+                val data = response.body()?.data ?: emptyList()
+                val tracks = coroutineScope {
+                    data.map { history ->
+                        async {
+                            val dto = history.song
+                            val track = dto.toDomain("Unknown")
+                            val imageUrl = resolveTrackCoverUrl(
+                                songId = dto.resolvedId(),
+                                albumId = dto.albumId?.toString() ?: dto.album?.id?.toString(),
+                                coverUrl = dto.coverUrl,
+                                albumCoverUrl = dto.album?.coverUrl
+                            )
+                            track.copy(imageUrl = imageUrl)
+                        }
+                    }.awaitAll()
+                }
                 MusicResult.Success(enrichTrackCovers(mergeFavoriteStatus(tracks)))
             } else {
                 MusicResult.Error("Failed to fetch recently played")
@@ -733,6 +816,16 @@ class MusicRepository(
             val songInt = trackId.toIntOrNull() ?: return@withContext MusicResult.Error("Invalid track ID")
             val response = apiService.addSongToPlaylist(playlistId, AddSongToPlaylistRequest(songInt))
             if (response.isSuccessful) MusicResult.Success(true) else MusicResult.Error("Failed")
+        } catch (e: Exception) {
+            MusicResult.Error(e.localizedMessage ?: "Network error")
+        }
+    }
+
+    suspend fun removeFromPlaylist(trackId: String, playlistId: String): MusicResult<Boolean> = withContext(Dispatchers.IO) {
+        if (apiService == null) return@withContext MusicResult.Error("API service not initialized")
+        try {
+            val response = apiService.removeSongFromPlaylist(playlistId, trackId)
+            if (response.isSuccessful) MusicResult.Success(true) else MusicResult.Error("Failed to remove song")
         } catch (e: Exception) {
             MusicResult.Error(e.localizedMessage ?: "Network error")
         }

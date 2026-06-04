@@ -12,6 +12,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,18 +32,18 @@ import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.viewsmodel.LibraryItem
 import com.example.echo_panda_mobile.presentation.viewsmodel.LibraryViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     selectedNav: Int = 3,
     onNavSelect: (Int) -> Unit = {},
     onNavigateToFavorites: () -> Unit = {},
-    onNavigateToArtist: (String) -> Unit = {},
-    onNavigateToAlbum: (String) -> Unit = {},
     onNavigateToPlaylist: (String) -> Unit = {},
     onNavigateToPlayer: (String, Long?) -> Unit = { _, _ -> },
     viewModel: LibraryViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val ptrState = rememberPullToRefreshState()
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -53,104 +56,112 @@ fun LibraryScreen(
         },
         bottomBar = { EchoPandaBottomBar(selectedNav, onNavSelect) }
     ) { padding ->
-        if (state.isLoading && state.filteredItems.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
-            }
-        } else {
-        LazyColumn(
+        PullToRefreshBox(
+            state = ptrState,
+            isRefreshing = state.isLoading,
+            onRefresh = { viewModel.loadLibrary() },
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp)
+                .padding(padding),
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    state = ptrState,
+                    isRefreshing = state.isLoading,
+                    containerColor = Color(0xFF1A1A26),
+                    color = EchoPandaColors.AccentBlue,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
         ) {
-            item {
-                FilterChipsRow(
-                    selectedFilter = state.selectedFilter,
-                    onFilterSelect = { viewModel.setFilter(it) }
-                )
-                Spacer(Modifier.height(24.dp))
-            }
-
-            item {
-                LibraryActionButton(
-                    icon = Icons.Default.Add,
-                    text = "Add New Playlist",
-                    gradient = Brush.verticalGradient(listOf(Color(0xFF00D9FF), Color(0xFF00A3C2))),
-                    onClick = { viewModel.toggleCreatePlaylistDialog(true) }
-                )
-                Spacer(Modifier.height(16.dp))
-                LibraryActionButton(
-                    icon = Icons.Default.Favorite,
-                    text = "Add Favorite Artist",
-                    gradient = Brush.verticalGradient(listOf(Color(0xFFFF2D55), Color(0xFFC2185B))),
-                    onClick = { viewModel.toggleFollowArtistDialog(true) }
-                )
-                Spacer(Modifier.height(16.dp))
-                LibraryActionButton(
-                    icon = Icons.Default.FavoriteBorder,
-                    text = "Your Liked Songs (${state.likedSongsCount})",
-                    gradient = Brush.verticalGradient(listOf(Color(0xFF00D9FF), Color(0xFF00A3C2))),
-                    onClick = onNavigateToFavorites
-                )
-                Spacer(Modifier.height(32.dp))
-            }
-
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.SwapVert,
-                        contentDescription = null,
-                        tint = EchoPandaColors.AccentBlue,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = viewModel.sectionTitle(state.selectedFilter),
-                        color = EchoPandaColors.AccentBlue,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+            if (state.isLoading && state.filteredItems.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
                 }
-                Spacer(Modifier.height(16.dp))
-            }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    item {
+                        FilterChipsRow(
+                            selectedFilter = state.selectedFilter,
+                            onFilterSelect = { viewModel.setFilter(it) }
+                        )
+                        Spacer(Modifier.height(24.dp))
+                    }
 
-            if (state.filteredItems.isEmpty() && !state.isLoading) {
-                item {
-                    Text(
-                        text = state.errorMessage ?: "Nothing here yet",
-                        color = Color.White.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(vertical = 24.dp)
-                    )
-                }
-            }
+                    item {
+                        LibraryActionButton(
+                            icon = Icons.Default.Add,
+                            text = "Add New Playlist",
+                            gradient = Brush.verticalGradient(listOf(Color(0xFF00D9FF), Color(0xFF00A3C2))),
+                            onClick = { viewModel.toggleCreatePlaylistDialog(true) }
+                        )
+                        Spacer(Modifier.height(16.dp))
+                      
+                        Spacer(Modifier.height(16.dp))
+                        LibraryActionButton(
+                            icon = Icons.Default.FavoriteBorder,
+                            text = "Your Liked Songs (${state.likedSongsCount})",
+                            gradient = Brush.verticalGradient(listOf(Color(0xFF00D9FF), Color(0xFF00A3C2))),
+                            onClick = onNavigateToFavorites
+                        )
+                        Spacer(Modifier.height(32.dp))
+                    }
 
-            items(state.filteredItems) { item ->
-                LibraryListItem(
-                    item = item,
-                    onClick = {
-                        when (item) {
-                            is LibraryItem.ArtistItem -> onNavigateToArtist(item.artist.id)
-                            is LibraryItem.PlaylistItem -> onNavigateToPlaylist(item.playlist.id)
-                            is LibraryItem.AlbumItem -> onNavigateToAlbum(item.album.id)
-                            is LibraryItem.RecentTrackItem -> onNavigateToPlayer(
-                                item.track.id,
-                                item.track.resumePositionMs
+                    item {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.SwapVert,
+                                contentDescription = null,
+                                tint = EchoPandaColors.AccentBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = viewModel.sectionTitle(state.selectedFilter),
+                                color = EchoPandaColors.AccentBlue,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
+                    }
+
+                    if (state.filteredItems.isEmpty() && !state.isLoading) {
+                        item {
+                            Text(
+                                text = state.errorMessage ?: "Nothing here yet",
+                                color = Color.White.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(vertical = 24.dp)
                             )
                         }
                     }
-                )
-                Spacer(Modifier.height(16.dp))
+
+                    items(state.filteredItems) { item ->
+                        LibraryListItem(
+                            item = item,
+                            onClick = {
+                                when (item) {
+                                    is LibraryItem.PlaylistItem -> onNavigateToPlaylist(item.playlist.id)
+                                    is LibraryItem.RecentTrackItem -> onNavigateToPlayer(
+                                        item.track.id,
+                                        item.track.resumePositionMs
+                                    )
+                                }
+                            }
+                        )
+                        Spacer(Modifier.height(16.dp))
+                    }
+                    item {
+                        Spacer(Modifier.height(32.dp))
+                    }
+                }
             }
-            item {
-                Spacer(Modifier.height(32.dp))
-            }
-        }
         }
 
         if (state.isCreatePlaylistOpen) {
@@ -175,38 +186,6 @@ fun LibraryScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                }
-            )
-        }
-
-        if (state.isFollowArtistOpen) {
-            AlertDialog(
-                onDismissRequest = { viewModel.toggleFollowArtistDialog(false) },
-                confirmButton = {
-                    TextButton(onClick = { viewModel.followArtist() }) {
-                        Text("Add")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { viewModel.toggleFollowArtistDialog(false) }) {
-                        Text("Cancel")
-                    }
-                },
-                title = { Text("Add Favorite Artist") },
-                text = {
-                    Column {
-                        OutlinedTextField(
-                            value = state.newArtistName,
-                            onValueChange = viewModel::onNewArtistNameChange,
-                            placeholder = { Text("Artist name") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        state.followArtistError?.let { error ->
-                            Spacer(Modifier.height(8.dp))
-                            Text(error, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-                        }
-                    }
                 }
             )
         }
@@ -266,7 +245,7 @@ fun FilterChipsRow(
     selectedFilter: String,
     onFilterSelect: (String) -> Unit
 ) {
-    val filters = listOf("All", "Recently", "Playlists", "Artists", "Albums")
+    val filters = listOf("Recently", "Playlists")
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxWidth()
@@ -345,26 +324,6 @@ fun LibraryListItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         when (item) {
-            is LibraryItem.ArtistItem -> {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                ) {
-                    ArtPlaceholder(
-                        colors = item.artist.placeholderColors,
-                        imageUrl = item.artist.imageUrl,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                Spacer(Modifier.width(16.dp))
-                Text(
-                    text = item.artist.name,
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
             is LibraryItem.PlaylistItem -> {
                 Box(
                     modifier = Modifier
@@ -388,33 +347,6 @@ fun LibraryListItem(
                     val subtitle = item.subtitle ?: "${item.trackCount ?: 0} songs"
                     Text(
                         text = subtitle,
-                        color = Color.White.copy(alpha = 0.6f),
-                        fontSize = 14.sp
-                    )
-                }
-            }
-            is LibraryItem.AlbumItem -> {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                ) {
-                    ArtPlaceholder(
-                        colors = item.album.placeholderColors,
-                        imageUrl = item.album.imageUrl,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                Spacer(Modifier.width(16.dp))
-                Column {
-                    Text(
-                        text = item.album.title,
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = item.album.artist,
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 14.sp
                     )

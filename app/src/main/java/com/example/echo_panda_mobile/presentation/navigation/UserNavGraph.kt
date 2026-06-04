@@ -10,6 +10,7 @@ import com.example.echo_panda_mobile.presentation.views.user.home.HomeScreen
 import com.example.echo_panda_mobile.presentation.views.user.discover.DiscoverScreen
 import com.example.echo_panda_mobile.presentation.views.user.library.LibraryScreen
 import com.example.echo_panda_mobile.presentation.views.user.library.FavoritesScreen
+import com.example.echo_panda_mobile.presentation.views.user.library.PlaylistDetailScreen
 import com.example.echo_panda_mobile.presentation.views.user.album.AlbumScreen
 import com.example.echo_panda_mobile.presentation.views.user.album.AlbumDetailScreen
 import com.example.echo_panda_mobile.presentation.views.user.player.PlayerScreen
@@ -86,18 +87,29 @@ fun NavGraphBuilder.userNavGraph(
                     android.util.Log.d("NAVIGATION", "Navigating to: ${Routes.USER_FAVORITES}")
                     navController.navigate(Routes.USER_FAVORITES)
                 },
-                onNavigateToArtist = { artistId ->
-                    val route = Routes.ARTIST_VIEW.replace("{artistId}", artistId)
+                onNavigateToPlaylist = { playlistId ->
+                    val route = Routes.USER_PLAYLIST_DETAIL.replace("{playlistId}", playlistId)
                     android.util.Log.d("NAVIGATION", "Navigating to: $route")
                     navController.navigate(route)
                 },
-                onNavigateToAlbum = { albumId ->
-                    android.util.Log.d("NAVIGATION", "━━━━ NAVIGATING TO ALBUM DETAIL ━━━━")
-                    android.util.Log.d("NAVIGATION", "Album ID: $albumId")
-                    val route = Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId)
-                    android.util.Log.d("NAVIGATION", "Route: $route")
+                onNavigateToPlayer = { trackId, _ ->
+                    val route = Routes.USER_PLAYER.replace("{trackId}", trackId)
+                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
                     navController.navigate(route)
-                },
+                }
+            )
+        }
+
+        composable(
+            route = Routes.USER_PLAYLIST_DETAIL,
+            arguments = listOf(navArgument("playlistId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val playlistId = backStackEntry.arguments?.getString("playlistId") ?: ""
+            PlaylistDetailScreen(
+                playlistId = playlistId,
+                selectedNav = selectedNav,
+                onNavSelect = onNavSelect,
+                onBack = { navController.popBackStack() },
                 onNavigateToPlayer = { trackId, _ ->
                     val route = Routes.USER_PLAYER.replace("{trackId}", trackId)
                     android.util.Log.d("NAVIGATION", "Navigating to: $route")

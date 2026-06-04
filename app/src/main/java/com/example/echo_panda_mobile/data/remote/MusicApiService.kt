@@ -179,7 +179,9 @@ data class SongDto(
 
 data class FavoriteItemDto(
     @SerializedName("song") val song: SongDto? = null,
+    @SerializedName("favoritable") val favoritable: SongDto? = null,
     @SerializedName("song_id") val songId: Int? = null,
+    @SerializedName("favoritable_id") val favoritableId: Int? = null,
     @SerializedName("id") val id: Int? = null,
     @SerializedName("title") val title: String? = null,
     @SerializedName("name") val name: String? = null,
@@ -192,7 +194,7 @@ data class FavoriteItemDto(
     @SerializedName("album") val album: AlbumDto? = null,
     @SerializedName("is_favorited") val isFavorite: Boolean? = null
 ) {
-    fun getDisplayCoverUrl(): String? = coverUrl ?: coverKey ?: album?.getDisplayCoverUrl()
+    fun getDisplayCoverUrl(): String? = coverUrl ?: coverKey ?: album?.getDisplayCoverUrl() ?: favoritable?.getDisplayCoverUrl() ?: song?.getDisplayCoverUrl()
 }
 
 data class PlaylistDto(
@@ -384,7 +386,7 @@ interface MusicApiService {
     @GET("api/playback/recent")
     suspend fun getRecentlyPlayed(): Response<BaseResponse<List<SongDto>>>
 
-    @GET("api/favorites")
+    @GET("api/profile/favorite-songs")
     suspend fun getFavorites(): Response<PaginatedResponse<FavoriteItemDto>>
 
     @GET("api/playlists/{playlist}/songs")
@@ -408,6 +410,12 @@ interface MusicApiService {
     suspend fun addSongToPlaylist(
         @Path("playlist") playlistId: String,
         @Body request: AddSongToPlaylistRequest
+    ): Response<Unit>
+
+    @DELETE("api/playlists/{playlist}/songs/{songId}")
+    suspend fun removeSongFromPlaylist(
+        @Path("playlist") playlistId: String,
+        @Path("songId") songId: String
     ): Response<Unit>
 
     @GET("api/playback/continue")

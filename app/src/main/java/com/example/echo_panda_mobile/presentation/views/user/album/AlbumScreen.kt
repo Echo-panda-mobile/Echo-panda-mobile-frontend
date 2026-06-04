@@ -14,6 +14,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,7 +26,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.echo_panda_mobile.data.model.AppStrings
 import com.example.echo_panda_mobile.presentation.components.*
@@ -32,6 +34,7 @@ import com.example.echo_panda_mobile.presentation.theme.LocalAppLanguage
 import com.example.echo_panda_mobile.presentation.theme.LocalIsDarkTheme
 import com.example.echo_panda_mobile.presentation.viewsmodel.AlbumViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumScreen(
     selectedNav: Int = 2,
@@ -46,6 +49,7 @@ fun AlbumScreen(
     val bgStart = if (isDark) EchoPandaColors.BgDarkStart else EchoPandaColors.BgLightStart
     val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
     val bgEnd = if (isDark) EchoPandaColors.BgDarkEnd else EchoPandaColors.BgLightEnd
+    val ptrState = rememberPullToRefreshState()
 
     Box(
         modifier = Modifier
@@ -67,125 +71,142 @@ fun AlbumScreen(
             },
             bottomBar = { EchoPandaBottomBar(selectedNav, onNavSelect) }
         ) { padding ->
-            if (state.isLoading) {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
-                }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    if (!state.errorMessage.isNullOrBlank()) {
-                        Text(
-                            text = state.errorMessage!!,
-                            color = EchoPandaColors.ErrorRed,
-                            fontSize = 14.sp,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                    }
-
-                    // ── Filter Chips ──────────────────────────────────────────
-                    AlbumFilterChips(
-                        selected = state.selectedCategory,
-                        onSelect = { viewModel.setCategory(it) }
+            PullToRefreshBox(
+                state = ptrState,
+                isRefreshing = state.isLoading,
+                onRefresh = { viewModel.loadAlbums() },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        state = ptrState,
+                        isRefreshing = state.isLoading,
+                        containerColor = Color(0xFF1A1A26),
+                        color = EchoPandaColors.AccentBlue,
+                        modifier = Modifier.align(Alignment.TopCenter)
                     )
-
-                    if (state.isSearchActive || state.selectedCategory != "All") {
-                        // ── Filtered/Search Results ──────────────────────────
-                        SectionHeader(
-                            fullTitle = if (state.isSearchActive) "Search Results" else "${state.selectedCategory} Albums",
-                            onViewAll = null
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                            state.filteredAlbums.forEach { album ->
-                                AlbumListRow(
-                                    album = album,
-                                    onClick = { onNavigateToDetail(album.id) }
-                                )
-                                HorizontalDivider(color = mutedColor.copy(alpha = 0.25f), thickness = 0.5.dp)
-                            }
-                            if (state.filteredAlbums.isEmpty()) {
-                                Text(
-                                    "No albums found",
-                                    color = mutedColor,
-                                    modifier = Modifier.fillMaxWidth().padding(32.dp),
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                            }
-                        }
-                    } else {
-                        // ── Default View ─────────────────────────────────────
-                        
-                        // ── Featured Hero Section ──────────────────────────────────
-                        if (state.topAlbums.isNotEmpty()) {
-                            FeaturedAlbumHero(
-                                album = state.topAlbums.first(),
-                                onClick = { onNavigateToDetail(state.topAlbums.first().id) }
+                }
+            ) {
+                if (state.isLoading && state.topAlbums.isEmpty() && state.allAlbums.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        if (!state.errorMessage.isNullOrBlank()) {
+                            Text(
+                                text = state.errorMessage!!,
+                                color = EchoPandaColors.ErrorRed,
+                                fontSize = 14.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
                         }
 
-                        Spacer(Modifier.height(24.dp))
-
-                        // ── Top Picks (Horizontal Scroll) ─────────────────────────────────
-                        SectionHeader(
-                            fullTitle = "Top Picks", 
-                            onViewAll = { viewModel.setCategory("Trending") }
+                        // ── Filter Chips ──────────────────────────────────────────
+                        AlbumFilterChips(
+                            selected = state.selectedCategory,
+                            onSelect = { viewModel.setCategory(it) }
                         )
-                        Spacer(Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            // Exclude the featured one and show the rest of the most played albums
-                            state.topAlbums.drop(1).forEach { album ->
-                                AlbumCard(
-                                    album = album,
-                                    onClick = { onNavigateToDetail(album.id) }
-                                )
-                            }
-                        }
 
-                        Spacer(Modifier.height(32.dp))
-
-                        // ── All Albums (List Style) ────────────────────────────────
-                        SectionHeader(fullTitle = "All Albums", onViewAll = null)
-                        Spacer(Modifier.height(8.dp))
-                        Column(
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        ) {
-                            val allAlbums = state.allAlbums.ifEmpty { state.popularAlbums }
-                            if (allAlbums.isEmpty()) {
-                                Text(
-                                    text = "No albums available",
-                                    color = mutedColor,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 24.dp),
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                            } else {
-                                allAlbums.forEach { album ->
+                        if (state.isSearchActive || state.selectedCategory != "All") {
+                            // ── Filtered/Search Results ──────────────────────────
+                            SectionHeader(
+                                fullTitle = if (state.isSearchActive) "Search Results" else "${state.selectedCategory} Albums",
+                                onViewAll = null
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                state.filteredAlbums.forEach { album ->
                                     AlbumListRow(
                                         album = album,
                                         onClick = { onNavigateToDetail(album.id) }
                                     )
-                                    HorizontalDivider(
-                                        color = mutedColor.copy(alpha = 0.25f),
-                                        thickness = 0.5.dp
+                                    HorizontalDivider(color = mutedColor.copy(alpha = 0.25f), thickness = 0.5.dp)
+                                }
+                                if (state.filteredAlbums.isEmpty()) {
+                                    Text(
+                                        "No albums found",
+                                        color = mutedColor,
+                                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                     )
                                 }
                             }
-                        }
-                    }
+                        } else {
+                            // ── Default View ─────────────────────────────────────
+                            
+                            // ── Featured Hero Section ──────────────────────────────────
+                            if (state.topAlbums.isNotEmpty()) {
+                                FeaturedAlbumHero(
+                                    album = state.topAlbums.first(),
+                                    onClick = { onNavigateToDetail(state.topAlbums.first().id) }
+                                )
+                            }
 
-                    Spacer(Modifier.height(100.dp))
+                            Spacer(Modifier.height(24.dp))
+
+                            // ── Top Picks (Horizontal Scroll) ─────────────────────────────────
+                            SectionHeader(
+                                fullTitle = "Top Picks", 
+                                onViewAll = { viewModel.setCategory("Trending") }
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                // Exclude the featured one and show the rest of the most played albums
+                                state.topAlbums.drop(1).forEach { album ->
+                                    AlbumCard(
+                                        album = album,
+                                        onClick = { onNavigateToDetail(album.id) }
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(32.dp))
+
+                            // ── All Albums (List Style) ────────────────────────────────
+                            SectionHeader(fullTitle = "All Albums", onViewAll = null)
+                            Spacer(Modifier.height(8.dp))
+                            Column(
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            ) {
+                                val allAlbums = state.allAlbums.ifEmpty { state.popularAlbums }
+                                if (allAlbums.isEmpty()) {
+                                    Text(
+                                        text = "No albums available",
+                                        color = mutedColor,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 24.dp),
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                } else {
+                                    allAlbums.forEach { album ->
+                                        AlbumListRow(
+                                            album = album,
+                                            onClick = { onNavigateToDetail(album.id) }
+                                        )
+                                        HorizontalDivider(
+                                            color = mutedColor.copy(alpha = 0.25f),
+                                            thickness = 0.5.dp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(100.dp))
+                    }
                 }
             }
         }

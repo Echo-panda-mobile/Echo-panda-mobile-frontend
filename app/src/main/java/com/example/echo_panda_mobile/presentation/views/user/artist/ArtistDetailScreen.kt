@@ -14,6 +14,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +38,7 @@ import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewMode
 import com.example.echo_panda_mobile.presentation.viewsmodel.ArtistDetailViewModel
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArtistDetailScreen(
     artistId: String,
@@ -48,7 +52,7 @@ fun ArtistDetailScreen(
     val state by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    val ptrState = rememberPullToRefreshState()
 
     LaunchedEffect(artistId) {
         viewModel.loadArtist(artistId)
@@ -59,87 +63,104 @@ fun ArtistDetailScreen(
             .fillMaxSize()
             .background(Color(0xFF05070D))
     ) {
-        if (state.isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.align(Alignment.Center),
-                color = EchoPandaColors.AccentBlue
-            )
-        } else if (state.artist != null) {
-            val artist = state.artist!!
-            val headerColor = artist.placeholderColors.firstOrNull() ?: Color(0xFF1A1A2A)
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scrollState)
-            ) {
-                // ─── Header ────────────────────────────────────────────────────
-                ArtistHeader(
-                    artist = artist,
-                    headerColor = headerColor,
-                    onBack = onBack
+        PullToRefreshBox(
+            state = ptrState,
+            isRefreshing = state.isLoading,
+            onRefresh = { viewModel.loadArtist(artistId) },
+            modifier = Modifier.fillMaxSize(),
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    state = ptrState,
+                    isRefreshing = state.isLoading,
+                    containerColor = Color(0xFF1A1A26),
+                    color = EchoPandaColors.AccentBlue,
+                    modifier = Modifier.align(Alignment.TopCenter)
                 )
-
-                // ─── Actions & Popular ─────────────────────────────────────────
-                PopularSection(
-                    state = state,
-                    onToggleFollow = { viewModel.toggleFollow() },
-                    onTrackClick = { id, resume ->
-                        globalPlayerViewModel.setQueue(state.popularTracks, state.popularTracks.indexOfFirst { it.id == id }.coerceAtLeast(0))
-                        onNavigateToPlayer(id, resume)
-                    },
-                    onAddToFavorites = { track ->
-                        viewModel.toggleFavorite(track)
-                    },
-                    onDashboardClick = onNavigateToDashboard,
-                    onPlayTopTracks = {
-                        if (state.popularTracks.isNotEmpty()) {
-                            globalPlayerViewModel.setQueue(state.popularTracks, 0)
-                            onNavigateToPlayer(state.popularTracks.first().id, null)
-                        }
-                    }
-                )
-
-                // ─── Biography Section ─────────────────────────────────────────
-                if (!artist.bio.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(32.dp))
-                    BiographySection(bio = artist.bio)
+            }
+        ) {
+            if (state.isLoading && state.artist == null) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
                 }
+            } else if (state.artist != null) {
+                val artist = state.artist!!
+                val headerColor = artist.placeholderColors.firstOrNull() ?: Color(0xFF1A1A2A)
 
-                // ─── Albums Section ────────────────────────────────────────────
-                Spacer(modifier = Modifier.height(32.dp))
-                ArtistAlbumsSection(
-                    albums = state.albums,
-                    onAlbumClick = onNavigateToAlbum
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                ) {
+                    // ─── Header ────────────────────────────────────────────────────
+                    ArtistHeader(
+                        artist = artist,
+                        headerColor = headerColor,
+                        onBack = onBack
+                    )
 
-                // ─── Singles Section ───────────────────────────────────────────
-                if (state.singles.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(32.dp))
-                    ArtistSinglesSection(
-                        singles = state.singles,
+                    // ─── Actions & Popular ─────────────────────────────────────────
+                    PopularSection(
+                        state = state,
+                        onToggleFollow = { viewModel.toggleFollow() },
                         onTrackClick = { id, resume ->
-                            globalPlayerViewModel.setQueue(state.singles, state.singles.indexOfFirst { it.id == id }.coerceAtLeast(0))
+                            globalPlayerViewModel.setQueue(state.popularTracks, state.popularTracks.indexOfFirst { it.id == id }.coerceAtLeast(0))
                             onNavigateToPlayer(id, resume)
+                        },
+                        onAddToFavorites = { track ->
+                            viewModel.toggleFavorite(track)
+                        },
+                        onDashboardClick = onNavigateToDashboard,
+                        onPlayTopTracks = {
+                            if (state.popularTracks.isNotEmpty()) {
+                                globalPlayerViewModel.setQueue(state.popularTracks, 0)
+                                onNavigateToPlayer(state.popularTracks.first().id, null)
+                            }
                         }
                     )
+
+                    // ─── Biography Section ─────────────────────────────────────────
+                    if (!artist.bio.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(32.dp))
+                        BiographySection(bio = artist.bio)
+                    }
+
+                    // ─── Albums Section ────────────────────────────────────────────
+                    Spacer(modifier = Modifier.height(32.dp))
+                    ArtistAlbumsSection(
+                        albums = state.albums,
+                        onAlbumClick = onNavigateToAlbum
+                    )
+
+                    // ─── Singles Section ───────────────────────────────────────────
+                    if (state.singles.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(32.dp))
+                        ArtistSinglesSection(
+                            singles = state.singles,
+                            onTrackClick = { id, resume ->
+                                globalPlayerViewModel.setQueue(state.singles, state.singles.indexOfFirst { it.id == id }.coerceAtLeast(0))
+                                onNavigateToPlayer(id, resume)
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(120.dp))
                 }
-
-                Spacer(modifier = Modifier.height(120.dp))
             }
+        }
 
-            // ─── Sticky Top Bar ──────────────────────────────────────────────
+        // ─── Sticky Top Bar ──────────────────────────────────────────────
+        state.artist?.let {
             ArtistStickyHeaderActions(
-                artistName = artist.name,
+                artistName = it.name,
                 scrollOffset = scrollState.value,
                 onBack = onBack
             )
-            
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 90.dp)
-            )
         }
+        
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 90.dp)
+        )
     }
 }
 

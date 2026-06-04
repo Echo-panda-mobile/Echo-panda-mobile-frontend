@@ -11,6 +11,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,6 +29,7 @@ import com.example.echo_panda_mobile.presentation.theme.LocalAppLanguage
 import com.example.echo_panda_mobile.presentation.viewmodel.DiscoverViewModel
 import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DiscoverScreen(
     selectedNav: Int = 1,
@@ -37,6 +41,7 @@ fun DiscoverScreen(
     globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val ptrState = rememberPullToRefreshState()
     
     Box(
         modifier = Modifier
@@ -56,172 +61,189 @@ fun DiscoverScreen(
             },
             bottomBar = { EchoPandaBottomBar(selectedNav, onNavSelect) }
         ) { padding ->
-            if (state.isLoading) {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
+            PullToRefreshBox(
+                state = ptrState,
+                isRefreshing = state.isLoading,
+                onRefresh = { viewModel.refresh() },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        state = ptrState,
+                        isRefreshing = state.isLoading,
+                        containerColor = Color(0xFF1A1A26),
+                        color = EchoPandaColors.AccentBlue,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
                 }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Spacer(Modifier.height(16.dp))
-
-                    if (state.isSearchActive && state.searchResults.isNotEmpty()) {
-                        SectionHeader(
-                            fullTitle = "Search Results: Albums",
-                            highlightPart = "Albums",
-                            highlightColor = EchoPandaColors.AccentBlue,
-                            onViewAll = null
-                        )
+            ) {
+                if (state.isLoading && state.genres.isEmpty() && state.moodPlaylists.isEmpty() && state.newReleases.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                    ) {
                         Spacer(Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            state.searchResults.forEach { album ->
-                                AlbumCard(
-                                    album = album,
-                                    onClick = { onNavigateToAlbum(album.id) }
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(32.dp))
-                    }
 
-                    // ── Music Genres ──────────────────────────────────────────────
-                    if (state.genres.isNotEmpty()) {
-                        SectionHeader(
-                            fullTitle = "Music Genres",
-                            highlightPart = "Genres",
-                            highlightColor = EchoPandaColors.AccentBlue,
-                            onViewAll = {}
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            state.genres.forEach { genre ->
-                                LabeledArtCard(
-                                    title = genre.name,
-                                    subLabel = genre.subLabel,
-                                    colors = genre.placeholderColors,
-                                    imageUrl = genre.imageUrl
-                                )
+                        if (state.isSearchActive && state.searchResults.isNotEmpty()) {
+                            SectionHeader(
+                                fullTitle = "Search Results: Albums",
+                                highlightPart = "Albums",
+                                highlightColor = EchoPandaColors.AccentBlue,
+                                onViewAll = null
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                state.searchResults.forEach { album ->
+                                    AlbumCard(
+                                        album = album,
+                                        onClick = { onNavigateToAlbum(album.id) }
+                                    )
+                                }
                             }
+                            Spacer(Modifier.height(32.dp))
                         }
-                        Spacer(Modifier.height(32.dp))
-                    }
 
-                    // ── Mood Playlist ─────────────────────────────────────────────
-                    if (state.moodPlaylists.isNotEmpty()) {
-                        SectionHeader(
-                            fullTitle = "Mood Playlist",
-                            highlightPart = "Playlist",
-                            highlightColor = EchoPandaColors.AccentBlue,
-                            onViewAll = {}
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            state.moodPlaylists.forEach { playlist ->
-                                LabeledArtCard(
-                                    title = playlist.name,
-                                    subLabel = playlist.subLabel,
-                                    colors = playlist.placeholderColors,
-                                    imageUrl = playlist.imageUrl
-                                )
+                        // ── Music Genres ──────────────────────────────────────────────
+                        if (state.genres.isNotEmpty()) {
+                            SectionHeader(
+                                fullTitle = "Music Genres",
+                                highlightPart = "Genres",
+                                highlightColor = EchoPandaColors.AccentBlue,
+                                onViewAll = {}
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                state.genres.forEach { genre ->
+                                    LabeledArtCard(
+                                        title = genre.name,
+                                        subLabel = genre.subLabel,
+                                        colors = genre.placeholderColors,
+                                        imageUrl = genre.imageUrl
+                                    )
+                                }
                             }
+                            Spacer(Modifier.height(32.dp))
                         }
-                        Spacer(Modifier.height(32.dp))
-                    }
 
-                    // ── New Release Songs ─────────────────────────────────────────
-                    if (state.newReleases.isNotEmpty()) {
-                        SectionHeader(
-                            fullTitle = "New Release Songs",
-                            highlightPart = "Songs",
-                            highlightColor = EchoPandaColors.AccentBlue,
-                            onViewAll = {}
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Column(
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        ) {
-                            state.newReleases.take(4).forEachIndexed { index, track ->
-                                SongCardHorizontal(
-                                    track = track,
-                                    onClick = { 
-                                        globalPlayerViewModel.setQueue(state.newReleases, index)
-                                        onNavigateToSong(track.id, track.resumePositionMs) 
-                                    },
-                                    onFavoriteClick = { viewModel.toggleFavorite(track) }
-                                )
+                        // ── Mood Playlist ─────────────────────────────────────────────
+                        if (state.moodPlaylists.isNotEmpty()) {
+                            SectionHeader(
+                                fullTitle = "Mood Playlist",
+                                highlightPart = "Playlist",
+                                highlightColor = EchoPandaColors.AccentBlue,
+                                onViewAll = {}
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                state.moodPlaylists.forEach { playlist ->
+                                    LabeledArtCard(
+                                        title = playlist.name,
+                                        subLabel = playlist.subLabel,
+                                        colors = playlist.placeholderColors,
+                                        imageUrl = playlist.imageUrl
+                                    )
+                                }
                             }
+                            Spacer(Modifier.height(32.dp))
                         }
-                    }
 
-                    // ── Popular Artists ───────────────────────────────────────────
-                    if (!state.isSearchActive && state.popularArtists.isNotEmpty()) {
-                        SectionHeader(
-                            fullTitle = "Popular Artists",
-                            highlightPart = "Artists",
-                            highlightColor = EchoPandaColors.AccentBlue,
-                            onViewAll = {}
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            state.popularArtists.forEach { artist ->
-                                ArtistCircleCard(
-                                    artist = artist,
-                                    onClick = { onNavigateToArtist(artist.id) }
-                                )
+                        // ── New Release Songs ─────────────────────────────────────────
+                        if (state.newReleases.isNotEmpty()) {
+                            SectionHeader(
+                                fullTitle = "New Release Songs",
+                                highlightPart = "Songs",
+                                highlightColor = EchoPandaColors.AccentBlue,
+                                onViewAll = {}
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Column(
+                                modifier = Modifier.padding(bottom = 16.dp)
+                            ) {
+                                state.newReleases.take(4).forEachIndexed { index, track ->
+                                    SongCardHorizontal(
+                                        track = track,
+                                        onClick = { 
+                                            globalPlayerViewModel.setQueue(state.newReleases, index)
+                                            onNavigateToSong(track.id, track.resumePositionMs) 
+                                        },
+                                        onFavoriteClick = { viewModel.toggleFavorite(track) }
+                                    )
+                                }
                             }
                         }
-                        Spacer(Modifier.height(32.dp))
-                    }
 
-                    // ── Most Played Songs ──────────────────────────────────────────
-                    if (!state.isSearchActive && state.mostPlayedSongs.isNotEmpty()) {
-                        SectionHeader(
-                            fullTitle = "Most Played Songs",
-                            highlightPart = "Songs",
-                            highlightColor = EchoPandaColors.AccentBlue,
-                            onViewAll = {}
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Column(
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        ) {
-                            state.mostPlayedSongs.take(4).forEachIndexed { index, track ->
-                                SongCardHorizontal(
-                                    track = track,
-                                    onClick = { 
-                                        globalPlayerViewModel.setQueue(state.mostPlayedSongs, index)
-                                        onNavigateToSong(track.id, track.resumePositionMs) 
-                                    },
-                                    onFavoriteClick = { viewModel.toggleFavorite(track) }
-                                )
+                        // ── Popular Artists ───────────────────────────────────────────
+                        if (!state.isSearchActive && state.popularArtists.isNotEmpty()) {
+                            SectionHeader(
+                                fullTitle = "Popular Artists",
+                                highlightPart = "Artists",
+                                highlightColor = EchoPandaColors.AccentBlue,
+                                onViewAll = {}
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                state.popularArtists.forEach { artist ->
+                                    ArtistCircleCard(
+                                        artist = artist,
+                                        onClick = { onNavigateToArtist(artist.id) }
+                                    )
+                                }
                             }
+                            Spacer(Modifier.height(32.dp))
                         }
-                        Spacer(Modifier.height(100.dp))
+
+                        // ── Most Played Songs ──────────────────────────────────────────
+                        if (!state.isSearchActive && state.mostPlayedSongs.isNotEmpty()) {
+                            SectionHeader(
+                                fullTitle = "Most Played Songs",
+                                highlightPart = "Songs",
+                                highlightColor = EchoPandaColors.AccentBlue,
+                                onViewAll = {}
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Column(
+                                modifier = Modifier.padding(bottom = 16.dp)
+                            ) {
+                                state.mostPlayedSongs.take(4).forEachIndexed { index, track ->
+                                    SongCardHorizontal(
+                                        track = track,
+                                        onClick = { 
+                                            globalPlayerViewModel.setQueue(state.mostPlayedSongs, index)
+                                            onNavigateToSong(track.id, track.resumePositionMs) 
+                                        },
+                                        onFavoriteClick = { viewModel.toggleFavorite(track) }
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(100.dp))
+                        }
                     }
                 }
             }
