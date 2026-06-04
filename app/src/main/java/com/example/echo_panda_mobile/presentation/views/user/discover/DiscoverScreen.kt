@@ -1,5 +1,10 @@
 package com.example.echo_panda_mobile.presentation.views.user.discover
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -28,6 +33,7 @@ import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.theme.LocalAppLanguage
 import com.example.echo_panda_mobile.presentation.viewmodel.DiscoverViewModel
 import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,11 +43,36 @@ fun DiscoverScreen(
     onNavigateToArtist: (String) -> Unit = {},
     onNavigateToAlbum: (String) -> Unit = {},
     onNavigateToSong: (String, Long?) -> Unit = { _, _ -> },
+    onViewAllArtists: () -> Unit = {},
+    onViewAllSongs: (String) -> Unit = {},
     viewModel: DiscoverViewModel = viewModel(),
     globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val ptrState = rememberPullToRefreshState()
+
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val spokenText = results?.get(0) ?: ""
+            if (spokenText.isNotEmpty()) {
+                if (!state.isSearchActive) viewModel.toggleSearch()
+                viewModel.onSearchQueryChange(spokenText)
+            }
+        }
+    }
+
+    val onVoiceSearch = {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to search...")
+        }
+        speechLauncher.launch(intent)
+    }
     
     Box(
         modifier = Modifier
@@ -56,7 +87,8 @@ fun DiscoverScreen(
                     query = state.searchQuery,
                     isSearchActive = state.isSearchActive,
                     onQueryChange = viewModel::onSearchQueryChange,
-                    onToggleSearch = viewModel::toggleSearch
+                    onToggleSearch = viewModel::toggleSearch,
+                    onVoiceSearch = onVoiceSearch
                 )
             },
             bottomBar = { EchoPandaBottomBar(selectedNav, onNavSelect) }
@@ -121,7 +153,7 @@ fun DiscoverScreen(
                                 fullTitle = "Music Genres",
                                 highlightPart = "Genres",
                                 highlightColor = EchoPandaColors.AccentBlue,
-                                onViewAll = {}
+                                onViewAll = { onNavSelect(2) }
                             )
                             Spacer(Modifier.height(16.dp))
                             Row(
@@ -135,7 +167,8 @@ fun DiscoverScreen(
                                         title = genre.name,
                                         subLabel = genre.subLabel,
                                         colors = genre.placeholderColors,
-                                        imageUrl = genre.imageUrl
+                                        imageUrl = genre.imageUrl,
+                                        onClick = { onNavSelect(2) }
                                     )
                                 }
                             }
@@ -148,7 +181,7 @@ fun DiscoverScreen(
                                 fullTitle = "Mood Playlist",
                                 highlightPart = "Playlist",
                                 highlightColor = EchoPandaColors.AccentBlue,
-                                onViewAll = {}
+                                onViewAll = { onNavSelect(3) }
                             )
                             Spacer(Modifier.height(16.dp))
                             Row(
@@ -162,7 +195,8 @@ fun DiscoverScreen(
                                         title = playlist.name,
                                         subLabel = playlist.subLabel,
                                         colors = playlist.placeholderColors,
-                                        imageUrl = playlist.imageUrl
+                                        imageUrl = playlist.imageUrl,
+                                        onClick = { onNavSelect(3) }
                                     )
                                 }
                             }
@@ -175,7 +209,7 @@ fun DiscoverScreen(
                                 fullTitle = "New Release Songs",
                                 highlightPart = "Songs",
                                 highlightColor = EchoPandaColors.AccentBlue,
-                                onViewAll = {}
+                                onViewAll = { onViewAllSongs("New Releases") }
                             )
                             Spacer(Modifier.height(8.dp))
                             Column(
@@ -200,7 +234,7 @@ fun DiscoverScreen(
                                 fullTitle = "Popular Artists",
                                 highlightPart = "Artists",
                                 highlightColor = EchoPandaColors.AccentBlue,
-                                onViewAll = {}
+                                onViewAll = onViewAllArtists
                             )
                             Spacer(Modifier.height(16.dp))
                             Row(
@@ -225,7 +259,7 @@ fun DiscoverScreen(
                                 fullTitle = "Most Played Songs",
                                 highlightPart = "Songs",
                                 highlightColor = EchoPandaColors.AccentBlue,
-                                onViewAll = {}
+                                onViewAll = { onViewAllSongs("Most Played") }
                             )
                             Spacer(Modifier.height(8.dp))
                             Column(
@@ -257,7 +291,8 @@ private fun DiscoverTopBar(
     query: String,
     isSearchActive: Boolean,
     onQueryChange: (String) -> Unit,
-    onToggleSearch: () -> Unit
+    onToggleSearch: () -> Unit,
+    onVoiceSearch: () -> Unit
 ) {
     if (isSearchActive) {
         Row(
@@ -288,9 +323,14 @@ private fun DiscoverTopBar(
                 shape = RoundedCornerShape(12.dp),
                 singleLine = true,
                 trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
+                    Row {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { onQueryChange("") }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
+                            }
+                        }
+                        IconButton(onClick = onVoiceSearch) {
+                            Icon(Icons.Default.Mic, contentDescription = "Voice Search", tint = Color.Gray)
                         }
                     }
                 }
@@ -321,10 +361,10 @@ private fun DiscoverTopBar(
                 fontWeight = FontWeight.Bold
             )
             
-            IconButton(onClick = { /* Open Menu */ }) {
+            IconButton(onClick = onVoiceSearch) {
                 Icon(
-                    Icons.Default.Menu,
-                    contentDescription = "Menu",
+                    Icons.Default.Mic,
+                    contentDescription = "Voice Search",
                     tint = EchoPandaColors.AccentBlue,
                     modifier = Modifier.size(28.dp)
                 )

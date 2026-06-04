@@ -15,25 +15,7 @@ object LibraryRepository {
         Artist(id = "a2", name = "The Neighbourhood", placeholderColors = listOf(Color(0xFF1A2A4A), Color(0xFF0A1228)))
     )
 
-    private val initialPlaylists = listOf(
-        Playlist(
-            id = "p1",
-            title = "Chill Vibes",
-            placeholderColors = listOf(Color(0xFF0D1F2A), Color(0xFF11304A))
-        ),
-        Playlist(
-            id = "p2",
-            title = "Top Hits",
-            placeholderColors = listOf(Color(0xFF2A1F33), Color(0xFF3B2A51))
-        ),
-        Playlist(
-            id = "p3",
-            title = "Workout",
-            placeholderColors = listOf(Color(0xFF2A2A1E), Color(0xFF3A3A24))
-        )
-    )
-
-    private val _playlists = MutableStateFlow(initialPlaylists)
+    private val _playlists = MutableStateFlow<List<Playlist>>(emptyList())
     val playlists: StateFlow<List<Playlist>> = _playlists.asStateFlow()
 
     private val _followedArtists = MutableStateFlow(initialArtists)
@@ -42,12 +24,10 @@ object LibraryRepository {
     private val _favoriteTracks = MutableStateFlow<List<Track>>(emptyList())
     val favoriteTracks: StateFlow<List<Track>> = _favoriteTracks.asStateFlow()
 
-    private val playlistTracks: MutableMap<String, MutableSet<String>> = initialPlaylists
-        .associate { it.id to mutableSetOf<String>() }
-        .toMutableMap()
+    private val playlistTracks: MutableMap<String, MutableSet<String>> = mutableMapOf()
 
     fun createPlaylist(title: String): Playlist {
-        val trimmedTitle = title.trim().takeIf { it.isNotBlank() } ?: return initialPlaylists.first()
+        val trimmedTitle = title.trim().takeIf { it.isNotBlank() } ?: "Untitled Playlist"
         val newPlaylist = Playlist(
             id = UUID.randomUUID().toString(),
             title = trimmedTitle,

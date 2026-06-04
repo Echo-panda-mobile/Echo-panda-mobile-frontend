@@ -17,6 +17,8 @@ import com.example.echo_panda_mobile.presentation.views.user.player.PlayerScreen
 import com.example.echo_panda_mobile.presentation.views.user.profile.UserProfileScreen
 import com.example.echo_panda_mobile.presentation.views.user.profile.UserSettingsScreen
 import com.example.echo_panda_mobile.presentation.views.user.artist.ArtistDetailScreen
+import com.example.echo_panda_mobile.presentation.views.user.artist.AllArtistsScreen
+import com.example.echo_panda_mobile.presentation.views.user.discover.AllSongsScreen
 
 fun NavGraphBuilder.userNavGraph(
     navController: NavController,
@@ -46,6 +48,22 @@ fun NavGraphBuilder.userNavGraph(
                     val route = Routes.ARTIST_VIEW.replace("{artistId}", artistId)
                     android.util.Log.d("NAVIGATION", "Navigating to: $route")
                     navController.navigate(route)
+                },
+                onViewAllArtists = {
+                    android.util.Log.d("NAVIGATION", "Navigating to: ${Routes.USER_ALL_ARTISTS}")
+                    navController.navigate(Routes.USER_ALL_ARTISTS)
+                },
+                onViewAllAlbums = {
+                    android.util.Log.d("NAVIGATION", "Navigating to: ${Routes.USER_ALBUMS}")
+                    navController.navigate(Routes.USER_ALBUMS)
+                },
+                onNavigateToPlayer = { trackId, resumeMs ->
+                    var route = Routes.USER_PLAYER.replace("{trackId}", trackId)
+                    if (resumeMs != null) {
+                        route += "?resumeMs=$resumeMs"
+                    }
+                    android.util.Log.d("NAVIGATION", "Navigating to player: $route")
+                    navController.navigate(route)
                 }
             )
         }
@@ -69,6 +87,42 @@ fun NavGraphBuilder.userNavGraph(
                 onNavigateToSong = { trackId, _ ->
                     val route = Routes.USER_PLAYER.replace("{trackId}", trackId)
                     android.util.Log.d("NAVIGATION", "Navigating to: $route")
+                    navController.navigate(route)
+                },
+                onViewAllArtists = {
+                    navController.navigate(Routes.USER_ALL_ARTISTS)
+                },
+                onViewAllSongs = { type ->
+                    val route = Routes.USER_ALL_SONGS.replace("{type}", type)
+                    navController.navigate(route)
+                }
+            )
+        }
+
+        composable(Routes.USER_ALL_ARTISTS) {
+            AllArtistsScreen(
+                selectedNav = selectedNav,
+                onNavSelect = onNavSelect,
+                onBack = { navController.popBackStack() },
+                onNavigateToArtist = { artistId ->
+                    val route = Routes.ARTIST_VIEW.replace("{artistId}", artistId)
+                    navController.navigate(route)
+                }
+            )
+        }
+
+        composable(
+            route = Routes.USER_ALL_SONGS,
+            arguments = listOf(navArgument("type") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val type = backStackEntry.arguments?.getString("type") ?: "Songs"
+            AllSongsScreen(
+                type = type,
+                selectedNav = selectedNav,
+                onNavSelect = onNavSelect,
+                onBack = { navController.popBackStack() },
+                onNavigateToPlayer = { trackId, _ ->
+                    val route = Routes.USER_PLAYER.replace("{trackId}", trackId)
                     navController.navigate(route)
                 }
             )
@@ -135,8 +189,7 @@ fun NavGraphBuilder.userNavGraph(
                     android.util.Log.d("NAVIGATION", "Navigating to: $route")
                     navController.navigate(route)
                 },
-                onSearch = { /* TODO */ },
-                onVoiceSearch = { /* TODO */ }
+                onSearch = { /* TODO */ }
             )
         }
 
@@ -159,12 +212,21 @@ fun NavGraphBuilder.userNavGraph(
         }
 
         composable(
-            route = Routes.USER_PLAYER,
-            arguments = listOf(navArgument("trackId") { type = NavType.StringType })
+            route = "${Routes.USER_PLAYER}?resumeMs={resumeMs}",
+            arguments = listOf(
+                navArgument("trackId") { type = NavType.StringType },
+                navArgument("resumeMs") { 
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
         ) { backStackEntry ->
             val trackId = backStackEntry.arguments?.getString("trackId") ?: ""
+            val resumeMs = backStackEntry.arguments?.getString("resumeMs")?.toLongOrNull()
             PlayerScreen(
                 trackId = trackId,
+                resumePositionMs = resumeMs,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -182,6 +244,12 @@ fun NavGraphBuilder.userNavGraph(
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }
+                },
+                onNavigateToFavorites = {
+                    navController.navigate(Routes.USER_FAVORITES)
+                },
+                onNavigateToLibrary = {
+                    navController.navigate(Routes.USER_LIBRARY)
                 }
             )
         }

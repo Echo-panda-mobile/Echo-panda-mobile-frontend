@@ -36,6 +36,15 @@ data class ArtistDto(
     @SerializedName("monthly_listeners") val monthlyListeners: String? = null
 )
 
+/** Popular-artist payload (`/api/artists/popular`); id is a string in the API response. */
+data class MbArtistDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("image_url") val imageUrl: String? = null,
+    @SerializedName("bio") val bio: String? = null,
+    @SerializedName("monthly_listeners") val monthlyListeners: String? = null
+)
+
 data class ArtistImageUrlResponse(
     @SerializedName("url") val url: String? = null,
     @SerializedName("signed_url") val signedUrl: String? = null,
@@ -300,6 +309,11 @@ interface MusicApiService {
 
     @GET("api/artists")
     suspend fun getArtists(): Response<BaseResponse<List<ArtistDto>>>
+
+    @GET("api/artists/popular")
+    suspend fun getPopularArtists(
+        @Query("limit") limit: Int? = null
+    ): Response<BaseResponse<List<MbArtistDto>>>
 
     @GET("api/artists/{id}")
     suspend fun getArtistDetail(

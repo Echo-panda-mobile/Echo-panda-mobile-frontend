@@ -153,14 +153,15 @@ class MusicRepository(
 
                         Playlist(
                             id = albumId,
-                            title = dto.album?.title ?: dto.resolvedTitle(),
+                            title = dto.resolvedTitle(),
                             imageUrl = imageUrl,
                             labelOverlay = dto.artistName ?: dto.artist?.name,
                             placeholderColors = getColorsForId(albumId),
-                            resumePositionMs = history.progressSeconds * 1000L
+                            resumePositionMs = history.progressSeconds * 1000L,
+                            trackId = dto.resolvedId()
                         )
                     }
-                }.awaitAll().distinctBy { it.id }
+                }.awaitAll().distinctBy { it.trackId ?: it.id }
                 MusicResult.Success(playlists)
             } else {
                 getNewAlbumsAsPlaylists()
@@ -198,20 +199,70 @@ class MusicRepository(
         }
     }
 
-    suspend fun getPopularArtists(): MusicResult<List<Artist>> = withContext(Dispatchers.IO) {
+    suspend fun getPopularArtists(limit: Int = 30): MusicResult<List<Artist>> = withContext(Dispatchers.IO) {
         val api = apiService ?: return@withContext MusicResult.Error("API service not initialized")
         try {
+            // 1. Try public popular artists endpoint (ranked by play count)
+            val popularResponse = api.getPopularArtists(limit = limit)
+            if (popularResponse.isSuccessful) {
+                val popularDtos = popularResponse.body()?.data ?: emptyList()
+                if (popularDtos.isNotEmpty()) {
+                    val artists = popularDtos.map { dto ->
+                        async { enrichArtist(dto.toDomain()) }
+                    }.awaitAll()
+                    return@withContext MusicResult.Success(artists)
+                }
+            }
+
+            // 2. Fallback: public artists list
             val response = api.getArtists()
             if (response.isSuccessful) {
                 val artistDtos = response.body()?.data ?: emptyList()
-                val artists = artistDtos.map { dto ->
-                    async { enrichArtist(dto.toDomain()) }
-                }.awaitAll()
-                MusicResult.Success(artists)
-            } else {
-                MusicResult.Error("Failed to fetch artists")
+                if (artistDtos.isNotEmpty()) {
+                    val artists = artistDtos.take(limit).map { dto ->
+                        async { enrichArtist(dto.toDomain()) }
+                    }.awaitAll()
+                    return@withContext MusicResult.Success(artists)
+                }
             }
+
+            // 3. Fallback: derive from albums and songs
+            Log.d("MusicRepository", "Popular artists endpoint empty, falling back to derivation")
+            val albumsDef = async { api.getAlbums(perPage = 50) }
+            val songsDef = async { api.getSongs() }
+
+            val albumDtos = (albumsDef.await().body()?.data ?: emptyList())
+            val songDtos = (songsDef.await().body()?.data ?: emptyList())
+
+            val artistMap = mutableMapOf<String, Artist>()
+
+            fun addArtist(name: String?, id: String?, imageUrl: String?) {
+                val artistName = name?.trim() ?: return
+                if (artistName.isBlank() || artistName.lowercase() == "unknown") return
+                
+                val key = artistName.lowercase()
+                if (!artistMap.containsKey(key)) {
+                    val resolvedId = id ?: java.net.URLEncoder.encode(artistName, "UTF-8")
+                    artistMap[key] = Artist(
+                        id = resolvedId,
+                        name = artistName,
+                        imageUrl = directImageUrl(imageUrl),
+                        placeholderColors = getColorsForId(resolvedId)
+                    )
+                }
+            }
+
+            songDtos.forEach { song ->
+                addArtist(song.artistName ?: song.artist?.name, song.artist?.id, null)
+            }
+            albumDtos.forEach { album ->
+                addArtist(album.artistName ?: album.artist?.name, album.artist?.id, null)
+            }
+
+            val derived = artistMap.values.toList().take(limit)
+            MusicResult.Success(derived)
         } catch (e: Exception) {
+            Log.e("MusicRepository", "Error fetching popular artists", e)
             MusicResult.Error(e.localizedMessage ?: "Network error")
         }
     }
@@ -557,6 +608,15 @@ class MusicRepository(
         bio = bio,
         monthlyListeners = monthlyListeners ?: "0M",
         placeholderColors = getColorsForId(id.toString())
+    )
+
+    private fun MbArtistDto.toDomain() = Artist(
+        id = id,
+        name = name,
+        imageUrl = directImageUrl(imageUrl),
+        bio = bio,
+        monthlyListeners = monthlyListeners ?: "0",
+        placeholderColors = getColorsForId(id)
     )
 
     private fun AlbumDto.toDomain() = Album(

@@ -916,7 +916,6 @@ fun RecentPlaylistCard(playlist: Playlist, modifier: Modifier = Modifier, onClic
             ArtPlaceholder(
                 colors = playlist.placeholderColors,
                 imageUrl = playlist.imageUrl,
-                overlayText = playlist.labelOverlay,
                 modifier = Modifier.fillMaxSize()
             )
         }

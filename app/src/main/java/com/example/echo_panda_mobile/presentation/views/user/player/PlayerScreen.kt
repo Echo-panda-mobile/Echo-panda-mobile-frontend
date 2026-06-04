@@ -108,8 +108,8 @@ fun PlayerScreen(
                             Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = EchoPandaColors.AccentBlue, modifier = Modifier.size(16.dp))
                         }
                     }
-                    IconButton(onClick = { /* More options */ }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More", tint = Color.White)
+                    IconButton(onClick = { showPlaylistPicker = true }) {
+                        Icon(Icons.Default.Add, contentDescription = "Add to Playlist", tint = Color.White)
                     }
                 }
 
@@ -225,24 +225,7 @@ fun PlayerScreen(
 
                 Spacer(Modifier.height(32.dp))
                 
-                // Extra actions (Plus and Download)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    IconButton(onClick = { showPlaylistPicker = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add to Playlist", tint = Color.White.copy(alpha = 0.5f))
-                    }
-                    IconButton(onClick = { viewModel.downloadTrack() }) {
-                        Icon(
-                            Icons.Default.Download,
-                            contentDescription = "Download",
-                            tint = if (track.isDownloaded) EchoPandaColors.AccentBlue else Color.White.copy(alpha = 0.5f)
-                        )
-                    }
-                }
 
-                Spacer(Modifier.height(48.dp))
 
                 // Lyrics Section
                 Text(

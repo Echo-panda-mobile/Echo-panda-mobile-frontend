@@ -23,7 +23,8 @@ data class PlayerUiState(
     val streamUrl: String? = null,
     val streamExpiresAt: Long = 0,
     val currentPositionMs: Long = 0,
-    val durationMs: Long = 0
+    val durationMs: Long = 0,
+    val pendingResumePositionMs: Long? = null
 )
 
 @OptIn(UnstableApi::class)
@@ -61,7 +62,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
     fun loadTrack(trackId: String, resumePositionMs: Long? = null) {
-        android.util.Log.d("PlayerViewModel", "loadTrack called with ID: $trackId")
+        android.util.Log.d("PlayerViewModel", "loadTrack called with ID: $trackId, resume: $resumePositionMs")
         
         // If the track is already the current one in the manager, just update UI
         val current = playerManager.currentTrack.value
@@ -71,7 +72,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, pendingResumePositionMs = resumePositionMs) }
             val result = musicRepository.getTrackById(trackId)
             if (result is MusicResult.Success) {
                 val track = result.data
@@ -114,11 +115,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     val ticket = result.data
                     val audioUrl = ticket.signedUrl ?: ticket.streamUrl ?: ticket.url
                     if (audioUrl != null) {
+                        val resumePos = _uiState.value.pendingResumePositionMs ?: 0L
                         _uiState.update { it.copy(
                             streamUrl = audioUrl,
-                            streamExpiresAt = System.currentTimeMillis() + ((ticket.expiresInSeconds ?: 300) * 1000)
+                            streamExpiresAt = System.currentTimeMillis() + ((ticket.expiresInSeconds ?: 300) * 1000),
+                            pendingResumePositionMs = null // Clear after use
                         ) }
-                        playerManager.play(audioUrl, track.title, track.artist, track.album)
+                        playerManager.play(audioUrl, track.title, track.artist, track.album, resumePositionMs = resumePos)
                     } else {
                         _uiState.update { it.copy(errorMessage = "Stream URL not found") }
                     }

@@ -164,9 +164,7 @@ private fun AlbumDetailTopBar(onBack: () -> Unit) {
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
         )
-        IconButton(onClick = { /* TODO */ }) {
-            Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Color.White)
-        }
+        Spacer(Modifier.width(48.dp)) // Placeholder for balance
     }
 }
 

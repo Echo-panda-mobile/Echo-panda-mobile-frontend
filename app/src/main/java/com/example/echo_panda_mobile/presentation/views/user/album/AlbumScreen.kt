@@ -1,5 +1,10 @@
 package com.example.echo_panda_mobile.presentation.views.user.album
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,6 +38,7 @@ import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.theme.LocalAppLanguage
 import com.example.echo_panda_mobile.presentation.theme.LocalIsDarkTheme
 import com.example.echo_panda_mobile.presentation.viewsmodel.AlbumViewModel
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,10 +47,33 @@ fun AlbumScreen(
     onNavSelect: (Int) -> Unit = {},
     onNavigateToDetail: (String) -> Unit = {},
     onSearch: (String) -> Unit = {},
-    onVoiceSearch: () -> Unit = {},
     viewModel: AlbumViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val spokenText = results?.get(0) ?: ""
+            if (spokenText.isNotEmpty()) {
+                if (!state.isSearchActive) viewModel.toggleSearch()
+                viewModel.onSearchQueryChange(spokenText)
+            }
+        }
+    }
+
+    val onVoiceSearch = {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to search albums...")
+        }
+        speechLauncher.launch(intent)
+    }
+
     val isDark = LocalIsDarkTheme.current
     val bgStart = if (isDark) EchoPandaColors.BgDarkStart else EchoPandaColors.BgLightStart
     val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -343,11 +372,20 @@ private fun AlbumTopBar(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent
                 ),
-                singleLine = true
+                singleLine = true,
+                trailingIcon = {
+                    Row {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { onChange("") }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
+                            }
+                        }
+                        IconButton(onClick = onVoiceSearch) {
+                            Icon(Icons.Default.Mic, contentDescription = "Voice Search", tint = Color.Gray)
+                        }
+                    }
+                }
             )
-            IconButton(onClick = onSearch) {
-                Icon(Icons.Default.Search, contentDescription = "Search", tint = EchoPandaColors.AccentBlue)
-            }
         }
     } else {
         Row(
@@ -375,42 +413,13 @@ private fun AlbumTopBar(
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Default.Mic,
-                    contentDescription = "Voice Search",
-                    tint = EchoPandaColors.AccentBlue,
-                    modifier = Modifier.size(26.dp).clickable { onVoiceSearch() }
-                )
-                Spacer(Modifier.width(16.dp))
-                
-                var showMenu by remember { mutableStateOf(false) }
-                Box {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(
-                            Icons.Default.Menu,
-                            contentDescription = "Menu",
-                            tint = EchoPandaColors.AccentBlue,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false },
-                        modifier = Modifier.background(EchoPandaColors.BgCardDark)
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Sort by Name", color = Color.White) },
-                            onClick = { showMenu = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Sort by Artist", color = Color.White) },
-                            onClick = { showMenu = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Settings", color = Color.White) },
-                            onClick = { showMenu = false }
-                        )
-                    }
+                IconButton(onClick = onVoiceSearch) {
+                    Icon(
+                        Icons.Default.Mic,
+                        contentDescription = "Voice Search",
+                        tint = EchoPandaColors.AccentBlue,
+                        modifier = Modifier.size(26.dp)
+                    )
                 }
             }
         }

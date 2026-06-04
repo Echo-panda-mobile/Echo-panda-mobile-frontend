@@ -44,6 +44,9 @@ fun HomeScreen(
     onNavigateToProfile: () -> Unit = {},
     onNavigateToAlbum: (String) -> Unit = {},
     onNavigateToArtist: (String) -> Unit = {},
+    onViewAllArtists: () -> Unit = {},
+    onViewAllAlbums: () -> Unit = {},
+    onNavigateToPlayer: (String, Long?) -> Unit = { _, _ -> },
     viewModel: HomeViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -78,7 +81,7 @@ fun HomeScreen(
                 )
             }
         ) {
-            if (state.isLoading && state.recentPlaylists.isEmpty()) {
+            if (state.isLoading && state.recentListening.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -103,7 +106,7 @@ fun HomeScreen(
                     Spacer(Modifier.height(16.dp))
 
                     // ── Continue Listening ──────────────────────────────────────
-                    if (state.recentPlaylists.isNotEmpty()) {
+                    if (state.recentListening.isNotEmpty()) {
                         Text(
                             text = "Continue Listening",
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -116,15 +119,20 @@ fun HomeScreen(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            state.recentPlaylists.take(6).chunked(2).forEach { rowItems ->
+                            state.recentListening.take(6).chunked(2).forEach { rowItems ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     rowItems.forEach { playlist ->
                                         RecentPlaylistCard(
                                             playlist = playlist,
                                             modifier = Modifier.weight(1f),
                                             onClick = { 
-                                                android.util.Log.d("HomeScreen", "Continue Listening: Navigating to Album ID ${playlist.id}")
-                                                onNavigateToAlbum(playlist.id)
+                                                if (playlist.trackId != null) {
+                                                    android.util.Log.d("HomeScreen", "Continue Listening: Navigating to Player for Track ID ${playlist.trackId} at ${playlist.resumePositionMs}ms")
+                                                    onNavigateToPlayer(playlist.trackId, playlist.resumePositionMs)
+                                                } else {
+                                                    android.util.Log.d("HomeScreen", "Continue Listening: Navigating to Album ID ${playlist.id}")
+                                                    onNavigateToAlbum(playlist.id)
+                                                }
                                             }
                                         )
                                     }
@@ -140,7 +148,7 @@ fun HomeScreen(
                         fullTitle = "Popular Artists",
                         highlightPart = "Artists",
                         highlightColor = EchoPandaColors.AccentBlue,
-                        onViewAll = { /* TODO */ }
+                        onViewAll = onViewAllArtists
                     )
                     Spacer(Modifier.height(16.dp))
                     Row(
@@ -165,7 +173,7 @@ fun HomeScreen(
                         fullTitle = "Top Albums",
                         highlightPart = "Albums",
                         highlightColor = EchoPandaColors.AccentBlue,
-                        onViewAll = { /* TODO */ }
+                        onViewAll = onViewAllAlbums
                     )
                     Spacer(Modifier.height(16.dp))
                     Row(
@@ -198,39 +206,9 @@ fun HomeScreen(
                         Spacer(Modifier.height(32.dp))
                     }
 
-                    // ── Based on your recent listening ────────────────────────────
-                    if (state.recentListening.isNotEmpty()) {
-                        Text(
-                            text = "Based on your recent listening",
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            state.recentListening.forEach { playlist ->
-                                SquareArtCard(
-                                    colors = playlist.placeholderColors,
-                                    imageUrl = playlist.imageUrl,
-                                    size = 160.dp,
-                                    cornerRadius = 16.dp,
-                                    onClick = { 
-                                        android.util.Log.d("HomeScreen", "Recent Listening: Navigating to Album ID ${playlist.id}")
-                                        onNavigateToAlbum(playlist.id)
-                                    }
-                                )
-                            }
-                        }
-                    }
 
-                    Spacer(Modifier.height(100.dp))
+
+
                 }
             }
         }

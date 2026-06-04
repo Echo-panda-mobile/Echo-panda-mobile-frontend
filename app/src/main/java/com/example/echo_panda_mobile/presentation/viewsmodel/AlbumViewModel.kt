@@ -90,9 +90,10 @@ class AlbumViewModel(application: Application) : AndroidViewModel(application) {
             val filtered = if (query.isBlank()) {
                 source
             } else {
-                source.filter {
-                    it.title.contains(query, ignoreCase = true) ||
-                        it.artist.contains(query, ignoreCase = true)
+                val queryWords = query.trim().lowercase().split("\\s+".toRegex()).filter { it.isNotBlank() }
+                source.filter { album ->
+                    val target = "${album.title} ${album.artist}".lowercase()
+                    queryWords.all { word -> target.contains(word) }
                 }
             }
             state.copy(searchQuery = query, filteredAlbums = filtered)
@@ -112,7 +113,12 @@ class AlbumViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleSearch() {
-        _uiState.update { it.copy(isSearchActive = !it.isSearchActive, searchQuery = "") }
-        if (!_uiState.value.isSearchActive) onSearchQueryChange("")
+        _uiState.update { state ->
+            val nextActive = !state.isSearchActive
+            state.copy(
+                isSearchActive = nextActive,
+                searchQuery = if (nextActive) state.searchQuery else ""
+            )
+        }
     }
 }

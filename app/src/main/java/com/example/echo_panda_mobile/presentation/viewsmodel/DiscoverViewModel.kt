@@ -73,43 +73,61 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun onSearchQueryChange(query: String) {
-        _uiState.value = _uiState.value.copy(searchQuery = query)
+        _uiState.update { it.copy(searchQuery = query) }
+        
         if (query.isBlank()) {
-            _uiState.value = _uiState.value.copy(
-                genres = allGenres,
-                moodPlaylists = allMoods,
-                newReleases = allReleases,
-                searchResults = emptyList()
-            )
+            _uiState.update { state ->
+                state.copy(
+                    genres = allGenres,
+                    moodPlaylists = allMoods,
+                    newReleases = allReleases,
+                    searchResults = emptyList()
+                )
+            }
         } else {
-            val lowerQuery = query.lowercase()
-            _uiState.value = _uiState.value.copy(
-                genres = allGenres.filter { it.name.lowercase().contains(lowerQuery) },
-                moodPlaylists = allMoods.filter { it.name.lowercase().contains(lowerQuery) },
-                newReleases = allReleases.filter { it.title.lowercase().contains(lowerQuery) || it.artist.lowercase().contains(lowerQuery) }
-            )
+            val queryWords = query.trim().lowercase().split("\\s+".toRegex()).filter { it.isNotBlank() }
+            
+            _uiState.update { state ->
+                state.copy(
+                    genres = allGenres.filter { genre ->
+                        val target = genre.name.lowercase()
+                        queryWords.all { word -> target.contains(word) }
+                    },
+                    moodPlaylists = allMoods.filter { mood ->
+                        val target = mood.name.lowercase()
+                        queryWords.all { word -> target.contains(word) }
+                    },
+                    newReleases = allReleases.filter { track ->
+                        val target = "${track.title} ${track.artist}".lowercase()
+                        queryWords.all { word -> target.contains(word) }
+                    }
+                )
+            }
+            
             // Simulate album search
             viewModelScope.launch {
                 val albumsResult = repository.getTopAlbums()
                 if (albumsResult is MusicResult.Success) {
-                    _uiState.value = _uiState.value.copy(
-                        searchResults = albumsResult.data.filter { 
-                            it.title.lowercase().contains(lowerQuery) || it.artist.lowercase().contains(lowerQuery) 
-                        }
-                    )
+                    _uiState.update { state ->
+                        state.copy(
+                            searchResults = albumsResult.data.filter { album ->
+                                val target = "${album.title} ${album.artist}".lowercase()
+                                queryWords.all { word -> target.contains(word) }
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 
     fun toggleSearch() {
-        val nextActive = !_uiState.value.isSearchActive
-        _uiState.value = _uiState.value.copy(
-            isSearchActive = nextActive,
-            searchQuery = if (!nextActive) "" else _uiState.value.searchQuery
-        )
-        if (!nextActive) {
-            onSearchQueryChange("")
+        _uiState.update { state ->
+            val nextActive = !state.isSearchActive
+            state.copy(
+                isSearchActive = nextActive,
+                searchQuery = if (nextActive) state.searchQuery else ""
+            )
         }
     }
 

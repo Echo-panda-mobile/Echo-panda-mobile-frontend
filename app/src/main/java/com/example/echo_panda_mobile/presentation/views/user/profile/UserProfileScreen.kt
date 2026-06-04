@@ -15,6 +15,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,10 +42,13 @@ fun UserProfileScreen(
     onSettings: () -> Unit,
     onEditProfile: () -> Unit,
     onLogoutSuccess: () -> Unit,
+    onNavigateToFavorites: () -> Unit,
+    onNavigateToLibrary: () -> Unit,
     viewModel: UserProfileViewModel = viewModel(factory = UserProfileViewModelFactory(LocalContext.current))
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
+    val ptrState = rememberPullToRefreshState()
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -102,13 +108,14 @@ fun UserProfileScreen(
                     )
                     OutlinedTextField(
                         value = newEmail,
-                        onValueChange = { newEmail = it },
+                        onValueChange = { },
                         label = { Text("Email") },
+                        enabled = false,
                         colors = TextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent
+                            disabledTextColor = Color.White.copy(alpha = 0.6f),
+                            disabledContainerColor = Color.Transparent,
+                            disabledIndicatorColor = Color.White.copy(alpha = 0.2f),
+                            disabledLabelColor = Color.White.copy(alpha = 0.4f)
                         )
                     )
                 }
@@ -165,155 +172,190 @@ fun UserProfileScreen(
         },
         containerColor = EchoPandaColors.BgDarkEnd
     ) { padding ->
-        if (uiState.isLoading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
+        PullToRefreshBox(
+            state = ptrState,
+            isRefreshing = uiState.isLoading,
+            onRefresh = { viewModel.loadUserProfile() },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    state = ptrState,
+                    isRefreshing = uiState.isLoading,
+                    containerColor = Color(0xFF1A1A26),
+                    color = EchoPandaColors.AccentBlue,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
             }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(scrollState)
-                    .padding(horizontal = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.height(24.dp))
+        ) {
+            if (uiState.isLoading && uiState.user == null) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                // Profile Image
-                Box(contentAlignment = Alignment.BottomEnd) {
-                    Box(
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF0F2537)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (uiState.user?.photoUrl != null) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data(uiState.user?.photoUrl)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = "Profile Picture",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
+                    // Profile Image
+                    Box(contentAlignment = Alignment.BottomEnd) {
+                        Box(
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF0F2537)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (uiState.user?.photoUrl != null) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(LocalContext.current)
+                                        .data(uiState.user?.photoUrl)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = "Profile Picture",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(70.dp),
+                                    tint = EchoPandaColors.AccentBlue
+                                )
+                            }
+                        }
+                        
+                        // Edit Profile Picture Icon
+                        IconButton(
+                            onClick = { photoPickerLauncher.launch("image/*") },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(EchoPandaColors.AccentBlue)
+                        ) {
                             Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                modifier = Modifier.size(70.dp),
-                                tint = EchoPandaColors.AccentBlue
+                                Icons.Default.CameraAlt,
+                                contentDescription = "Change Profile Picture",
+                                tint = Color.Black,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
-                    
-                    // Edit Profile Picture Icon
-                    IconButton(
-                        onClick = { photoPickerLauncher.launch("image/*") },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(EchoPandaColors.AccentBlue)
-                    ) {
-                        Icon(
-                            Icons.Default.CameraAlt,
-                            contentDescription = "Change Profile Picture",
-                            tint = Color.Black,
-                            modifier = Modifier.size(18.dp)
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Name and Email
+                    Text(
+                        text = uiState.user?.name?.takeIf { it.isNotBlank() } ?: "—",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = uiState.user?.email?.takeIf { it.isNotBlank() } ?: "—",
+                        fontSize = 14.sp,
+                        color = EchoPandaColors.TextMutedDark
+                    )
+
+                    uiState.errorMessage?.let { message ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = message,
+                            fontSize = 12.sp,
+                            color = EchoPandaColors.ErrorRed
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    // Stats Cards
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        ProfileStatCard(
+                            count = uiState.playlists.size.toString(),
+                            label = "Playlists",
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable { onNavigateToLibrary() }
+                        )
+                        ProfileStatCard(
+                            count = uiState.likedSongsCount.toString(),
+                            label = "Liked Songs",
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable { onNavigateToFavorites() }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(40.dp))
+
+                    // Account Actions Section
+                    Text(
+                        text = "Account Actions",
+                        modifier = Modifier.fillMaxWidth(),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AccountActionItem(
+                            icon = Icons.Default.Edit,
+                            title = "Edit Profile",
+                            subtitle = "Update your information",
+                            onClick = { showEditProfileDialog = true }
+                        )
+                        AccountActionItem(
+                            icon = Icons.Default.LibraryMusic,
+                            title = "My Playlists",
+                            subtitle = if (uiState.playlists.size == 1) {
+                                "1 playlist created"
+                            } else {
+                                "${uiState.playlists.size} playlists created"
+                            },
+                            onClick = onNavigateToLibrary
+                        )
+                        AccountActionItem(
+                            icon = Icons.Default.Favorite,
+                            title = "Liked Songs",
+                            subtitle = if (uiState.likedSongsCount == 1) {
+                                "1 saved song"
+                            } else {
+                                "${uiState.likedSongsCount} saved songs"
+                            },
+                            onClick = onNavigateToFavorites
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    // Log Out Button
+                    Button(
+                        onClick = { showLogoutDialog = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B6B)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Log Out", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                    }
+
+                    Spacer(modifier = Modifier.height(40.dp))
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Name and Email
-                Text(
-                    text = uiState.user?.name ?: "John Doe",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    text = uiState.user?.email ?: "john.doe@example.com",
-                    fontSize = 14.sp,
-                    color = EchoPandaColors.TextMutedDark
-                )
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Stats Cards
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    ProfileStatCard(
-                        count = uiState.playlists.size.toString(),
-                        label = "Playlists",
-                        modifier = Modifier.weight(1f)
-                    )
-                    ProfileStatCard(
-                        count = "0",
-                        label = "Followers",
-                        modifier = Modifier.weight(1f)
-                    )
-                    ProfileStatCard(
-                        count = uiState.followingCount.toString(),
-                        label = "Following",
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(40.dp))
-
-                // Account Actions Section
-                Text(
-                    text = "Account Actions",
-                    modifier = Modifier.fillMaxWidth(),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AccountActionItem(
-                        icon = Icons.Default.Edit,
-                        title = "Edit Profile",
-                        subtitle = "Update your information",
-                        onClick = { showEditProfileDialog = true }
-                    )
-                    AccountActionItem(
-                        icon = Icons.Default.Favorite,
-                        title = "Liked Songs",
-                        subtitle = "View your saved songs",
-                        onClick = { /* Navigate to Liked Songs */ }
-                    )
-                    AccountActionItem(
-                        icon = Icons.Default.FileDownload,
-                        title = "Download Management",
-                        subtitle = "Manage your downloads",
-                        onClick = { /* Navigate to Downloads */ }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Log Out Button
-                Button(
-                    onClick = { showLogoutDialog = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B6B)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Log Out", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
-                }
-
-                Spacer(modifier = Modifier.height(40.dp))
             }
         }
     }
