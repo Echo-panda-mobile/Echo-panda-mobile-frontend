@@ -1,22 +1,44 @@
 package com.example.echo_panda_mobile.presentation.views.admin
 
+import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Stars
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.echo_panda_mobile.data.remote.BackendUser
+import com.example.echo_panda_mobile.presentation.viewsmodel.AdminUserDetailViewModel
+import com.example.echo_panda_mobile.presentation.viewsmodel.AdminUserDetailViewModelFactory
 
 private val BgDark = Color(0xFF05070D)
 private val CardBg = Color(0xFF161C24)
@@ -30,15 +52,11 @@ fun AdminUserDetailScreen(
     role: String,
     onBack: () -> Unit
 ) {
-    // Mock data for detail view
-    val user = AdminUserRecord(
-        id = userId,
-        name = "Pory Morokot",
-        email = "morokotpory@gmail.com",
-        joinedDate = "May 24, 2026",
-        status = "ACTIVE",
-        role = role
+    val application = LocalContext.current.applicationContext as Application
+    val viewModel: AdminUserDetailViewModel = viewModel(
+        factory = AdminUserDetailViewModelFactory(application, userId, role)
     )
+    val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
@@ -54,84 +72,112 @@ fun AdminUserDetailScreen(
         },
         containerColor = BgDark
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Profile Header
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(CircleShape)
-                    .background(AccentPurple.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = user.name.firstOrNull()?.toString() ?: "",
-                    color = AccentPurple,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 40.sp
-                )
+        when {
+            uiState.isLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = AccentPurple)
+                }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(user.name, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text(user.email, color = TextMuted, fontSize = 16.sp)
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Info Cards
-            DetailItem("User ID", user.id, Icons.Default.Fingerprint)
-            DetailItem(
-                label = "Status",
-                value = user.status,
-                icon = if (user.status == "ACTIVE") Icons.Default.CheckCircle else Icons.Default.Block,
-                color = if (user.status == "ACTIVE") Color(0xFF00C853) else Color(0xFFFF5252)
-            )
-            DetailItem("Joined Date", user.joinedDate, Icons.Default.CalendarToday)
-            DetailItem("Account Type", user.role, Icons.Default.Stars)
-
-            // --- Information shown ONLY for ARTISTS ---
-            if (user.role == "Artist") {
-                val artistRole = "Group" // Example: "Single" or "Group"
-                val artistGender = "Male" // Example: "Male" or "Female"
-                
-                DetailItem("Artist Role", artistRole, Icons.Default.Groups)
-                
-                val genderValue = if (artistRole == "Group") "They" else artistGender
-                DetailItem("Gender", genderValue, Icons.Default.Face)
-
-                DetailItem("Total Songs", "24 Tracks", Icons.Default.MusicNote)
-                DetailItem("Monthly Listeners", "12,400", Icons.Default.GraphicEq)
-                DetailItem("Verification", "Verified Artist", Icons.Default.Verified)
+            uiState.errorMessage != null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = uiState.errorMessage.orEmpty(),
+                        color = Color(0xFFFF6B6B),
+                        fontSize = 14.sp
+                    )
+                }
             }
 
-            // --- Information shown ONLY for ADMINS ---
-            if (user.role == "Admin") {
-                DetailItem("Permission Level", "Super Admin", Icons.Default.Security)
-                DetailItem("Last Access", "10 mins ago", Icons.Default.History)
+            uiState.user != null -> {
+                val user = uiState.user
+                if (user != null) {
+                    UserDetailContent(
+                        user = user,
+                        paddingValues = paddingValues,
+                        onBack = onBack
+                    )
+                }
             }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Action Buttons
-            Button(
-                onClick = { /* Handle Ban/Unban */ },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (user.status == "ACTIVE") Color(0xFFFF5252) else Color(0xFF00C853)
-                ),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text(if (user.status == "ACTIVE") "Ban User" else "Unban User", fontWeight = FontWeight.Bold)
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+}
+
+@Composable
+private fun UserDetailContent(
+    user: BackendUser,
+    paddingValues: PaddingValues,
+    onBack: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .clip(CircleShape)
+                .background(AccentPurple.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = user.name.firstOrNull()?.toString() ?: "",
+                color = AccentPurple,
+                fontWeight = FontWeight.Black,
+                fontSize = 40.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(user.name, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(user.email, color = TextMuted, fontSize = 16.sp)
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        DetailItem("User ID", user.id.toString(), Icons.Default.Fingerprint)
+        DetailItem(
+            label = "Role",
+            value = user.role.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
+            icon = Icons.Default.Stars
+        )
+        DetailItem("Linked Artist ID", user.artist_id?.toString() ?: "None", Icons.Default.MusicNote)
+
+        user.artist?.let { artist ->
+            DetailItem("Linked Artist", artist.name, Icons.Default.Star)
+            if (!artist.image_url.isNullOrBlank()) {
+                DetailItem("Artist Image", artist.image_url, Icons.Default.Image)
+            }
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        Button(
+            onClick = onBack,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = AccentPurple),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text("Back", fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 

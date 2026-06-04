@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.echo_panda_mobile.presentation.viewsmodel.AdminDashboardViewModel
 
 private val BgDark = Color(0xFF05070D)
 private val CardBg = Color(0xFF161C24)
@@ -29,9 +31,11 @@ fun AdminDashboardScreen(
     selectedNav: Int,
     onNavSelect: (Int) -> Unit,
     onLogout: () -> Unit,
-    onProfileClick: () -> Unit
+    onProfileClick: () -> Unit,
+    viewModel: AdminDashboardViewModel = viewModel()
 ) {
     var searchQuery by remember { mutableStateOf("") }
+    val uiState by viewModel.uiState.collectAsState()
 
     Box(
         modifier = Modifier
@@ -67,93 +71,212 @@ fun AdminDashboardScreen(
                 )
             }
         ) { paddingValues ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 20.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Header Section
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            if (uiState.isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column {
-                        Text(
-                            text = "Admin Panel",
-                            color = Color.White,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                        Text(
-                            text = "EchoPanda Management",
-                            color = Color.White.copy(alpha = 0.5f),
-                            fontSize = 14.sp
-                        )
-                    }
-                    
-                    IconButton(
-                        onClick = onLogout,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.05f))
+                    CircularProgressIndicator(color = AccentCyan)
+                }
+            } else if (uiState.errorMessage != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Logout,
-                            contentDescription = "Logout",
-                            tint = Color.White
+                        Text(
+                            text = "Error loading dashboard",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
                         )
+                        Text(
+                            text = uiState.errorMessage ?: "Unknown error",
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                        Button(
+                            onClick = { viewModel.refresh() },
+                            modifier = Modifier.padding(top = 16.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan)
+                        ) {
+                            Text("Retry", color = BgDark)
+                        }
                     }
                 }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(horizontal = 20.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                Spacer(modifier = Modifier.height(32.dp))
+                    // Header Section
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Admin Panel",
+                                color = Color.White,
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                text = "EchoPanda Management",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 14.sp
+                            )
+                        }
 
-                // Stats Grid
-                Text(
-                    text = "System Overview",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    StatCard(
-                        label = "Total Users",
-                        value = "12,842",
-                        icon = Icons.Default.People,
-                        modifier = Modifier.weight(1f)
+                        IconButton(
+                            onClick = onLogout,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White.copy(alpha = 0.05f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Logout,
+                                contentDescription = "Logout",
+                                tint = Color.White
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    // Stats Grid
+                    Text(
+                        text = "System Overview",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
                     )
-                    StatCard(
-                        label = "Active Artists",
-                        value = "450",
-                        icon = Icons.Default.MusicNote,
-                        modifier = Modifier.weight(1f)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    val stats = uiState.stats
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        StatCard(
+                            label = "Total Users",
+                            value = stats?.totalUsers?.toString() ?: "0",
+                            icon = Icons.Default.People,
+                            modifier = Modifier.weight(1f)
+                        )
+                        StatCard(
+                            label = "Active Artists",
+                            value = stats?.activeArtists?.toString() ?: "0",
+                            icon = Icons.Default.MusicNote,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        StatCard(
+                            label = "Total Admins",
+                            value = stats?.totalAdmins?.toString() ?: "0",
+                            icon = Icons.Default.Security,
+                            modifier = Modifier.weight(1f)
+                        )
+                        StatCard(
+                            label = "Flagged Content",
+                            value = stats?.flaggedContent?.toString() ?: "0",
+                            icon = Icons.Default.Warning,
+                            modifier = Modifier.weight(1f),
+                            color = Color(0xFFFF5252)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        StatCard(
+                            label = "Pending Reports",
+                            value = stats?.pendingReports?.toString() ?: "0",
+                            icon = Icons.Default.Report,
+                            modifier = Modifier.weight(1f),
+                            color = Color(0xFFFFAB40)
+                        )
+                        StatCard(
+                            label = "Total Genres",
+                            value = stats?.totalGenres?.toString() ?: "0",
+                            icon = Icons.Default.Category,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(40.dp))
+
+                    // Content Statistics
+                    Text(
+                        text = "Content Metadata",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        StatCard(
+                            label = "Total Tags",
+                            value = stats?.totalTags?.toString() ?: "0",
+                            icon = Icons.Default.LocalOffer,
+                            modifier = Modifier.weight(1f),
+                            color = Color(0xFF00BCD4)
+                        )
+                        StatCard(
+                            label = "Total Songs",
+                            value = stats?.totalSongs?.toString() ?: "0",
+                            icon = Icons.Default.AudioFile,
+                            modifier = Modifier.weight(1f),
+                            color = Color(0xFF9C27B0)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        StatCard(
+                            label = "Total Albums",
+                            value = stats?.totalAlbums?.toString() ?: "0",
+                            icon = Icons.Default.Album,
+                            modifier = Modifier.weight(1f),
+                            color = Color(0xFF4CAF50)
+                        )
+                        // Placeholder card for balance
+                        StatCard(
+                            label = "System Status",
+                            value = "Active",
+                            icon = Icons.Default.CheckCircle,
+                            modifier = Modifier.weight(1f),
+                            color = Color(0xFF4CAF50)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(40.dp))
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    StatCard(
-                        label = "Flagged Content",
-                        value = "24",
-                        icon = Icons.Default.Warning,
-                        modifier = Modifier.weight(1f),
-                        color = Color(0xFFFF5252)
-                    )
-                    StatCard(
-                        label = "New Reports",
-                        value = "5",
-                        icon = Icons.Default.Report,
-                        modifier = Modifier.weight(1f),
-                        color = Color(0xFFFFAB40)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(40.dp))
             }
         }
     }

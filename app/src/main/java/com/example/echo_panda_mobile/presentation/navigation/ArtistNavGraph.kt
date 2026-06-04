@@ -6,19 +6,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import com.example.echo_panda_mobile.data.repository.TokenStorage
-import kotlinx.coroutines.launch
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
 import com.example.echo_panda_mobile.data.model.User
 import com.example.echo_panda_mobile.data.repository.AuthRepository
-import com.example.echo_panda_mobile.presentation.views.user.artist.*
+import com.example.echo_panda_mobile.data.repository.TokenStorage
+import com.example.echo_panda_mobile.presentation.views.artist.*
+import kotlinx.coroutines.launch
 
 fun NavGraphBuilder.artistNavGraph(
-    navController: NavController
+    navController: NavController,
+    tokenStorage: TokenStorage
 ) {
     navigation(
         startDestination = Routes.ARTIST_DASHBOARD,
@@ -42,10 +42,14 @@ fun NavGraphBuilder.artistNavGraph(
 
             ArtistDashboardScreen(
                 currentUser = currentUser,
-                onNavigate = { route -> navController.navigate(route) },
+                onNavigate = { route -> 
+                    android.util.Log.d("NAVIGATION", "ArtistDashboard navigating to: $route")
+                    navController.navigate(route) 
+                },
                 onLogout = {
                     scope.launch {
                         authRepo.logout()
+                        android.util.Log.d("NAVIGATION", "Artist Logout. Navigating to: ${Routes.LOGIN}")
                         navController.navigate(Routes.LOGIN) {
                             popUpTo(0) { inclusive = true }
                         }
@@ -55,19 +59,85 @@ fun NavGraphBuilder.artistNavGraph(
         }
 
         composable(Routes.ARTIST_MY_MUSIC) {
-            ArtistMusicScreen(onNavigate = { route -> navController.navigate(route) })
+            ArtistMusicScreen(onNavigate = { route -> 
+                android.util.Log.d("NAVIGATION", "ArtistMusic navigating to: $route")
+                navController.navigate(route) 
+            })
         }
 
         composable(Routes.ARTIST_UPLOAD) {
-            ArtistUploadScreen(onNavigate = { route -> navController.navigate(route) })
+            val authRepo = remember { AuthRepository(tokenStorage) }
+            var currentUser by remember { mutableStateOf<User?>(null) }
+            LaunchedEffect(Unit) {
+                currentUser = authRepo.getCurrentUserProfile()
+            }
+            ArtistUploadScreen(
+                currentUser = currentUser,
+                onNavigate = { route -> 
+                    android.util.Log.d("NAVIGATION", "ArtistUpload navigating to: $route")
+                    navController.navigate(route) 
+                }
+            )
         }
 
         composable(Routes.ARTIST_ANALYTICS) {
-            ArtistAnalyticsScreen(onNavigate = { route -> navController.navigate(route) })
+            ArtistAnalyticsScreen(onNavigate = { route -> 
+                android.util.Log.d("NAVIGATION", "ArtistAnalytics navigating to: $route")
+                navController.navigate(route) 
+            })
         }
 
         composable(Routes.ARTIST_PROFILE) {
-            ArtistProfileScreen(onNavigate = { route -> navController.navigate(route) })
+            ArtistProfileScreen(onNavigate = { route -> 
+                android.util.Log.d("NAVIGATION", "ArtistProfile navigating to: $route")
+                navController.navigate(route) 
+            })
+        }
+
+        composable(Routes.ARTIST_ALBUMS) {
+            ArtistAlbumManagementScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToCreate = { 
+                    android.util.Log.d("NAVIGATION", "Navigating to: ${Routes.ARTIST_CREATE_ALBUM}")
+                    navController.navigate(Routes.ARTIST_CREATE_ALBUM) 
+                }
+            )
+        }
+
+        composable(Routes.ARTIST_CREATE_ALBUM) {
+            val authRepo = remember { AuthRepository(tokenStorage) }
+            var currentUser by remember { mutableStateOf<User?>(null) }
+            LaunchedEffect(Unit) {
+                currentUser = authRepo.getCurrentUserProfile()
+            }
+            ArtistCreateAlbumScreen(
+                currentUser = currentUser,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.ARTIST_NOTIFICATIONS) {
+            ArtistNotificationScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.ARTIST_COMMENTS) {
+            ArtistCommentsScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.ARTIST_PREFERENCES) {
+            ArtistPreferencesScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.ARTIST_HELP_SUPPORT) {
+            ArtistHelpSupportScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.ARTIST_SECURITY) {
+            ArtistSecurityScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.ARTIST_EDIT_PROFILE) {
+            ArtistEditProfileScreen(onBack = { navController.popBackStack() })
         }
     }
 }

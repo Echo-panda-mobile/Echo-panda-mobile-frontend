@@ -41,10 +41,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             combine(
                 playerManager.isPlaying,
                 playerManager.currentPosition,
-                playerManager.duration
-            ) { playing, position, duration ->
-                Triple(playing, position, duration)
-            }.collect { (playing, position, duration) ->
+                playerManager.duration,
+                playerManager.currentTrack
+            ) { playing, position, duration, currentTrack ->
+                Quadruple(playing, position, duration, currentTrack)
+            }.collect { (playing, position, duration, currentTrack) ->
                 _uiState.update { it.copy(
                     isPlaying = playing,
                     currentPositionMs = position,
@@ -139,9 +140,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun next() {
+        playerManager.next()
+    }
+
+    fun previous() {
+        playerManager.previous()
+    }
+
     fun togglePlayPause() {
         val track = _uiState.value.track ?: return
         
+        // If already playing or paused (i.e., we have a loaded media item in the manager)
+        // and it's the same track, just toggle.
+        val currentInManager = playerManager.currentTrack.value
+        if (currentInManager?.id == track.id && _uiState.value.streamUrl != null) {
+            playerManager.togglePlayPause()
+            return
+        }
+
         viewModelScope.launch {
             // Check if we need a new stream ticket or if we haven't started playing yet
             val isExpired = _uiState.value.streamUrl == null || 
@@ -157,7 +174,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                             streamUrl = audioUrl,
                             streamExpiresAt = System.currentTimeMillis() + ((ticket.expiresInSeconds ?: 300) * 1000)
                         ) }
-                        playerManager.play(audioUrl, track.title, track.artist)
+                        playerManager.play(audioUrl, track.title, track.artist, track.album)
                     } else {
                         _uiState.update { it.copy(errorMessage = "Stream URL not found") }
                     }

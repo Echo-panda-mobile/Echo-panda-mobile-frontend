@@ -97,8 +97,20 @@ fun ArtistDetailScreen(
                     onAddToFavorites = { track ->
                         viewModel.toggleFavorite(track)
                     },
-                    onDashboardClick = onNavigateToDashboard
+                    onDashboardClick = onNavigateToDashboard,
+                    onPlayTopTracks = {
+                        if (state.popularTracks.isNotEmpty()) {
+                            globalPlayerViewModel.setQueue(state.popularTracks, 0)
+                            onNavigateToPlayer(state.popularTracks.first().id, null)
+                        }
+                    }
                 )
+
+                // ─── Biography Section ─────────────────────────────────────────
+                if (!artist.bio.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(32.dp))
+                    BiographySection(bio = artist.bio)
+                }
 
                 // ─── Albums Section ────────────────────────────────────────────
                 Spacer(modifier = Modifier.height(32.dp))
@@ -215,7 +227,8 @@ private fun PopularSection(
     onToggleFollow: () -> Unit,
     onTrackClick: (String, Long?) -> Unit,
     onAddToFavorites: (Track) -> Unit,
-    onDashboardClick: () -> Unit
+    onDashboardClick: () -> Unit,
+    onPlayTopTracks: () -> Unit = {}
 ) {
     val isArtistRole = state.currentUser?.role?.lowercase() == "artist"
     val isOwnProfile = isArtistRole && state.currentUser?.name != null && state.currentUser.name == state.artist?.name
@@ -274,7 +287,7 @@ private fun PopularSection(
                     .size(56.dp)
                     .clip(CircleShape)
                     .background(EchoPandaColors.AccentBlue)
-                    .clickable { /* Play Top Tracks */ },
+                    .clickable { onPlayTopTracks() },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.Black, modifier = Modifier.size(32.dp))
@@ -402,6 +415,34 @@ private fun PopularTrackItem(
 
     if (showPlaylistPicker) {
         PlaylistPickerDialog(track = track, onDismiss = { showPlaylistPicker = false })
+    }
+}
+
+@Composable
+private fun BiographySection(bio: String) {
+    Column(
+        modifier = Modifier.padding(horizontal = 16.dp)
+    ) {
+        Text(
+            text = "About",
+            color = Color.White,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Surface(
+            color = Color(0xFF121A26),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = bio,
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 14.sp,
+                lineHeight = 22.sp,
+                modifier = Modifier.padding(16.dp)
+            )
+        }
     }
 }
 

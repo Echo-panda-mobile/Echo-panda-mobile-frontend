@@ -166,6 +166,7 @@ private fun AlbumHeaderSection(album: com.example.echo_panda_mobile.data.model.A
         Row(verticalAlignment = Alignment.CenterVertically) {
             SquareArtCard(
                 colors = album.placeholderColors,
+                imageUrl = album.imageUrl,
                 size = 120.dp,
                 cornerRadius = 12.dp
             )

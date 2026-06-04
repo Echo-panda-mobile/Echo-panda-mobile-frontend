@@ -5,6 +5,17 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 class TokenStorage(context: Context) {
+    companion object {
+        @Volatile
+        private var instance: TokenStorage? = null
+
+        fun getInstance(context: Context): TokenStorage {
+            return instance ?: synchronized(this) {
+                instance ?: TokenStorage(context.applicationContext).also { instance = it }
+            }
+        }
+    }
+
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
@@ -18,7 +29,14 @@ class TokenStorage(context: Context) {
     )
 
     fun saveToken(token: String) {
-        sharedPreferences.edit().putString("auth_token", token).apply()
+        if (token.isBlank()) {
+            android.util.Log.e("TokenStorage", "⚠️ Attempted to save EMPTY token! Ignoring.")
+            return
+        }
+        android.util.Log.d("TokenStorage", "━━━ SAVING TOKEN ━━━")
+        android.util.Log.d("TokenStorage", "Token length: ${token.length}")
+        sharedPreferences.edit().putString("auth_token", token).commit()
+        android.util.Log.d("TokenStorage", "✓ SAVED_TOKEN: Committed to secure storage")
     }
 
     fun getToken(): String? {
@@ -26,7 +44,10 @@ class TokenStorage(context: Context) {
     }
 
     fun saveRole(role: String) {
-        sharedPreferences.edit().putString("user_role", role).apply()
+        if (role.isNotBlank()) {
+            sharedPreferences.edit().putString("user_role", role).commit()
+            android.util.Log.d("TokenStorage", "Saved role: $role")
+        }
     }
 
     fun getRole(): String? {
@@ -75,6 +96,7 @@ class TokenStorage(context: Context) {
     }
 
     fun clear() {
-        sharedPreferences.edit().clear().apply()
+        sharedPreferences.edit().clear().commit()
+        android.util.Log.d("TokenStorage", "✓ Cleared all stored data")
     }
 }

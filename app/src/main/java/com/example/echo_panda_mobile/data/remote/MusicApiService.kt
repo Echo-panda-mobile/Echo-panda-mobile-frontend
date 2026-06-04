@@ -5,6 +5,8 @@ import com.google.gson.JsonDeserializer
 import com.google.gson.JsonElement
 import com.google.gson.annotations.JsonAdapter
 import com.google.gson.annotations.SerializedName
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.*
 import java.lang.reflect.Type
@@ -12,7 +14,8 @@ import java.lang.reflect.Type
 // ─── Base Response Wrapper ──────────────────────────────────────────────────
 
 data class BaseResponse<T>(
-    @SerializedName("data") val data: T
+    @SerializedName("data") val data: T,
+    @SerializedName("message") val message: String? = null
 )
 
 data class PaginatedResponse<T>(
@@ -25,9 +28,11 @@ data class PaginatedResponse<T>(
 // ─── Artist DTOs ──────────────────────────────────────────────────────────────
 
 data class ArtistDto(
-    @SerializedName("id") val id: String,
+    @SerializedName("id") val id: Int,
     @SerializedName("name") val name: String,
     @SerializedName("image_url") val imageUrl: String? = null,
+    @SerializedName("cover_image_url") val coverImageUrl: String? = null,
+    @SerializedName("bio") val bio: String? = null,
     @SerializedName("monthly_listeners") val monthlyListeners: String? = null
 )
 
@@ -76,7 +81,6 @@ data class StreamTicketResponse(
 
 // ─── Album DTOs ───────────────────────────────────────────────────────────────
 
-/** API may return artist as a string (lists) or nested object (album detail). */
 data class AlbumArtistField(
     val id: String? = null,
     val name: String = "Unknown"
@@ -152,7 +156,40 @@ data class AlbumDto(
     val artist: AlbumArtistField? = null,
     @SerializedName("release_date") val releaseDate: String? = null,
     @SerializedName("description") val description: String? = null,
-    @SerializedName("cover_url") val coverUrl: String? = null
+    @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("cover_key") val coverKey: String? = null,
+    @SerializedName("release_status") val releaseStatus: String? = "published",
+    @SerializedName("songs_count") val songsCount: Int? = null,
+    @SerializedName("cover_image") val coverImage: String? = null
+) {
+    fun getDisplayCoverUrl(): String? = coverUrl ?: coverImage ?: coverKey
+}
+
+data class ArtistAlbumsResponse(
+    @SerializedName("success") val success: Boolean? = null,
+    @SerializedName("data") val data: List<AlbumDto>? = null,
+    @SerializedName("albums") val albums: List<AlbumDto>? = null
+) {
+    val allAlbums: List<AlbumDto> get() = data ?: albums ?: emptyList()
+}
+
+data class ArtistSongsResponse(
+    @SerializedName("success") val success: Boolean? = null,
+    @SerializedName("data") val data: List<SongDto>? = null,
+    @SerializedName("songs") val songs: List<SongDto>? = null,
+    @SerializedName("tracks") val tracks: List<SongDto>? = null
+) {
+    val allSongs: List<SongDto> get() = data ?: songs ?: tracks ?: emptyList()
+}
+
+data class CreateAlbumRequest(
+    @SerializedName("title") val title: String,
+    @SerializedName("artist") val artist: String,
+    @SerializedName("artist_id") val artistId: Int? = null,
+    @SerializedName("description") val description: String? = null,
+    @SerializedName("cover_key") val coverKey: String? = null,
+    @SerializedName("release_date") val releaseDate: String? = null,
+    @SerializedName("release_status") val releaseStatus: String? = "published"
 )
 
 // ─── Song DTOs ────────────────────────────────────────────────────────────────
@@ -171,9 +208,13 @@ data class SongDto(
     @SerializedName("track_number") val trackNumber: Int? = null,
     @SerializedName("album_id") val albumId: Int? = null,
     @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("cover_key") val coverKey: String? = null,
+    @SerializedName("audio_url") val audioUrl: String? = null,
     @SerializedName("album") val album: AlbumDto? = null,
     @SerializedName("is_favorited") val isFavorite: Boolean? = null
-)
+) {
+    fun getDisplayCoverUrl(): String? = coverUrl ?: coverKey ?: album?.getDisplayCoverUrl()
+}
 
 /** Laravel favorites: `{ favoritable_type, favoritable: { song fields... } }` or `{ song: ... }`. */
 data class FavoriteItemDto(
@@ -183,7 +224,6 @@ data class FavoriteItemDto(
     @SerializedName("song") val song: SongDto? = null
 )
 
-// Playlist DTOs
 data class PlaylistDto(
     @SerializedName("id") val id: String,
     @SerializedName("name") val name: String?,
@@ -226,58 +266,92 @@ data class MbRecentItemDto(
 
 interface MusicApiService {
 
-    @GET("artists")
+    @GET("api/artists")
     suspend fun getArtists(): Response<BaseResponse<List<ArtistDto>>>
 
-    @GET("artists/{id}")
+    @GET("api/artists/{id}")
     suspend fun getArtistDetail(
         @Path("id") artistId: String
     ): Response<ArtistDto>
 
-    @GET("artists/{artist}/image-url")
+    @GET("api/artists/{artist}/image-url")
     suspend fun getArtistImageUrl(
         @Path("artist") artistId: String
     ): Response<ArtistImageUrlResponse>
 
-    @GET("albums")
+    // ─── Albums ───
+    @GET("api/albums")
     suspend fun getAlbums(
         @Query("search") search: String? = null,
         @Query("sort_by") sortBy: String? = "latest",
         @Query("per_page") perPage: Int? = null
     ): Response<PaginatedResponse<AlbumDto>>
 
-    @GET("albums/{id}")
+    @GET("api/albums/{id}")
     suspend fun getAlbumDetail(
         @Path("id") albumId: String
     ): Response<AlbumDto>
 
-    @GET("songs")
+    @POST("api/albums")
+    suspend fun createAlbum(
+        @Body request: CreateAlbumRequest
+    ): Response<BaseResponse<AlbumDto>>
+
+    @PUT("api/albums/{id}")
+    suspend fun updateAlbum(
+        @Path("id") albumId: String,
+        @Body request: CreateAlbumRequest
+    ): Response<BaseResponse<AlbumDto>>
+
+    @DELETE("api/albums/{id}")
+    suspend fun deleteAlbum(
+        @Path("id") albumId: String
+    ): Response<BaseResponse<Unit>>
+
+    // ─── Songs ───
+    @GET("api/songs")
     suspend fun getSongs(
         @Query("search") search: String? = null,
         @Query("album_id") albumId: Int? = null
     ): Response<PaginatedResponse<SongDto>>
 
-    @GET("songs/{id}")
+    @GET("api/songs/{id}")
     suspend fun getSongDetail(
         @Path("id") songId: String
     ): Response<SongDto>
 
-    @GET("songs/{id}/cover-url")
+    @POST("api/songs")
+    suspend fun createSong(
+        @Body request: CreateSongRequest
+    ): Response<BaseResponse<SongDto>>
+
+    @PUT("api/songs/{id}")
+    suspend fun updateSong(
+        @Path("id") songId: String,
+        @Body request: CreateSongRequest
+    ): Response<BaseResponse<SongDto>>
+
+    @DELETE("api/songs/{id}")
+    suspend fun deleteSong(
+        @Path("id") songId: String
+    ): Response<BaseResponse<Unit>>
+
+    @GET("api/songs/{id}/cover-url")
     suspend fun getSongCoverUrl(
         @Path("id") songId: String
     ): Response<SongCoverUrlResponse>
 
-    @GET("albums/{id}/cover-url")
+    @GET("api/albums/{id}/cover-url")
     suspend fun getAlbumCoverUrl(
         @Path("id") albumId: String
     ): Response<SongCoverUrlResponse>
 
-    @GET("songs/{id}/signed-url")
+    @GET("api/songs/{id}/signed-url")
     suspend fun getStreamTicket(
         @Path("id") songId: String
     ): Response<StreamTicketResponse>
 
-    @GET("playback/recent")
+    @GET("api/playback/recent")
     suspend fun getRecentlyPlayed(): Response<BaseResponse<List<SongDto>>>
 
     /** Mobile-only: normalized recently played (listen-history). */
@@ -315,63 +389,98 @@ interface MusicApiService {
         @Query("per_page") perPage: Int? = 100
     ): Response<PaginatedResponse<FavoriteItemDto>>
 
-    @GET("playlists/{playlist}/songs")
+    @GET("api/playlists/{playlist}/songs")
     suspend fun getPlaylistSongs(
         @Path("playlist") playlistId: String,
         @Query("per_page") perPage: Int? = null
     ): Response<PaginatedResponse<SongDto>>
 
     // Playlists endpoints
-    @GET("playlists")
+    @GET("api/playlists")
     suspend fun getPlaylists(
         @Query("per_page") perPage: Int? = null
     ): Response<PaginatedResponse<PlaylistDto>>
 
-    @POST("playlists")
+    @POST("api/playlists")
     suspend fun createPlaylist(
         @Body request: CreatePlaylistRequest
     ): Response<BaseResponse<PlaylistDto>>
 
-    @POST("playlists/{playlist}/songs")
+    @POST("api/playlists/{playlist}/songs")
     suspend fun addSongToPlaylist(
         @Path("playlist") playlistId: String,
         @Body request: AddSongToPlaylistRequest
     ): Response<Unit>
 
-    @GET("playback/continue")
+    @GET("api/playback/continue")
     suspend fun getContinueListening(): Response<BaseResponse<List<PlayHistoryDto>>>
 
-    @GET("listen-history")
+    @GET("api/listen-history")
     suspend fun getListenHistory(
         @Query("per_page") perPage: Int? = null
     ): Response<PaginatedResponse<ListenHistoryDto>>
 
-    @POST("favorites/songs")
+    @POST("api/favorites/songs")
     suspend fun toggleFavorite(
         @Body request: CheckFavoriteRequest
     ): Response<Unit>
 
-    @POST("favorites/songs/remove")
+    @POST("api/favorites/songs/remove")
     suspend fun removeFavorite(
         @Body request: CheckFavoriteRequest
     ): Response<Unit>
 
-    @POST("favorites/songs/check")
+    @POST("api/favorites/songs/check")
     suspend fun checkIsFavorite(
         @Body request: CheckFavoriteRequest
     ): Response<CheckFavoriteResponse>
 
-    @POST("listen-history")
+    @POST("api/listen-history")
     suspend fun addToListenHistory(
         @Body request: ListenHistoryRequest
     ): Response<Unit>
 
-    @GET("stats/most-played-albums")
+    @Multipart
+    @POST("api/upload/media")
+    suspend fun uploadMedia(
+        @Part file: MultipartBody.Part,
+        @Part("purpose") purpose: RequestBody 
+    ): Response<UploadResponse>
+
+    @POST("api/upload/media/presign")
+    suspend fun getUploadUrl(
+        @Body request: PresignUploadRequest
+    ): Response<PresignedUrlResponse>
+
+    @GET("api/songs")
+    suspend fun getMySongs(
+        @Query("per_page") perPage: Int = 500,
+        @Query("sort_by") sortBy: String = "latest"
+    ): Response<ArtistSongsResponse>
+
+    @GET("api/albums")
+    suspend fun getMyAlbums(
+        @Query("per_page") perPage: Int = 500,
+        @Query("sort_by") sortBy: String = "latest"
+    ): Response<ArtistAlbumsResponse>
+
+    @GET("api/artist/analytics")
+    suspend fun getArtistAnalytics(): Response<BaseResponse<ArtistAnalyticsDto>>
+
+    @PUT("api/artist/profile")
+    suspend fun updateArtistProfile(
+        @Body profile: ArtistDto
+    ): Response<BaseResponse<ArtistDto>>
+
+    @GET("api/artist/notifications")
+    suspend fun getNotifications(): Response<BaseResponse<List<NotificationDto>>>
+
+    @GET("api/stats/most-played-albums")
     suspend fun getMostPlayedAlbums(
         @Query("limit") limit: Int? = 10
     ): Response<BaseResponse<List<MostPlayedAlbumDto>>>
 
-    @GET("stats/most-played-songs")
+    @GET("api/stats/most-played-songs")
     suspend fun getMostPlayedSongs(
         @Query("limit") limit: Int? = 10
     ): Response<BaseResponse<List<MostPlayedSongDto>>>

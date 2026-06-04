@@ -1,33 +1,45 @@
 package com.example.echo_panda_mobile.data.remote
 
+import android.util.Log
 import com.example.echo_panda_mobile.data.repository.TokenStorage
 import okhttp3.Interceptor
 import okhttp3.Response
 
 class AuthInterceptor(private val tokenStorage: TokenStorage) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val url = request.url.toString()
+        val originalRequest = chain.request()
+        val url = originalRequest.url.toString()
+        val token = tokenStorage.getToken()
         
-        // CRITICAL: If the URL is an AWS S3 Pre-Signed URL, we MUST NOT send the 
-        // app's Authorization header. S3 URLs are self-contained.
+        val isOurDomain = url.contains("echopanda.me")
+        val isPublicAuth = url.contains("/login") || url.contains("/register") || url.contains("/firebase/session")
         val isS3 = url.contains("amazonaws.com")
-        val isPublicAuthEndpoint = url.contains("/firebase/session")
-            || url.endsWith("/login")
-            || url.endsWith("/register")
 
-        val newRequestBuilder = request.newBuilder()
-            .addHeader("Accept", "application/json")
+        val requestBuilder = originalRequest.newBuilder()
 
-        if (isS3 || isPublicAuthEndpoint) {
-            newRequestBuilder.removeHeader("Authorization")
-        } else {
-            val token = tokenStorage.getToken()
-            if (!token.isNullOrBlank()) {
-                newRequestBuilder.header("Authorization", "Bearer $token")
-            }
+        if (isOurDomain && !token.isNullOrBlank() && !isPublicAuth) {
+            requestBuilder.header("Authorization", "Bearer $token")
+        }
+
+        val isImage = url.lowercase().run { 
+            endsWith(".jpg") || endsWith(".jpeg") || endsWith(".png") || endsWith(".webp") 
         }
         
-        return chain.proceed(newRequestBuilder.build())
+        if (!isImage && !isS3) {
+            requestBuilder.addHeader("Accept", "application/json")
+            requestBuilder.addHeader("X-Requested-With", "XMLHttpRequest")
+        }
+        
+        val request = requestBuilder.build()
+        return try {
+            val response = chain.proceed(request)
+            if (response.code == 403) {
+                Log.e("AuthInterceptor", "403 Forbidden for URL: ${request.url}")
+            }
+            response
+        } catch (e: Exception) {
+            Log.e("AuthInterceptor", "Connection Error: ${e.message}")
+            throw e
+        }
     }
 }

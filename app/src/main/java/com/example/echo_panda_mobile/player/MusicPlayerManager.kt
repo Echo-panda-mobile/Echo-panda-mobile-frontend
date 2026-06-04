@@ -54,6 +54,12 @@ class MusicPlayerManager(context: Context) {
     private val _duration = MutableStateFlow(0L)
     val duration = _duration.asStateFlow()
 
+    private val _currentTrack = MutableStateFlow<com.example.echo_panda_mobile.data.model.Track?>(null)
+    val currentTrack = _currentTrack.asStateFlow()
+
+    private var queue = mutableListOf<com.example.echo_panda_mobile.data.model.Track>()
+    private var currentIndex = -1
+
     private val playerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     init {
@@ -80,6 +86,15 @@ class MusicPlayerManager(context: Context) {
                 if (state == Player.STATE_READY) {
                     _duration.value = exoPlayer.duration
                 }
+                if (state == Player.STATE_ENDED) {
+                    next()
+                }
+            }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                super.onMediaItemTransition(mediaItem, reason)
+                Log.d(TAG, "onMediaItemTransition: ${mediaItem?.mediaMetadata?.title}")
+                // Update current track state if needed
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -109,7 +124,7 @@ class MusicPlayerManager(context: Context) {
         positionJob?.cancel()
     }
 
-    fun play(url: String?, title: String?, artist: String?, resumePositionMs: Long = 0) {
+    fun play(url: String?, title: String?, artist: String?, album: String? = null, resumePositionMs: Long = 0) {
         if (url.isNullOrBlank()) {
             Log.e(TAG, "Cannot play: URL is null or empty")
             return
@@ -127,6 +142,7 @@ class MusicPlayerManager(context: Context) {
                 MediaMetadata.Builder()
                     .setTitle(title ?: "Unknown Title")
                     .setArtist(artist ?: "Unknown Artist")
+                    .setAlbumTitle(album ?: "Unknown Album")
                     .build()
             )
             .build()
@@ -139,6 +155,38 @@ class MusicPlayerManager(context: Context) {
         exoPlayer.play()
     }
 
+    fun setQueue(tracks: List<com.example.echo_panda_mobile.data.model.Track>, startAtId: String? = null) {
+        queue = tracks.toMutableList()
+        currentIndex = if (startAtId != null) {
+            queue.indexOfFirst { it.id == startAtId }.coerceAtLeast(0)
+        } else {
+            0
+        }
+        if (queue.isNotEmpty()) {
+            _currentTrack.value = queue[currentIndex]
+        }
+    }
+
+    fun next() {
+        if (queue.isEmpty()) return
+        currentIndex = (currentIndex + 1) % queue.size
+        _currentTrack.value = queue[currentIndex]
+        // This will trigger the PlayerViewModel or whoever observes currentTrack to load the new URL
+    }
+
+    fun previous() {
+        if (queue.isEmpty()) return
+        
+        // If we're more than 3 seconds into the song, just restart it
+        if (exoPlayer.currentPosition > 3000) {
+            exoPlayer.seekTo(0)
+            return
+        }
+        
+        currentIndex = if (currentIndex <= 0) queue.size - 1 else currentIndex - 1
+        _currentTrack.value = queue[currentIndex]
+    }
+
     fun togglePlayPause() {
         if (exoPlayer.isPlaying) {
             exoPlayer.pause()
@@ -149,6 +197,17 @@ class MusicPlayerManager(context: Context) {
 
     fun seekTo(positionMs: Long) {
         exoPlayer.seekTo(positionMs)
+    }
+
+    fun stop() {
+        exoPlayer.stop()
+        exoPlayer.clearMediaItems()
+        _currentTrack.value = null
+        _isPlaying.value = false
+        _currentPosition.value = 0L
+        _duration.value = 0L
+        queue.clear()
+        currentIndex = -1
     }
 
     fun release() {

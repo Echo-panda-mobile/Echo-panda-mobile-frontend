@@ -1,7 +1,6 @@
 package com.example.echo_panda_mobile.presentation.viewsmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.User
 import com.example.echo_panda_mobile.data.remote.RetrofitClient
@@ -122,5 +121,17 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
                 }
             }
         }
+    }
+}
+
+class UserProfileViewModelFactory(private val context: android.content.Context) : androidx.lifecycle.ViewModelProvider.Factory {
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(UserProfileViewModel::class.java)) {
+            val tokenStorage = TokenStorage.getInstance(context.applicationContext)
+            val repository = AuthRepository(tokenStorage)
+            @Suppress("UNCHECKED_CAST")
+            return UserProfileViewModel(repository) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

@@ -1,15 +1,14 @@
 package com.example.echo_panda_mobile.presentation.viewsmodel
 
-import android.app.Application
-import android.content.Intent
-import androidx.lifecycle.AndroidViewModel
+import android.content.Context
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.model.AuthResponse
 import com.example.echo_panda_mobile.data.model.RegisterRequest
 import com.example.echo_panda_mobile.data.model.UserRole
 import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.AuthResult
-import com.example.echo_panda_mobile.data.repository.FirebaseAuthManager
 import com.example.echo_panda_mobile.data.repository.TokenStorage
 import com.example.echo_panda_mobile.presentation.navigation.Routes
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,12 +29,10 @@ data class RegisterUiState(
     val navigateTo: String? = null
 )
 
-class RegisterViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val repository = AuthRepository(
-        tokenStorage = TokenStorage(application),
-        firebaseAuthManager = FirebaseAuthManager(application)
-    )
+class RegisterViewModel(
+    private val repository: AuthRepository,
+    private val tokenStorage: TokenStorage? = null
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(RegisterUiState())
     val uiState: StateFlow<RegisterUiState> = _uiState.asStateFlow()
@@ -95,36 +92,25 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
             )
 
             when (result) {
-                is AuthResult.Success<AuthResponse> -> {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        navigateTo = Routes.VERIFY_EMAIL
-                    )
-                }
-                is AuthResult.Error -> {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = result.message
-                    )
-                }
-                else -> Unit
-            }
-        }
-    }
+                is AuthResult.Success -> {
+                    android.util.Log.d("RegisterViewModel", "✓ Registration successful, auto-navigating to home")
+                    val authResponse = result.data
+                    
+                    // Sanitize redirectTo from backend
+                    val rawRedirect = authResponse.redirectTo?.trim()?.removePrefix("/")
+                    val destination = if (rawRedirect.isNullOrBlank()) {
+                        Routes.getHomeRoute(authResponse.user.role)
+                    } else {
+                        when (rawRedirect) {
+                            "admin/dashboard" -> Routes.ADMIN_GRAPH
+                            "artist/dashboard" -> Routes.ARTIST_GRAPH
+                            else -> Routes.getHomeRoute(authResponse.user.role)
+                        }
+                    }
 
-    fun signInWithGoogle(data: Intent?) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-
-            when (val result = repository.signInWithGoogle(data)) {
-                is AuthResult.Success<*> -> {
-                    val authResponse = result.data as? AuthResponse
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        navigateTo = Routes.getHomeRoute(
-                            authResponse?.user?.role,
-                            authResponse?.redirectTo
-                        )
+                        navigateTo = destination
                     )
                 }
                 is AuthResult.Error -> {
@@ -143,14 +129,23 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
             when (val result = repository.signInWithGoogle(idToken)) {
-                is AuthResult.Success<*> -> {
-                    val authResponse = result.data as? AuthResponse
+                is AuthResult.Success -> {
+                    val authResponse = result.data
+                    
+                    val rawRedirect = authResponse.redirectTo?.trim()?.removePrefix("/")
+                    val destination = if (rawRedirect.isNullOrBlank()) {
+                        Routes.getHomeRoute(authResponse.user.role)
+                    } else {
+                        when (rawRedirect) {
+                            "admin/dashboard" -> Routes.ADMIN_GRAPH
+                            "artist/dashboard" -> Routes.ARTIST_GRAPH
+                            else -> Routes.getHomeRoute(authResponse.user.role)
+                        }
+                    }
+
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        navigateTo = Routes.getHomeRoute(
-                            authResponse?.user?.role,
-                            authResponse?.redirectTo
-                        )
+                        navigateTo = destination
                     )
                 }
                 is AuthResult.Error -> {
@@ -170,5 +165,17 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
 
     fun onNavigationHandled() {
         _uiState.value = _uiState.value.copy(navigateTo = null)
+    }
+}
+
+class RegisterViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(RegisterViewModel::class.java)) {
+            val tokenStorage = TokenStorage.getInstance(context.applicationContext)
+            val repository = AuthRepository(tokenStorage)
+            @Suppress("UNCHECKED_CAST")
+            return RegisterViewModel(repository, tokenStorage) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

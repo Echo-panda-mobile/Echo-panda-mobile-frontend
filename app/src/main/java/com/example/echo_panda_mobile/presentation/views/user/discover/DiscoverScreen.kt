@@ -167,7 +167,7 @@ fun DiscoverScreen(
                         Column(
                             modifier = Modifier.padding(bottom = 16.dp)
                         ) {
-                            state.newReleases.take(4).forEach { track ->
+                            state.newReleases.take(4).forEachIndexed { index, track ->
                                 SongCardHorizontal(
                                     track = track,
                                     onClick = {
@@ -217,7 +217,7 @@ fun DiscoverScreen(
                         Column(
                             modifier = Modifier.padding(bottom = 16.dp)
                         ) {
-                            state.mostPlayedSongs.take(4).forEach { track ->
+                            state.mostPlayedSongs.take(4).forEachIndexed { index, track ->
                                 SongCardHorizontal(
                                     track = track,
                                     onClick = {

@@ -1,15 +1,16 @@
 package com.example.echo_panda_mobile.presentation.navigation
 
 import android.content.Context
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.annotation.OptIn
+import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.common.util.UnstableApi
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -19,12 +20,16 @@ import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.TokenStorage
 import com.example.echo_panda_mobile.presentation.components.MiniPlayer
 import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
+import com.example.echo_panda_mobile.presentation.views.auth.ForgotPasswordScreen
 import com.example.echo_panda_mobile.presentation.views.auth.LoginScreen
 import com.example.echo_panda_mobile.presentation.views.auth.SignUpScreen
+import com.example.echo_panda_mobile.presentation.views.auth.SuccessAccountScreen
 import com.example.echo_panda_mobile.presentation.views.intro.EchoPandaOnboardingView
+import com.example.echo_panda_mobile.presentation.viewsmodel.ForgotPasswordViewModel
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
+@OptIn(UnstableApi::class)
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
@@ -33,11 +38,10 @@ fun AppNavigation() {
     val scope = rememberCoroutineScope()
 
     val globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
-    val playerState by globalPlayerViewModel.playerState.collectAsState()
 
     // Single stable instances — never recreated on recomposition
     val context = navController.context
-    val tokenStorage = remember { TokenStorage(context) }
+    val tokenStorage = remember { TokenStorage.getInstance(context) }
     val auth = remember { FirebaseAuth.getInstance() }
     val authRepo = remember { AuthRepository(tokenStorage) }
 
@@ -66,6 +70,12 @@ fun AppNavigation() {
         val prefs = navController.context
             .getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val hasSeenIntroGlobal = prefs.getBoolean("has_seen_intro", false)
+        val localToken = tokenStorage.getToken()
+        val localRole = tokenStorage.getRole()
+        
+        android.util.Log.d("AppNavigation", "Firebase User: ${currentUser?.email ?: "NULL"}")
+        android.util.Log.d("AppNavigation", "Local Token: ${if (localToken.isNullOrBlank()) "MISSING" else "PRESENT"}")
+        android.util.Log.d("AppNavigation", "Local Role: $localRole")
 
         if (currentUser == null) {
             userRole = null
@@ -94,14 +104,6 @@ fun AppNavigation() {
         }
     }
 
-    // Block rendering until we know where to send the user
-    if (startRoute == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-        return
-    }
-
     // ── Bottom nav helpers ────────────────────────────────────────────────────
     val selectedNav = Routes.bottomNavIndex(currentRoute)
     val onNavSelect: (Int) -> Unit = { index ->
@@ -112,8 +114,9 @@ fun AppNavigation() {
             Routes.bottomNavRoute(index)
         }
 
+        android.util.Log.d("NAVIGATION", "Bottom nav interaction: index $index -> target route: $route")
+
         navController.navigate(route) {
-            // Use findStartDestination().id to pop back to the role-based graph root
             popUpTo(navController.graph.findStartDestination().id) {
                 saveState = true
             }
@@ -146,28 +149,50 @@ fun AppNavigation() {
                 )
             }
 
-            composable(Routes.SIGNUP) {
-                SignUpScreen(
-                    onBack = { navController.popBackStack() },
-                    onSignUpSuccess = { route ->
-                        navController.navigate(route) {
-                            popUpTo(Routes.LOGIN) { inclusive = true }
+                // ── Auth ──────────────────────────────────────────────────────────
+                composable(Routes.LOGIN) {
+                    LoginScreen(
+                        onBack = { navController.popBackStack() },
+                        onAuthenticateSuccess = { destination ->
+                            scope.launch {
+                                val profile = authRepo.getCurrentUserProfile()
+                                val role = profile?.role ?: tokenStorage.getRole()
+                                userRole = role
+
+                                android.util.Log.d("NAVIGATION", "━━━ LOGIN SUCCESS ━━━")
+                                val finalDest = Routes.resolveRoute(destination, role)
+                                navController.navigate(finalDest) {
+                                    popUpTo(navController.graph.id) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            }
+                        },
+                        onNavigateToSignUp = {
+                            navController.navigate(Routes.SIGNUP)
+                        },
+                        onNavigateToForgotPassword = {
+                            navController.navigate(Routes.FORGOT_PASSWORD)
                         }
-                    }
-                )
-            }
-
-            composable(Routes.FORGOT_PASSWORD) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    androidx.compose.material3.Text("Forgot Password Screen")
+                    )
                 }
-            }
 
-            composable(Routes.VERIFY_EMAIL) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    androidx.compose.material3.Text("Verify Email Screen")
+                composable(Routes.SIGNUP) {
+                    SignUpScreen(
+                        onBack = { navController.popBackStack() },
+                        onSignUpSuccess = { route ->
+                            scope.launch {
+                                val profile = authRepo.getCurrentUserProfile()
+                                val role = profile?.role
+                                userRole = role
+                                val finalDest = Routes.resolveRoute(route, role)
+                                navController.navigate(finalDest) {
+                                    popUpTo(navController.graph.id) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            }
+                        }
+                    )
                 }
-            }
 
             // ── Role-based graphs ─────────────────────────────────────────────
             userNavGraph(navController, selectedNav, onNavSelect)
@@ -200,14 +225,64 @@ fun AppNavigation() {
                                 launchSingleTop = true
                             }
                         }
-                    }
-                )
-            }
-        }
+                    )
+                }
 
-        // ── Global Mini Player ────────────────────────────────────────────────
-        val isPlayerScreen = currentRoute?.startsWith("user/player") == true
-        val isAuthScreen   = currentRoute == Routes.LOGIN || currentRoute == Routes.SIGNUP
+                composable(Routes.FORGOT_PASSWORD) {
+                    val forgotPasswordViewModel: ForgotPasswordViewModel = viewModel(
+                        factory = com.example.echo_panda_mobile.presentation.viewsmodel.ForgotPasswordViewModelFactory(LocalContext.current)
+                    )
+                    val uiState by forgotPasswordViewModel.uiState.collectAsState()
+
+                    LaunchedEffect(uiState.navigateTo) {
+                        uiState.navigateTo?.let { route ->
+                            navController.navigate(route)
+                            forgotPasswordViewModel.onNavigationHandled()
+                        }
+                    }
+
+                    ForgotPasswordScreen(
+                        onBack = { navController.popBackStack() },
+                        viewModel = forgotPasswordViewModel
+                    )
+                }
+
+                // ── Role-based graphs ─────────────────────────────────────────────
+                userNavGraph(navController, selectedNav, onNavSelect)
+                artistNavGraph(navController, tokenStorage)
+                adminNavGraph(navController, selectedNav, onNavSelect, tokenStorage)
+
+                // ── Onboarding ────────────────────────────────────────────────────
+                composable(Routes.INTRO) {
+                    EchoPandaOnboardingView(
+                        onFinished = {
+                            navController.context
+                                .getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                                .edit { putBoolean("has_seen_intro", true) }
+
+                            if (currentUser == null && tokenStorage.getToken().isNullOrBlank()) {
+                                navController.navigate(Routes.LOGIN) {
+                                    popUpTo(Routes.INTRO) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            } else {
+                                scope.launch {
+                                    val profile = authRepo.getCurrentUserProfile()
+                                    val nextRoute = Routes.getHomeRoute(profile?.role)
+                                    navController.navigate(nextRoute) {
+                                        popUpTo(Routes.INTRO) { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+
+            // ── Global Mini Player ────────────────────────────────────────────────
+            val isPlayerScreen = currentRoute?.startsWith("user/player") == true
+            val isAuthScreen = currentRoute == Routes.LOGIN || currentRoute == Routes.SIGNUP
 
         if (playerState.currentTrack != null && !isPlayerScreen && !isAuthScreen) {
             Box(
@@ -226,7 +301,7 @@ fun AppNavigation() {
                             Routes.USER_PLAYER.replace("{trackId}", playerState.currentTrack!!.id)
                         )
                     }
-                )
+                }
             }
         }
     }

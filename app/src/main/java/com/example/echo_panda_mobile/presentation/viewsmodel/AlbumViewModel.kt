@@ -30,8 +30,10 @@ data class AlbumUiState(
 )
 
 class AlbumViewModel(application: Application) : AndroidViewModel(application) {
+    private val tokenStorage = TokenStorage(application)
     private val musicRepository = MusicRepository(
-        RetrofitClient.getMusicService(TokenStorage(application))
+        RetrofitClient.getMusicService(tokenStorage),
+        tokenStorage
     )
 
     private val _uiState = MutableStateFlow(AlbumUiState())

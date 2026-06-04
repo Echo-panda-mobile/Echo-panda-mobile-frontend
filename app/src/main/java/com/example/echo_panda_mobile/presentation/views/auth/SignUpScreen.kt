@@ -53,7 +53,7 @@ private val TextMuted = Color(0xFF7E8B97)       // Subdued corporate metadata gr
 fun SignUpScreen(
     onBack: () -> Unit,
     onSignUpSuccess: (String) -> Unit,
-    viewModel: RegisterViewModel = viewModel()
+    viewModel: RegisterViewModel = viewModel(factory = com.example.echo_panda_mobile.presentation.viewsmodel.RegisterViewModelFactory(LocalContext.current))
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
@@ -61,13 +61,13 @@ fun SignUpScreen(
 
     val googleSignInOptions = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(context.getString(R.string.default_web_client_id))
+            .requestIdToken(context.applicationContext.getString(R.string.default_web_client_id))
             .requestEmail()
             .build()
     }
 
     val googleSignInClient = remember {
-        GoogleSignIn.getClient(context, googleSignInOptions)
+        GoogleSignIn.getClient(context.applicationContext, googleSignInOptions)
     }
 
     val launcher = rememberLauncherForActivityResult(

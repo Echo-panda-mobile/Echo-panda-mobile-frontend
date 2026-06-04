@@ -4,8 +4,8 @@ object Routes {
     // Auth
     const val LOGIN             = "login"
     const val SIGNUP            = "signup"
-    const val FORGOT_PASSWORD   = "forgot_password"
     const val VERIFY_EMAIL      = "verify_email"
+    const val FORGOT_PASSWORD   = "forgot_password"
 
     // Intro
     const val INTRO = "intro"
@@ -20,7 +20,7 @@ object Routes {
     const val USER_DISCOVER     = "user/discover"
     const val USER_ALBUMS       = "user/albums"
     const val USER_ALBUM_DETAIL = "user/album_detail/{albumId}"
-    const val USER_PLAYER       = "user/player/{trackId}?resumeMs={resumeMs}"
+    const val USER_PLAYER       = "user/player/{trackId}"
     const val USER_LIBRARY      = "user/library"
     const val USER_FAVORITES    = "user/favorites"
     const val USER_PROFILE      = "user/profile"
@@ -29,15 +29,23 @@ object Routes {
     const val USER_BROWSE = "user/browse/{section}"
 
     // ── Artist destinations (inside artist_graph) ─────────────────────────────
-    const val ARTIST_DASHBOARD = "artist/dashboard"
+    const val ARTIST_DASHBOARD = "artist/home"
     const val ARTIST_MY_MUSIC  = "artist/my_music"
     const val ARTIST_UPLOAD    = "artist/upload"
     const val ARTIST_ANALYTICS = "artist/analytics"
     const val ARTIST_PROFILE   = "artist/profile"
     const val ARTIST_VIEW      = "artist/view/{artistId}"
+    const val ARTIST_NOTIFICATIONS = "artist/notifications"
+    const val ARTIST_ALBUMS        = "artist/albums"
+    const val ARTIST_COMMENTS      = "artist/comments"
+    const val ARTIST_CREATE_ALBUM  = "artist/create_album"
+    const val ARTIST_PREFERENCES   = "artist/preferences"
+    const val ARTIST_HELP_SUPPORT  = "artist/help_support"
+    const val ARTIST_SECURITY      = "artist/security"
+    const val ARTIST_EDIT_PROFILE  = "artist/edit_profile"
 
     // ── Admin destinations (inside admin_graph) ───────────────────────────────
-    const val ADMIN_DASHBOARD          = "admin/dashboard"
+    const val ADMIN_DASHBOARD          = "admin/home"
     const val ADMIN_USER_MANAGEMENT    = "admin/users"
     const val ADMIN_ADD_ARTIST         = "admin/add_artist"
     const val ADMIN_USER_DETAIL        = "admin/user_detail/{userId}/{role}"
@@ -56,22 +64,60 @@ object Routes {
      * Returns the GRAPH route for the role — safe to use as NavHost startDestination
      * and as the target of navController.navigate().
      */
-    fun isAdminRole(role: String?): Boolean =
-        role?.trim()?.equals("admin", ignoreCase = true) == true
-
-    /**
-     * Picks the nav graph from API role and optional [redirectTo] from /firebase/session.
-     */
-    fun getHomeRoute(role: String?, redirectTo: String? = null): String {
-        if (redirectTo?.contains("admin", ignoreCase = true) == true) {
-            return ADMIN_GRAPH
-        }
-        return when (role?.trim()?.lowercase()) {
-            "artist", "publicer" -> ARTIST_GRAPH
-            "admin" -> ADMIN_GRAPH
-            else -> USER_GRAPH
+    fun getHomeRoute(role: String?): String {
+        val cleanRole = role?.trim()?.uppercase() ?: "USER"
+        android.util.Log.d("ROLE_CHECK", "Determining Home for role: '$cleanRole'")
+        
+        return when (cleanRole) {
+            "ADMIN"            -> ADMIN_GRAPH
+            "ARTIST", "PUBLISHER" -> ARTIST_GRAPH
+            else               -> USER_GRAPH
         }
     }
+
+    /**
+     * Resolves a backend-provided route (e.g. "/", "/admin/dashboard") 
+     * into a valid Compose Navigation route.
+     */
+    fun resolveRoute(destination: String?, role: String?): String {
+        val cleanRole = role?.trim()?.uppercase() ?: "USER"
+        val fallback = getHomeRoute(cleanRole)
+
+        if (destination.isNullOrBlank()) return fallback
+        
+        val trimmed = destination.trim()
+        val sanitized = trimmed.removePrefix("/")
+        
+        android.util.Log.d("NAVIGATION", "Resolving route: '$destination' for role: $cleanRole")
+
+        // SECURE ROLE CHECK: Prevent non-admins from going to admin routes
+        if (sanitized.startsWith("admin") && cleanRole != "ADMIN") {
+            android.util.Log.w("NAVIGATION", "Security Breach Attempt: $cleanRole tried to access admin route. Redirecting to $fallback")
+            return fallback
+        }
+
+        return when {
+            // Admin mappings
+            sanitized == "admin/dashboard" || sanitized == "admin/home" || sanitized == "admin" -> ADMIN_GRAPH
+            
+            // Artist mappings
+            sanitized == "artist/dashboard" || sanitized == "artist/home" || sanitized == "artist" -> ARTIST_GRAPH
+            
+            // User mappings
+            sanitized == "user/home" || sanitized == "home" || sanitized == "" || sanitized == "/" -> USER_GRAPH
+            
+            // Direct matches for graphs
+            sanitized == USER_GRAPH || sanitized == ARTIST_GRAPH || sanitized == ADMIN_GRAPH -> sanitized
+            
+            // Allow sub-routes
+            sanitized.startsWith("user/") || sanitized.startsWith("admin/") || sanitized.startsWith("artist/") -> sanitized
+
+            else -> fallback
+        }
+    }
+
+    fun isAdminRole(role: String?) = role?.uppercase() == "ADMIN"
+    fun isArtistRole(role: String?) = role?.uppercase() == "ARTIST"
 
     // Bottom nav index → route mapping (user destinations, not graph routes)
     fun bottomNavRoute(index: Int) = when (index) {

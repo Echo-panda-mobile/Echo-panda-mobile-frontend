@@ -35,11 +35,13 @@ fun AuthInputField(
     placeholder: String,
     isPassword: Boolean = false,
     passwordVisible: Boolean = false,
-    onPasswordToggle: (() -> Unit)? = null
+    onPasswordToggle: (() -> Unit)? = null,
+    isError: Boolean = false
 ) {
     TextField(
         value = value,
         onValueChange = onValueChange,
+        isError = isError,
         placeholder = {
             Text(text = placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant)
         },

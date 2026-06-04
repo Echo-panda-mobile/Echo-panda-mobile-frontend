@@ -4,7 +4,6 @@ import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,26 +15,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.echo_panda_mobile.R
 import com.example.echo_panda_mobile.data.repository.FirebaseAuthManager
 import com.example.echo_panda_mobile.presentation.views.globalComponent.AuthInputField
 import com.example.echo_panda_mobile.presentation.views.globalComponent.PandaBrandLogo
-import com.example.echo_panda_mobile.presentation.navigation.Routes
 import com.example.echo_panda_mobile.presentation.viewsmodel.LoginViewModel
+import com.example.echo_panda_mobile.presentation.viewsmodel.LoginViewModelFactory
 
 // ─── HARDCODED DESIGN SYSTEM COLORS ──────────────────────────────────────────────────
 private val IntroBg = Color(0xFF03070B)
@@ -51,7 +46,7 @@ fun LoginScreen(
     onAuthenticateSuccess: (String) -> Unit,
     onNavigateToSignUp: () -> Unit,
     onNavigateToForgotPassword: () -> Unit,
-    loginViewModel: LoginViewModel = viewModel(),
+    loginViewModel: LoginViewModel = viewModel(factory = LoginViewModelFactory(LocalContext.current))
 ) {
     val uiState by loginViewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -65,7 +60,18 @@ fun LoginScreen(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            loginViewModel.signInWithGoogle(result.data)
+            val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+                val idToken = account?.idToken
+                if (idToken != null) {
+                    loginViewModel.onGoogleSignIn(idToken)
+                } else {
+                    loginViewModel.onGoogleSignInFailed("Google ID Token not found.")
+                }
+            } catch (e: Exception) {
+                loginViewModel.onGoogleSignInFailed("Google sign-in failed: ${e.localizedMessage}")
+            }
         } else {
             loginViewModel.onGoogleSignInFailed("Google sign-in was cancelled or failed.")
         }
@@ -107,15 +113,12 @@ fun LoginScreen(
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Calculated dynamic spacer for ideal top positioning
             Spacer(modifier = Modifier.height(48.dp))
 
-            // ─── HIGH QUALITY CORE LOGO CONTAINER WITH COMPOSITE BLURRY GLOW ──────────
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(130.dp)
             ) {
-                // Dynamic underlying glow core layer matching the exact branding light
                 Box(
                     modifier = Modifier
                         .size(90.dp)
@@ -127,13 +130,11 @@ fun LoginScreen(
                         )
                 )
 
-                // EchoPanda Brand Logo
                 PandaBrandLogo(modifier = Modifier.size(96.dp))
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ─── HEADINGS TYPOGRAPHY STACK ───────────────────────────────────────────
             Text(
                 text = "WELCOME BACK",
                 color = TextPrimary,
@@ -156,8 +157,6 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(38.dp))
 
-            // ─── INPUT FIELDS SECTION ────────────────────────────────────────────────
-            // Email Input Box Container with custom thin cyan alpha border
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -178,7 +177,6 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Password Input Box Container with custom thin cyan alpha border
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -202,7 +200,6 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Forgot Password Link Wrapper aligned perfectly to the right border node
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -218,10 +215,8 @@ fun LoginScreen(
                 )
             }
 
-            // Pushes operational buttons down cleanly to ensure balanced vertical weight
             Spacer(modifier = Modifier.weight(1f))
 
-            // Operational Error Layout Alert Message Banner Node
             val errorMessage = uiState.errorMessage
             if (hasAttemptedSubmit && !errorMessage.isNullOrBlank()) {
                 Surface(
@@ -240,7 +235,6 @@ fun LoginScreen(
                 }
             }
 
-            // Mid-screen Section Context Divider Component Line
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -259,7 +253,6 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ─── 1. GOOGLE SINGLE SIGN-IN PILL BUTTON (Placed on top per design) ───
             SocialButton(
                 text = if (uiState.isLoading) "Signing in…" else "Sign in with Google",
                 bgColor = SocialBtnBg,
@@ -274,7 +267,6 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // ─── 2. MAIN LOGIN EXECUTIVE BUTTON (Placed below Google per design) ───
             Button(
                 onClick = {
                     hasAttemptedSubmit = true
@@ -309,7 +301,6 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Navigation Registration Terminal Footer Link Area
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

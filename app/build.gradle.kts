@@ -1,34 +1,32 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
 }
 
 android {
     namespace = "com.example.echo_panda_mobile"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.echo_panda_mobile"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Production API. Override in debug for local backend (emulator → host machine).
-        buildConfigField("String", "API_BASE_URL", "\"https://api.echopanda.me/api/\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://api.echopanda.me/\"")
     }
 
     buildTypes {
         debug {
             // Same production API as release (web + mobile both use api.echopanda.me).
-            buildConfigField("String", "API_BASE_URL", "\"https://api.echopanda.me/api/\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://api.echopanda.me/\"")
         }
         release {
             isMinifyEnabled = false
@@ -43,11 +41,12 @@ android {
         buildConfig = true
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 
+// Dependencies
 dependencies {
     // Navigation Compose
     implementation(libs.androidx.navigation.compose)
@@ -56,6 +55,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.messaging)
 
     // Lifecycle
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -74,6 +74,11 @@ dependencies {
 
     // Image Loading
     implementation(libs.coil.compose)
+    
+    // Audio/Media
+    implementation("androidx.media3:media3-exoplayer:1.1.1")
+    implementation("androidx.media3:media3-ui:1.1.1")
+    implementation("androidx.media3:media3-common:1.1.1")
     
     // Google Sign-In
     implementation(libs.google.play.services.auth)
@@ -106,9 +111,9 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-// Configure Kotlin compiler options
 kotlin {
+    jvmToolchain(21)
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_11)
+        jvmTarget.set(JvmTarget.JVM_21)
     }
 }

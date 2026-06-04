@@ -1,4 +1,4 @@
-package com.example.echo_panda_mobile.presentation.viewmodel
+package com.example.echo_panda_mobile.presentation.viewsmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -31,9 +31,9 @@ data class HomeUiState(
 )
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
-    private val tokenStorage = TokenStorage(application)
+    private val tokenStorage = TokenStorage.getInstance(application)
     private val musicRepository = MusicRepository(RetrofitClient.getMusicService(tokenStorage))
-    private val authRepository = AuthRepository(TokenStorage(application))
+    private val authRepository = AuthRepository(tokenStorage)
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()

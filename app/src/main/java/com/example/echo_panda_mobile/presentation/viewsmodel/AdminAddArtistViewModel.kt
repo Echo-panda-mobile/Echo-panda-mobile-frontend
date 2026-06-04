@@ -15,6 +15,11 @@ data class AdminAddArtistUiState(
     val name: String = "",
     val email: String = "",
     val password: String = "",
+    val slug: String = "",
+    val bio: String = "",
+    val verificationStatus: String = "pending",
+    val verificationReason: String = "",
+    val isActive: Boolean = true,
     val artistType: String = "Single",
     val gender: String = "Male",
     val isLoading: Boolean = false,
@@ -31,6 +36,10 @@ class AdminAddArtistViewModel(application: Application) : AndroidViewModel(appli
 
     fun onNameChange(value: String) {
         _uiState.value = _uiState.value.copy(name = value, errorMessage = null)
+        // Auto-generate slug from name if slug is empty
+        if (_uiState.value.slug.isBlank()) {
+            _uiState.value = _uiState.value.copy(slug = value.lowercase().replace(" ", "-"))
+        }
     }
 
     fun onEmailChange(value: String) {
@@ -39,6 +48,26 @@ class AdminAddArtistViewModel(application: Application) : AndroidViewModel(appli
 
     fun onPasswordChange(value: String) {
         _uiState.value = _uiState.value.copy(password = value, errorMessage = null)
+    }
+
+    fun onSlugChange(value: String) {
+        _uiState.value = _uiState.value.copy(slug = value, errorMessage = null)
+    }
+
+    fun onBioChange(value: String) {
+        _uiState.value = _uiState.value.copy(bio = value, errorMessage = null)
+    }
+
+    fun onVerificationStatusChange(status: String) {
+        _uiState.value = _uiState.value.copy(verificationStatus = status, errorMessage = null)
+    }
+
+    fun onVerificationReasonChange(value: String) {
+        _uiState.value = _uiState.value.copy(verificationReason = value, errorMessage = null)
+    }
+
+    fun onIsActiveChange(value: Boolean) {
+        _uiState.value = _uiState.value.copy(isActive = value, errorMessage = null)
     }
 
     fun onArtistTypeChange(type: String) {
@@ -59,6 +88,19 @@ class AdminAddArtistViewModel(application: Application) : AndroidViewModel(appli
 
     fun createArtist() {
         val state = _uiState.value
+        if (state.name.isBlank()) {
+            _uiState.value = state.copy(errorMessage = "Artist name is required")
+            return
+        }
+        if (state.email.isBlank()) {
+            _uiState.value = state.copy(errorMessage = "Email is required")
+            return
+        }
+        if (state.password.length < 8) {
+            _uiState.value = state.copy(errorMessage = "Password must be at least 8 characters")
+            return
+        }
+
         viewModelScope.launch {
             _uiState.value = state.copy(isLoading = true, errorMessage = null, successMessage = null)
 
