@@ -42,11 +42,6 @@ fun NavGraphBuilder.userNavGraph(
                     android.util.Log.d("NAVIGATION", "Route: $route")
                     navController.navigate(route)
                 },
-                onNavigateToPlayer = { trackId, _ ->
-                    val route = Routes.USER_PLAYER.replace("{trackId}", trackId)
-                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
-                    navController.navigate(route)
-                },
                 onNavigateToArtist = { artistId ->
                     val route = Routes.ARTIST_VIEW.replace("{artistId}", artistId)
                     android.util.Log.d("NAVIGATION", "Navigating to: $route")

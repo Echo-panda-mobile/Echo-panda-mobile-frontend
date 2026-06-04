@@ -11,6 +11,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
+
+
+
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -40,10 +43,8 @@ fun HomeScreen(
     onNavSelect: (Int) -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     onNavigateToAlbum: (String) -> Unit = {},
-    onNavigateToPlayer: (String, Long?) -> Unit = { _, _ -> },
     onNavigateToArtist: (String) -> Unit = {},
-    viewModel: HomeViewModel = viewModel(),
-    globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
+    viewModel: HomeViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val ptrState = rememberPullToRefreshState()

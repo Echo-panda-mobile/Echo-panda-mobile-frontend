@@ -7,7 +7,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.repository.AuthRepository
 import com.example.echo_panda_mobile.data.repository.AuthResult
 import com.example.echo_panda_mobile.data.repository.TokenStorage
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,50 +43,17 @@ class ForgotPasswordViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
 
-            // Step 1: Check if the email exists in our system
-            val emailExists = repository.checkEmailExistsInFirestore(email)
-            
-            if (!emailExists) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    errorMessage = "This email is not registered in our system."
-                )
-                return@launch
-            }
-
-            // Step 2: Send the REAL Firebase Password Reset Email
+            // Step 1: Send the Firebase Password Reset Email directly
+            // We bypass the Firestore check because unauthenticated users are usually 
+            // blocked from reading collections by security rules.
             val result = repository.sendPasswordResetEmail(email)
             
             if (result is AuthResult.Success) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    successMessage = "A secure reset link has been sent to your email. Please check your inbox.",
+                    successMessage = "A reset link has been sent to your email. Please check your inbox and spam folder.",
                     isEmailSent = true
                 )
-            } else if (result is AuthResult.Error) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    errorMessage = result.message
-                )
-            }
-        }
-    }
-
-    fun onUpdatePasswordClick(newPassword: String, onSuccess: () -> Unit) {
-        val email = _uiState.value.email.trim()
-        
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            
-            val result = repository.storeNewPasswordInFirestore(email, newPassword)
-            
-            if (result is AuthResult.Success) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    successMessage = "New password saved successfully!"
-                )
-                delay(1500)
-                onSuccess()
             } else if (result is AuthResult.Error) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
