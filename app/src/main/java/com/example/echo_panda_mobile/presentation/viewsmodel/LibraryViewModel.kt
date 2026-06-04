@@ -10,6 +10,7 @@ import com.example.echo_panda_mobile.data.model.Track
 import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.repository.MusicRepository
 import com.example.echo_panda_mobile.data.repository.MusicResult
+import com.example.echo_panda_mobile.data.util.SearchMatcher
 import com.example.echo_panda_mobile.data.repository.TokenStorage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -21,6 +22,7 @@ import kotlinx.coroutines.launch
 
 data class LibraryState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val allItems: List<LibraryItem> = emptyList(),
     val filteredItems: List<LibraryItem> = emptyList(),
     val selectedFilter: String = "All",
@@ -63,9 +65,19 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         loadLibrary()
     }
 
-    fun loadLibrary() {
+    fun refresh() {
+        loadLibrary(isRefresh = true)
+    }
+
+    fun loadLibrary(isRefresh: Boolean = false) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { state ->
+                state.copy(
+                    isLoading = !isRefresh && state.allItems.isEmpty(),
+                    isRefreshing = isRefresh,
+                    errorMessage = null
+                )
+            }
             try {
                 coroutineScope {
                     val playlistsDef = async { musicRepository.getPlaylistsWithSongCounts(perPage = 50) }
@@ -103,6 +115,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     _uiState.update { state ->
                         state.copy(
                             isLoading = false,
+                            isRefreshing = false,
                             likedSongsCount = favoritesCount,
                             allItems = allItems,
                             filteredItems = applyFilter(state.selectedFilter, state.searchQuery, allItems)
@@ -113,6 +126,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
+                        isRefreshing = false,
                         errorMessage = e.localizedMessage ?: "Failed to load library"
                     )
                 }
@@ -141,19 +155,15 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             else -> items
         }
 
-        val query = searchQuery.trim().lowercase()
+        val query = searchQuery.trim()
         if (query.isBlank()) return base
 
         return base.filter { item ->
             when (item) {
-                is LibraryItem.ArtistItem -> item.artist.name.lowercase().contains(query)
-                is LibraryItem.PlaylistItem -> item.playlist.title.lowercase().contains(query)
-                is LibraryItem.AlbumItem ->
-                    item.album.title.lowercase().contains(query) ||
-                        item.album.artist.lowercase().contains(query)
-                is LibraryItem.RecentTrackItem ->
-                    item.track.title.lowercase().contains(query) ||
-                        item.track.artist.lowercase().contains(query)
+                is LibraryItem.ArtistItem -> SearchMatcher.matches(query, item.artist.name)
+                is LibraryItem.PlaylistItem -> SearchMatcher.matches(query, item.playlist.title)
+                is LibraryItem.AlbumItem -> SearchMatcher.matches(query, item.album.title, item.album.artist)
+                is LibraryItem.RecentTrackItem -> SearchMatcher.matches(query, item.track.title, item.track.artist)
             }
         }
     }
@@ -166,6 +176,30 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 selectedFilter = newFilter,
                 allItems = allItems,
                 filteredItems = applyFilter(newFilter, currentState.searchQuery, allItems)
+            )
+        }
+    }
+
+    fun toggleFavorite(track: Track) {
+        val wasFavorite = track.isFavorite
+        updateRecentFavorite(track.id, !wasFavorite)
+        viewModelScope.launch {
+            val result = musicRepository.toggleFavorite(track.id, wasFavorite)
+            if (result is MusicResult.Error) {
+                updateRecentFavorite(track.id, wasFavorite)
+            }
+        }
+    }
+
+    private fun updateRecentFavorite(trackId: String, isFavorite: Boolean) {
+        cachedRecent = cachedRecent.map { item ->
+            if (item.track.id == trackId) item.copy(track = item.track.copy(isFavorite = isFavorite)) else item
+        }
+        _uiState.update { state ->
+            val allItems = buildAllItems()
+            state.copy(
+                allItems = allItems,
+                filteredItems = applyFilter(state.selectedFilter, state.searchQuery, allItems)
             )
         }
     }

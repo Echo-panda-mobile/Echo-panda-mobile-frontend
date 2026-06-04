@@ -25,6 +25,8 @@ object Routes {
     const val USER_FAVORITES    = "user/favorites"
     const val USER_PROFILE      = "user/profile"
     const val USER_SETTINGS     = "user/settings"
+    const val USER_PLAYLIST_DETAIL = "user/playlist/{playlistId}"
+    const val USER_BROWSE = "user/browse/{section}"
 
     // ── Artist destinations (inside artist_graph) ─────────────────────────────
     const val ARTIST_DASHBOARD = "artist/home"

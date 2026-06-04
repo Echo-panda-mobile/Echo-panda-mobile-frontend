@@ -7,6 +7,7 @@ import com.example.echo_panda_mobile.data.model.Track
 import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.repository.MusicRepository
 import com.example.echo_panda_mobile.data.repository.MusicResult
+import com.example.echo_panda_mobile.data.util.SearchMatcher
 import com.example.echo_panda_mobile.data.repository.TokenStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +43,11 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
                 is MusicResult.Success -> {
                     allFavoriteTracks = result.data
                     applyTracksToState(allFavoriteTracks)
+
+                    // API duration is often 180s for every row; match player by reading the audio file.
+                    val withRealDurations = musicRepository.enrichTracksDurationFromMedia(allFavoriteTracks)
+                    allFavoriteTracks = withRealDurations
+                    refreshVisibleTracks()
                 }
                 is MusicResult.Error -> {
                     _uiState.update {
@@ -65,19 +71,19 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    private fun refreshVisibleTracks() {
+        val query = _uiState.value.searchQuery.trim()
+        val visible = if (query.isBlank()) {
+            allFavoriteTracks
+        } else {
+            allFavoriteTracks.filter { SearchMatcher.matches(query, it.title, it.artist) }
+        }
+        applyTracksToState(visible)
+    }
+
     fun onSearchQueryChange(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
-        val lowerQuery = query.trim().lowercase()
-        if (lowerQuery.isBlank()) {
-            applyTracksToState(allFavoriteTracks)
-        } else {
-            applyTracksToState(
-                allFavoriteTracks.filter {
-                    it.title.lowercase().contains(lowerQuery) ||
-                        it.artist.lowercase().contains(lowerQuery)
-                }
-            )
-        }
+        refreshVisibleTracks()
     }
 
     fun toggleFavorite(track: Track) {

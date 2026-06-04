@@ -154,42 +154,57 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
         }
     }
 
-    suspend fun getCurrentUserProfile(): User? {
-        val firebaseUser = firebaseAuth.currentUser
-        val email = tokenStorage.getEmail() ?: firebaseUser?.email ?: ""
-        
-        if (email.isNotBlank()) {
-            if (findDocumentByEmail("admins", email) != null) {
-                return createLocalUser(firebaseUser, email, "admin")
-            }
-            if (findDocumentByEmail("artists", email) != null) {
-                return createLocalUser(firebaseUser, email, "artist")
-            }
+    /**
+     * Returns the signed-in user from memory/disk when available.
+     * Does not call the backend — safe for tab switches and screen recomposition.
+     */
+    fun getCachedUser(): User? {
+        val firebaseUser = firebaseAuth.currentUser ?: return null
+        UserSessionCache.getIfFresh()?.let { return it }
+        return UserSessionCache.fromStorage(tokenStorage, firebaseUser)
+    }
+
+    /**
+     * Resolves the user profile, syncing with the backend only when cache is missing or stale.
+     */
+    suspend fun getCurrentUserProfile(forceRefresh: Boolean = false): User? {
+        val firebaseUser = firebaseAuth.currentUser ?: return null
+
+        if (!forceRefresh) {
+            getCachedUser()?.let { return it }
         }
 
-        if (firebaseUser == null) return null
-        
         return when (val sync = syncBackendSession(firebaseUser, provider = "session_restore")) {
-            is AuthResult.Success -> sync.data.user
-            else -> null
+            is AuthResult.Success -> {
+                val user = sync.data.user
+                UserSessionCache.persist(tokenStorage, user)
+                user
+            }
+            else -> getCachedUser()
         }
     }
 
-    private suspend fun createLocalUser(firebaseUser: FirebaseUser?, email: String, role: String): User {
-        tokenStorage.saveRole(role)
-        val artistId = tokenStorage.getArtistId()
-        return User(
-            id = firebaseUser?.uid?.hashCode() ?: email.hashCode(),
-            name = firebaseUser?.displayName ?: role.replaceFirstChar { it.uppercase() },
-            email = email,
-            role = role,
-            token = tokenStorage.getToken() ?: "",
-            photoUrl = firebaseUser?.photoUrl?.toString(),
-            artistId = if (artistId != -1) artistId else null
-        )
-    }
+    suspend fun refreshCurrentUserProfile(): User? =
+        getCurrentUserProfile(forceRefresh = true)
 
-    suspend fun getCurrentUser(): User? = getCurrentUserProfile()
+    suspend fun getCurrentUser(): User? = getCachedUser() ?: getCurrentUserProfile()
+
+    /**
+     * Profile photo is not on the Laravel user model — resolve from encrypted prefs,
+     * Firebase Auth, then Firestore `users/{uid}.photoUrl`.
+     */
+    suspend fun resolveProfilePhotoUrl(): String? {
+        tokenStorage.getPhotoUrl()?.let { return it }
+        val firebaseUser = firebaseAuth.currentUser ?: return null
+        firebaseUser.photoUrl?.toString()?.let { return it }
+        return try {
+            firestore.collection("users").document(firebaseUser.uid).get().await()
+                .getString("photoUrl")
+                ?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     private suspend fun findDocumentByEmail(collection: String, email: String): DocumentSnapshot? {
         val trimmedEmail = email.trim()
@@ -262,6 +277,17 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
                 doc?.reference?.set(data, SetOptions.merge())?.await()
             }
 
+            getCachedUser()?.let { current ->
+                UserSessionCache.persist(
+                    tokenStorage,
+                    current.copy(
+                        name = normalizedName,
+                        email = normalizedEmail,
+                        photoUrl = photoUrl ?: current.photoUrl ?: firebaseUser.photoUrl?.toString()
+                    )
+                )
+            }
+
             AuthResult.Success(Unit)
         } catch (e: Exception) {
             val msg = when {
@@ -280,8 +306,12 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
     suspend fun logout() {
         try {
             authApi.logout()
-        } catch (_: Exception) { } finally {
-            logoutLocally()
+        } catch (_: Exception) {
+            // Proceed with local logout even if the backend call fails.
+        } finally {
+            firebaseAuth.signOut()
+            UserSessionCache.invalidate()
+            tokenStorage.clearSession()
         }
     }
 
@@ -319,25 +349,9 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
 
             tokenStorage.saveToken(response.token)
             tokenStorage.saveRole(normalizedRole)
-            tokenStorage.saveEmail(response.user.email)
-            tokenStorage.saveName(response.user.name)
-            tokenStorage.saveUserId(response.user.id)
-            
-            val artistId = response.user.artist_id ?: response.user.artist?.id ?: -1
-            tokenStorage.saveArtistId(artistId)
 
-            RetrofitClient.resetAll()
-
-            val user = User(
-                id = response.user.id,
-                name = response.user.name,
-                email = response.user.email,
-                role = normalizedRole,
-                token = response.token,
-                photoUrl = firebaseUser.photoUrl?.toString(),
-                artistId = if (artistId != -1) artistId else null
-            )
-            
+            val user = response.user.copy(role = normalizedRole).toUser(firebaseUser)
+            UserSessionCache.persist(tokenStorage, user)
             AuthResult.Success(
                 AuthResponse(
                     user = user,
@@ -358,19 +372,17 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
     }
     
     private fun incorrectFirebaseCredentialsMessage(): String =
-        "Wrong email or password for Firebase. The web admin password is separate."
+        "Wrong email or password for Firebase. The web admin password is separate — " +
+            "create this email in Firebase Console (project echo-panda-auth) or reset the password there."
 
-    suspend fun getUserLikedSongs(): List<String> {
-        val firebaseUser = firebaseAuth.currentUser ?: return emptyList()
-        val doc = firestore.collection("users").document(firebaseUser.uid).get().await()
-        @Suppress("UNCHECKED_CAST")
-        return doc.get("likedSongs") as? List<String> ?: emptyList()
-    }
-
-    suspend fun getUserPlaylists(): List<String> {
-        val firebaseUser = firebaseAuth.currentUser ?: return emptyList()
-        val doc = firestore.collection("users").document(firebaseUser.uid).get().await()
-        @Suppress("UNCHECKED_CAST")
-        return doc.get("playlists") as? List<String> ?: emptyList()
-    }
+    private fun com.example.echo_panda_mobile.data.remote.BackendUser.toUser(
+        firebaseUser: FirebaseUser
+    ): User = User(
+        id = id,
+        name = name,
+        email = email,
+        role = role,
+        token = tokenStorage.getToken().orEmpty(),
+        photoUrl = tokenStorage.getPhotoUrl() ?: firebaseUser.photoUrl?.toString()
+    )
 }

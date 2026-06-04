@@ -491,10 +491,8 @@ fun SongRow(index: Int, track: Track, isPlaying: Boolean = false, onClick: () ->
                 )
             }
 
-            val mins = (track.durationMs / 1000) / 60
-            val secs = (track.durationMs / 1000) % 60
             Text(
-                text = String.format(java.util.Locale.getDefault(), "%d:%02d", mins, secs),
+                text = formatTrackDuration(track.durationMs),
                 color = Color.White.copy(alpha = 0.5f),
                 fontSize = 13.sp,
                 modifier = Modifier.padding(horizontal = 4.dp)
@@ -616,11 +614,8 @@ fun SongCardHorizontal(
                 )
             }
 
-            // Duration
-            val mins = (track.durationMs / 1000) / 60
-            val secs = (track.durationMs / 1000) % 60
             Text(
-                text = String.format(java.util.Locale.getDefault(), "%d:%02d", mins, secs),
+                text = formatTrackDuration(track.durationMs),
                 color = Color.White.copy(alpha = 0.4f),
                 fontSize = 13.sp,
                 modifier = Modifier.padding(horizontal = 4.dp)
@@ -793,34 +788,9 @@ fun PlaylistPickerDialog(track: Track, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun MiniPlayer(
-    track: Track,
-    isPlaying: Boolean,
-    progress: Float,
-    onTogglePlay: () -> Unit,
-    onNext: () -> Unit,
-    onPrevious: () -> Unit,
-    onClose: () -> Unit,
-    onClick: () -> Unit
-) {
-    Column(modifier = Modifier
-        .fillMaxWidth()
-        .background(Color(0xFF121212).copy(alpha = 0.95f))
-        .clickable { onClick() }) {
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(2.dp),
-            color = Color.White,
-            trackColor = Color.White.copy(alpha = 0.2f)
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+fun MiniPlayer(track: Track, isPlaying: Boolean, onTogglePlay: () -> Unit, onNext: () -> Unit, onPrevious: () -> Unit, onClick: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF121212).copy(alpha = 0.95f)).clickable { onClick() }) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             SquareArtCard(
                 colors = track.placeholderColors,
                 imageUrl = track.imageUrl,
@@ -902,7 +872,6 @@ fun RecentPlaylistCard(playlist: Playlist, modifier: Modifier = Modifier, onClic
             ArtPlaceholder(
                 colors = playlist.placeholderColors,
                 imageUrl = playlist.imageUrl,
-                overlayText = playlist.labelOverlay,
                 modifier = Modifier.fillMaxSize()
             )
         }

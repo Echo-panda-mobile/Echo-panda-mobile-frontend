@@ -2,10 +2,11 @@ package com.example.echo_panda_mobile.presentation.navigation
 
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
-import androidx.navigation.compose.composable
-import androidx.navigation.navigation
 import androidx.navigation.NavType
+import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.navigation.navigation
+import com.example.echo_panda_mobile.presentation.views.user.browse.BrowseScreen
 import com.example.echo_panda_mobile.presentation.views.user.home.HomeScreen
 import com.example.echo_panda_mobile.presentation.views.user.discover.DiscoverScreen
 import com.example.echo_panda_mobile.presentation.views.user.library.LibraryScreen
@@ -16,6 +17,21 @@ import com.example.echo_panda_mobile.presentation.views.user.player.PlayerScreen
 import com.example.echo_panda_mobile.presentation.views.user.profile.UserProfileScreen
 import com.example.echo_panda_mobile.presentation.views.user.profile.UserSettingsScreen
 import com.example.echo_panda_mobile.presentation.views.user.artist.ArtistDetailScreen
+import com.example.echo_panda_mobile.presentation.views.user.library.PlaylistDetailScreen
+
+fun NavController.navigateToBrowse(section: String) {
+    navigate(Routes.USER_BROWSE.replace("{section}", section))
+}
+
+fun NavController.navigateToPlayer(trackId: String, resumeMs: Long? = null) {
+    var route = Routes.USER_PLAYER.replace("{trackId}", trackId)
+    if (resumeMs != null) {
+        route = route.replace("{resumeMs}", resumeMs.toString())
+    } else {
+        route = route.substringBefore("?")
+    }
+    this.navigate(route)
+}
 
 fun NavGraphBuilder.userNavGraph(
     navController: NavController,
@@ -47,10 +63,9 @@ fun NavGraphBuilder.userNavGraph(
                     navController.navigate(route)
                 },
                 onNavigateToArtist = { artistId ->
-                    val route = Routes.ARTIST_VIEW.replace("{artistId}", artistId)
-                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
-                    navController.navigate(route)
-                }
+                    navController.navigate(Routes.ARTIST_VIEW.replace("{artistId}", artistId))
+                },
+                onNavigateToBrowse = { section -> navController.navigateToBrowse(section) }
             )
         }
 
@@ -70,11 +85,10 @@ fun NavGraphBuilder.userNavGraph(
                     android.util.Log.d("NAVIGATION", "Route: $route")
                     navController.navigate(route)
                 },
-                onNavigateToSong = { trackId, _ ->
-                    val route = Routes.USER_PLAYER.replace("{trackId}", trackId)
-                    android.util.Log.d("NAVIGATION", "Navigating to: $route")
-                    navController.navigate(route)
-                }
+                onNavigateToSong = { trackId, resumeMs ->
+                    navController.navigateToPlayer(trackId, resumeMs)
+                },
+                onNavigateToBrowse = { section -> navController.navigateToBrowse(section) }
             )
         }
 
@@ -128,8 +142,26 @@ fun NavGraphBuilder.userNavGraph(
                     android.util.Log.d("NAVIGATION", "Navigating to: $route")
                     navController.navigate(route)
                 },
-                onSearch = { /* TODO */ },
-                onVoiceSearch = { /* TODO */ }
+                onSearch = { },
+                onNavigateToBrowse = { section -> navController.navigateToBrowse(section) }
+            )
+        }
+
+        composable(
+            route = Routes.USER_BROWSE,
+            arguments = listOf(navArgument("section") { type = NavType.StringType })
+        ) {
+            BrowseScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToArtist = { artistId ->
+                    navController.navigate(Routes.ARTIST_VIEW.replace("{artistId}", artistId))
+                },
+                onNavigateToAlbum = { albumId ->
+                    navController.navigate(Routes.USER_ALBUM_DETAIL.replace("{albumId}", albumId))
+                },
+                onNavigateToPlayer = { trackId, resumeMs ->
+                    navController.navigateToPlayer(trackId, resumeMs)
+                }
             )
         }
 
@@ -165,11 +197,8 @@ fun NavGraphBuilder.userNavGraph(
         composable(Routes.USER_PROFILE) {
             UserProfileScreen(
                 onBack = { navController.popBackStack() },
-                onSettings = { 
-                    android.util.Log.d("NAVIGATION", "Navigating to: ${Routes.USER_SETTINGS}")
-                    navController.navigate(Routes.USER_SETTINGS) 
-                },
-                onEditProfile = { /* TODO */ },
+                onSettings = { navController.navigate(Routes.USER_SETTINGS) },
+                onNavigateToLikedSongs = { navController.navigate(Routes.USER_FAVORITES) },
                 onLogoutSuccess = {
                     android.util.Log.d("NAVIGATION", "Logout success. Navigating to: ${Routes.LOGIN}")
                     navController.navigate(Routes.LOGIN) {

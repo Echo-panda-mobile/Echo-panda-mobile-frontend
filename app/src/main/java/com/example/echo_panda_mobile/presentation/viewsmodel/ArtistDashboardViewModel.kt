@@ -62,7 +62,9 @@ class ArtistDashboardViewModel(
         viewModelScope.launch {
             _uiState.value = DashboardUiState.Loading
 
-            val currentUser = user ?: authRepository.getCurrentUserProfile()
+            val currentUser = user
+                ?: authRepository.getCachedUser()
+                ?: authRepository.getCurrentUserProfile()
             
             if (currentUser == null && !_useMockData.value) {
                 _uiState.value = DashboardUiState.Error("Artist profile not found. Please log in again.")

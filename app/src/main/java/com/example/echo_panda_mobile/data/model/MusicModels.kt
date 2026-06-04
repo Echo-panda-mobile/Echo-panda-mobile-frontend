@@ -22,6 +22,22 @@ data class Album(
     val artistImageUrl: String? = null
 )
 
+/** API `duration` may be seconds or, if mis-stored, milliseconds. */
+private const val DURATION_SECONDS_VS_MS_THRESHOLD = 10_000
+
+fun resolveDurationMs(durationSeconds: Int?): Long {
+    val raw = durationSeconds ?: return 0L
+    return if (raw > DURATION_SECONDS_VS_MS_THRESHOLD) raw.toLong() else raw * 1000L
+}
+
+fun formatTrackDuration(durationMs: Long): String {
+    if (durationMs <= 0L) return "--:--"
+    val totalSeconds = durationMs / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format(java.util.Locale.getDefault(), "%d:%02d", minutes, seconds)
+}
+
 data class Track(
     val id: String,
     val title: String,

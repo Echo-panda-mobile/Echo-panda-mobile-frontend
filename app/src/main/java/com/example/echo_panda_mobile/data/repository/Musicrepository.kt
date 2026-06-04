@@ -1,10 +1,14 @@
 package com.example.echo_panda_mobile.data.repository
 
-import android.util.Log
+import android.media.MediaMetadataRetriever
 import androidx.compose.ui.graphics.Color
 import com.example.echo_panda_mobile.data.model.*
+import com.example.echo_panda_mobile.data.model.formatTrackDuration
+import com.example.echo_panda_mobile.data.model.resolveDurationMs
 import com.example.echo_panda_mobile.data.remote.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.*
 
@@ -21,25 +25,15 @@ class MusicRepository(
 
     private val defaultColors = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26))
 
-    private fun directImageUrl(url: String?): String? {
-        val raw = url?.takeIf { it.isNotBlank() && it != "null" } ?: return null
-        if (raw.startsWith("http") || raw.startsWith("content://") || raw.startsWith("file://")) {
-            return raw
-        }
-        
-        val apiBase = com.example.echo_panda_mobile.BuildConfig.API_BASE_URL
-        val domainBase = apiBase.replace("/api/", "/")
-        val cleanPath = if (raw.startsWith("/")) raw.substring(1) else raw
-        
-        val finalUrl = if (!cleanPath.contains("storage/") && !cleanPath.startsWith("http")) {
-            "${domainBase}storage/$cleanPath"
-        } else {
-            "$domainBase$cleanPath"
-        }
-        
-        Log.d("MusicRepository", "Generated URL: $finalUrl (from raw: $raw)")
-        return finalUrl
+    /** DB often has 180s placeholder; player uses real ExoPlayer duration from the audio file. */
+    private companion object {
+        const val PLACEHOLDER_DURATION_MS = 180_000L
+        const val MEDIA_DURATION_ENRICH_CONCURRENCY = 4
     }
+
+    /** Only use URLs that are already absolute (e.g. fresh S3 presigned links from the API). */
+    private fun directImageUrl(url: String?): String? =
+        url?.takeIf { it.isNotBlank() && it.startsWith("http") }
 
     private suspend fun fetchSignedArtistImageUrl(artistId: String): String? {
         if (apiService == null) return null
@@ -112,10 +106,10 @@ class MusicRepository(
     private suspend fun mergeFavoriteStatus(tracks: List<Track>): List<Track> {
         if (tracks.isEmpty() || apiService == null) return tracks
         return try {
-            val response = apiService.getFavorites()
+            val response = apiService.getMbFavorites()
             if (!response.isSuccessful) return tracks
             val favoriteIds = response.body()?.data?.mapNotNull { item ->
-                item.song?.id ?: item.songId ?: item.id
+                item.song?.id
             }?.map { it.toString() }?.toSet() ?: emptySet()
             tracks.map { it.copy(isFavorite = it.id in favoriteIds) }
         } catch (_: Exception) {
@@ -136,85 +130,154 @@ class MusicRepository(
         try {
             val response = api.getContinueListening()
             if (response.isSuccessful) {
-                val historyDtos = response.body()?.data ?: emptyList()
-                if (historyDtos.isEmpty()) return@withContext getNewAlbumsAsPlaylists()
-
-                val playlists = historyDtos.map { history ->
-                    async {
-                        val dto = history.song
-                        val albumId = dto.albumId?.toString() ?: dto.album?.id?.toString() ?: dto.resolvedId()
-                        
-                        val imageUrl = resolveTrackCoverUrl(
-                            songId = dto.resolvedId(),
-                            albumId = albumId,
-                            coverUrl = dto.coverUrl,
-                            albumCoverUrl = dto.album?.coverUrl
-                        )
-
-                        Playlist(
-                            id = albumId,
-                            title = dto.album?.title ?: dto.resolvedTitle(),
-                            imageUrl = imageUrl,
-                            labelOverlay = dto.artistName ?: dto.artist?.name,
-                            placeholderColors = getColorsForId(albumId),
-                            resumePositionMs = history.progressSeconds * 1000L
-                        )
-                    }
-                }.awaitAll().distinctBy { it.id }
-                MusicResult.Success(playlists)
+                val historyDtos = response.body()?.data.orEmpty()
+                android.util.Log.d("MusicRepository", "Found ${historyDtos.size} continue items")
+                if (historyDtos.isNotEmpty()) {
+                    return@withContext MusicResult.Success(playHistoryToPlaylists(historyDtos))
+                }
             } else {
-                getNewAlbumsAsPlaylists()
+                android.util.Log.w(
+                    "MusicRepository",
+                    "playback/continue failed (${response.code()}), using mb/playback/recent"
+                )
             }
+            val recent = fetchMbRecentPlaylists(limit = 6)
+            MusicResult.Success(recent)
         } catch (e: Exception) {
-            getNewAlbumsAsPlaylists()
+            android.util.Log.e("MusicRepository", "getRecentPlaylists error", e)
+            MusicResult.Success(fetchMbRecentPlaylists(limit = 6))
         }
     }
 
-    private suspend fun getNewAlbumsAsPlaylists(): MusicResult<List<Playlist>> = withContext(Dispatchers.IO) {
+    private suspend fun playHistoryToPlaylists(historyDtos: List<PlayHistoryDto>): List<Playlist> =
+        coroutineScope {
+            historyDtos.map { history ->
+                async {
+                    val dto = history.song
+                    val imageUrl = resolveTrackCoverUrl(
+                        songId = dto.resolvedId(),
+                        albumId = dto.albumId?.toString() ?: dto.album?.id?.toString(),
+                        coverUrl = dto.coverUrl,
+                        albumCoverUrl = dto.album?.coverUrl
+                    )
+                    Playlist(
+                        id = dto.resolvedId(),
+                        title = dto.resolvedTitle(),
+                        imageUrl = imageUrl,
+                        labelOverlay = dto.artistName,
+                        placeholderColors = getColorsForId(dto.resolvedId()),
+                        resumePositionMs = history.progressSeconds * 1000L
+                    )
+                }
+            }.awaitAll()
+        }
+
+    /** User-specific recently played (same source as Library → Recently). */
+    private suspend fun fetchMbRecentPlaylists(limit: Int): List<Playlist> {
+        if (apiService == null) return emptyList()
+        return try {
+            val response = apiService.getMbRecentlyPlayed(limit = limit)
+            if (!response.isSuccessful) {
+                android.util.Log.w("MusicRepository", "mb/playback/recent failed: ${response.code()}")
+                return emptyList()
+            }
+            coroutineScope {
+                response.body()?.data.orEmpty().map { item ->
+                    async {
+                        val song = item.song
+                        val imageUrl = resolveTrackCoverUrl(
+                            songId = song.resolvedId(),
+                            albumId = song.albumId?.toString() ?: song.album?.id?.toString(),
+                            coverUrl = song.coverUrl,
+                            albumCoverUrl = song.album?.coverUrl
+                        )
+                        Playlist(
+                            id = song.resolvedId(),
+                            title = song.resolvedTitle(),
+                            imageUrl = imageUrl,
+                            labelOverlay = song.artistName,
+                            placeholderColors = getColorsForId(song.resolvedId()),
+                            resumePositionMs = (item.progressSeconds ?: 0).coerceAtLeast(0) * 1000L
+                        )
+                    }
+                }.awaitAll()
+            }.distinctBy { it.id }
+        } catch (e: Exception) {
+            android.util.Log.e("MusicRepository", "mb/playback/recent error", e)
+            emptyList()
+        }
+    }
+
+    // ── Artists ───────────────────────────────────────────────────────────────
+
+    suspend fun getPopularArtists(limit: Int = 20): MusicResult<List<Artist>> = withContext(Dispatchers.IO) {
         if (apiService == null) return@withContext MusicResult.Error("API service not initialized")
         try {
-            val response = apiService.getAlbums(sortBy = "latest")
+            val response = apiService.getMbPopularArtists(limit = limit)
             if (response.isSuccessful) {
-                val albumDtos = response.body()?.data ?: emptyList()
-                val playlists = albumDtos.map { dto ->
-                    async {
-                        val albumId = dto.id.toString()
-                        val imageUrl = resolveAlbumCoverUrl(albumId, dto.coverUrl)
-
-                        Playlist(
-                            id = albumId,
-                            title = dto.title,
-                            imageUrl = imageUrl,
-                            placeholderColors = getColorsForId(albumId)
-                        )
-                    }
-                }.awaitAll()
-                MusicResult.Success(playlists)
+                val artists = mapArtistDtos(response.body()?.data.orEmpty())
+                if (artists.isNotEmpty()) {
+                    return@withContext MusicResult.Success(artists)
+                }
             } else {
-                MusicResult.Error("Failed to fetch fallback playlists")
+                android.util.Log.w(
+                    "MusicRepository",
+                    "mb/artists/popular failed (${response.code()}), falling back to /artists"
+                )
             }
+            fetchArtistsFromPublicCatalog()
         } catch (e: Exception) {
-            MusicResult.Error(e.localizedMessage ?: "Network error")
+            android.util.Log.e("MusicRepository", "getPopularArtists error", e)
+            fetchArtistsFromPublicCatalog()
         }
     }
 
-    suspend fun getPopularArtists(): MusicResult<List<Artist>> = withContext(Dispatchers.IO) {
-        val api = apiService ?: return@withContext MusicResult.Error("API service not initialized")
+    suspend fun getRandomArtists(limit: Int = 8): MusicResult<List<Artist>> = withContext(Dispatchers.IO) {
+        if (apiService == null) return@withContext MusicResult.Error("API service not initialized")
         try {
-            val response = api.getArtists()
+            val response = apiService.getMbRandomArtists(limit = limit)
             if (response.isSuccessful) {
-                val artistDtos = response.body()?.data ?: emptyList()
-                val artists = artistDtos.map { dto ->
-                    async { enrichArtist(dto.toDomain()) }
-                }.awaitAll()
-                MusicResult.Success(artists)
+                val artists = mapArtistDtos(response.body()?.data.orEmpty())
+                if (artists.isNotEmpty()) {
+                    return@withContext MusicResult.Success(artists)
+                }
             } else {
-                MusicResult.Error("Failed to fetch artists")
+                android.util.Log.w(
+                    "MusicRepository",
+                    "mb/artists/random failed (${response.code()}), using local shuffle fallback"
+                )
+            }
+            when (val popular = getPopularArtists(limit = 50)) {
+                is MusicResult.Success -> MusicResult.Success(popular.data.shuffled().take(limit))
+                is MusicResult.Error -> popular
+                else -> MusicResult.Success(emptyList())
             }
         } catch (e: Exception) {
-            MusicResult.Error(e.localizedMessage ?: "Network error")
+            android.util.Log.e("MusicRepository", "getRandomArtists error", e)
+            when (val popular = getPopularArtists(limit = 50)) {
+                is MusicResult.Success -> MusicResult.Success(popular.data.shuffled().take(limit))
+                is MusicResult.Error -> popular
+                else -> MusicResult.Success(emptyList())
+            }
         }
     }
+
+    private suspend fun fetchArtistsFromPublicCatalog(): MusicResult<List<Artist>> {
+        val response = apiService?.getArtists()
+            ?: return MusicResult.Error("API service not initialized")
+        return if (response.isSuccessful) {
+            MusicResult.Success(mapArtistDtos(response.body()?.data.orEmpty()))
+        } else {
+            MusicResult.Error("Failed to fetch artists: ${response.code()}")
+        }
+    }
+
+    private suspend fun mapArtistDtos(artistDtos: List<ArtistDto>): List<Artist> =
+        coroutineScope {
+            artistDtos.map { dto ->
+                async { enrichArtist(dto.toDomain()) }
+            }.awaitAll()
+        }
 
     suspend fun getArtistById(artistId: String): MusicResult<Artist> = withContext(Dispatchers.IO) {
         if (apiService == null) return@withContext MusicResult.Error("API service not initialized")
@@ -529,35 +592,30 @@ class MusicRepository(
 
     private fun SongDto.resolvedId(): String = (id ?: 0).toString()
 
-    private fun SongDto.toDomain(defaultArtist: String): Track {
-        val resolvedArtist = artist?.name?.takeIf { it != "Unknown" } ?: artistName ?: defaultArtist
-        return Track(
-            id = resolvedId(),
-            title = resolvedTitle(),
-            artist = resolvedArtist,
-            durationMs = (durationSeconds ?: 0) * 1000L,
-            imageUrl = directImageUrl(getDisplayCoverUrl()),
-            album = album?.title ?: (if (resolvedArtist != "Unknown") resolvedArtist else null),
-            placeholderColors = getColorsForId(resolvedId()),
-            isFavorite = isFavorite ?: false
-        )
-    }
+    private fun SongDto.resolvedArtist(fallback: String = "Unknown"): String =
+        artistName?.takeIf { it.isNotBlank() }
+            ?: artist?.name?.takeIf { it.isNotBlank() && it != "Unknown" }
+            ?: album?.artist?.name?.takeIf { it.isNotBlank() && it != "Unknown" }
+            ?: album?.artistName?.takeIf { it.isNotBlank() }
+            ?: fallback
+
+    private fun SongDto.toDomain(defaultArtist: String) = Track(
+        id = resolvedId(),
+        title = resolvedTitle(),
+        artist = resolvedArtist(defaultArtist),
+        durationMs = resolveDurationMs(durationSeconds),
+        imageUrl = directImageUrl(coverUrl ?: album?.coverUrl),
+        album = album?.title?.takeIf { it.isNotBlank() },
+        placeholderColors = getColorsForId(resolvedId()),
+        isFavorite = isFavorite ?: false
+    )
 
     private fun FavoriteItemDto.toTrack(): Track? {
-        song?.let { return it.toDomain("Unknown").copy(isFavorite = true) }
-        val trackId = songId ?: id ?: return null
-        val idStr = trackId.toString()
-        val resolvedTitle = title?.takeIf { it.isNotBlank() } ?: name?.takeIf { it.isNotBlank() } ?: "Unknown Track"
-        return Track(
-            id = idStr,
-            title = resolvedTitle,
-            artist = artistName ?: "Unknown",
-            durationMs = (durationSeconds ?: 0) * 1000L,
-            imageUrl = directImageUrl(getDisplayCoverUrl()),
-            album = album?.title,
-            placeholderColors = getColorsForId(idStr),
-            isFavorite = true
-        )
+        if (favoritableType != null && !favoritableType.contains("Song", ignoreCase = true)) {
+            return null
+        }
+        val songDto = song ?: favoritable ?: return null
+        return songDto.toDomain("Unknown").copy(isFavorite = true)
     }
 
     suspend fun getRecentListening(): MusicResult<List<Playlist>> = withContext(Dispatchers.IO) {
@@ -588,15 +646,15 @@ class MusicRepository(
                 }.awaitAll().distinctBy { it.id }
                 MusicResult.Success(playlists)
             } else {
-                getRecentPlaylists()
+                MusicResult.Success(fetchMbRecentPlaylists(limit = 10))
             }
         } catch (e: Exception) {
-            getRecentPlaylists()
+            MusicResult.Success(fetchMbRecentPlaylists(limit = 10))
         }
     }
 
     suspend fun getFeaturedArtist(): MusicResult<FeaturedArtist> = withContext(Dispatchers.IO) {
-        val artists = getPopularArtists()
+        val artists = getPopularArtists(limit = 1)
         if (artists is MusicResult.Success && artists.data.isNotEmpty()) {
             val artist = artists.data.first()
             MusicResult.Success(FeaturedArtist(
@@ -638,10 +696,22 @@ class MusicRepository(
     suspend fun getFavoriteTracks(): MusicResult<List<Track>> = withContext(Dispatchers.IO) {
         if (apiService == null) return@withContext MusicResult.Error("API service not initialized")
         try {
-            val response = apiService.getFavorites()
+            val response = apiService.getMbFavorites()
             if (response.isSuccessful) {
-                val tracks = response.body()?.data?.mapNotNull { it.toTrack() } ?: emptyList()
-                MusicResult.Success(enrichTrackCovers(tracks))
+                val items = response.body()?.data.orEmpty()
+                val tracks = items.mapNotNull { item ->
+                    val dto = item.song ?: return@mapNotNull null
+                    val track = item.toTrack()
+                    track?.let {
+                        android.util.Log.d(
+                            "MusicRepository",
+                            "mb/favorites id=${dto.id} apiDuration=${dto.durationSeconds} " +
+                                "durationMs=${it.durationMs} ui=${formatTrackDuration(it.durationMs)}"
+                        )
+                    }
+                    track
+                }
+                MusicResult.Success(enrichTrackCovers(mergeFavoriteStatus(tracks)))
             } else {
                 MusicResult.Error("Failed to fetch favorite tracks")
             }
@@ -650,15 +720,59 @@ class MusicRepository(
         }
     }
 
+    /**
+     * Recently played for Library — mobile MB endpoint (listen-history + normalized songs).
+     */
     suspend fun getRecentlyPlayedTracks(): MusicResult<List<Track>> = withContext(Dispatchers.IO) {
         if (apiService == null) return@withContext MusicResult.Error("API service not initialized")
         try {
-            val response = apiService.getRecentlyPlayed()
+            val response = apiService.getMbRecentlyPlayed(limit = 50)
             if (response.isSuccessful) {
-                val tracks = response.body()?.data?.map { it.toDomain("Unknown") } ?: emptyList()
+                val tracks = response.body()?.data.orEmpty().map { item ->
+                    val song = item.song
+                    song.toDomain(song.resolvedArtist()).copy(
+                        resumePositionMs = (item.progressSeconds ?: 0).coerceAtLeast(0) * 1000L,
+                        isFavorite = song.isFavorite ?: false
+                    )
+                }.distinctBy { it.id }
+                response.body()?.data.orEmpty().forEach { item ->
+                    android.util.Log.d(
+                        "MusicRepository",
+                        "mb/playback/recent id=${item.song.id} apiDuration=${item.song.durationSeconds} " +
+                            "durationMs=${item.song.let { resolveDurationMs(it.durationSeconds) }} " +
+                            "ui=${formatTrackDuration(resolveDurationMs(item.song.durationSeconds))}"
+                    )
+                }
                 MusicResult.Success(enrichTrackCovers(mergeFavoriteStatus(tracks)))
             } else {
                 MusicResult.Error("Failed to fetch recently played")
+            }
+        } catch (e: Exception) {
+            MusicResult.Error(e.localizedMessage ?: "Network error")
+        }
+    }
+
+    suspend fun trackPlaybackProgress(
+        songId: String,
+        progressSeconds: Int,
+        durationSeconds: Int
+    ): MusicResult<Boolean> = withContext(Dispatchers.IO) {
+        if (apiService == null) return@withContext MusicResult.Error("API service not initialized")
+        try {
+            val songIntId = songId.toIntOrNull()
+                ?: return@withContext MusicResult.Error("Invalid song ID")
+            val response = apiService.trackPlaybackProgress(
+                PlaybackProgressRequest(
+                    songId = songIntId,
+                    progressSeconds = progressSeconds.coerceAtLeast(0),
+                    durationSeconds = durationSeconds.coerceAtLeast(1),
+                    source = "android"
+                )
+            )
+            if (response.isSuccessful) {
+                MusicResult.Success(true)
+            } else {
+                MusicResult.Error("Failed to track playback: ${response.code()}")
             }
         } catch (e: Exception) {
             MusicResult.Error(e.localizedMessage ?: "Network error")
@@ -696,6 +810,66 @@ class MusicRepository(
             is MusicResult.Success -> MusicResult.Success(result.data.find { it.id == playlistId })
             is MusicResult.Error -> result
             else -> MusicResult.Error("Failed to load playlist")
+        }
+    }
+
+    /**
+     * Reads duration from the streamed audio file (same source as ExoPlayer on the player screen).
+     * Used when API/DB `songs.duration` is wrong or a placeholder (e.g. 180s for every row).
+     */
+    suspend fun enrichTracksDurationFromMedia(tracks: List<Track>): List<Track> =
+        withContext(Dispatchers.IO) {
+            if (tracks.isEmpty() || apiService == null) return@withContext tracks
+
+            val semaphore = Semaphore(MEDIA_DURATION_ENRICH_CONCURRENCY)
+            coroutineScope {
+                tracks.map { track ->
+                    async {
+                        if (!track.needsMediaDurationEnrichment()) return@async track
+                        semaphore.withPermit { enrichSingleTrackDurationFromMedia(track) }
+                    }
+                }.awaitAll()
+            }
+        }
+
+    private fun Track.needsMediaDurationEnrichment(): Boolean =
+        durationMs <= 0L || durationMs == PLACEHOLDER_DURATION_MS
+
+    private suspend fun enrichSingleTrackDurationFromMedia(track: Track): Track {
+        val ticketResult = getStreamTicket(track.id)
+        if (ticketResult !is MusicResult.Success) return track
+
+        val url = ticketResult.data.signedUrl
+            ?: ticketResult.data.streamUrl
+            ?: ticketResult.data.url
+            ?: return track
+
+        val mediaDurationMs = extractMediaDurationMs(url) ?: return track
+        if (mediaDurationMs <= 0L) return track
+
+        android.util.Log.d(
+            "MusicRepository",
+            "media duration id=${track.id} apiMs=${track.durationMs} mediaMs=$mediaDurationMs " +
+                "ui=${formatTrackDuration(mediaDurationMs)}"
+        )
+        return track.copy(durationMs = mediaDurationMs)
+    }
+
+    private fun extractMediaDurationMs(url: String): Long? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(url, emptyMap())
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()
+                ?.takeIf { it > 0L }
+        } catch (e: Exception) {
+            android.util.Log.w("MusicRepository", "MediaMetadataRetriever failed: ${e.message}")
+            null
+        } finally {
+            try {
+                retriever.release()
+            } catch (_: Exception) {
+            }
         }
     }
 

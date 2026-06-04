@@ -84,9 +84,15 @@ fun ArtistDetailScreen(
                 PopularSection(
                     state = state,
                     onToggleFollow = { viewModel.toggleFollow() },
-                    onTrackClick = { id, resume ->
-                        globalPlayerViewModel.setQueue(state.popularTracks, state.popularTracks.indexOfFirst { it.id == id }.coerceAtLeast(0))
-                        onNavigateToPlayer(id, resume)
+                    onTrackClick = { trackId, resumeMs ->
+                        val queue = when {
+                            state.popularTracks.any { it.id == trackId } -> state.popularTracks
+                            else -> state.singles
+                        }
+                        if (queue.isNotEmpty()) {
+                            globalPlayerViewModel.playQueue(queue, trackId)
+                        }
+                        onNavigateToPlayer(trackId, resumeMs)
                     },
                     onAddToFavorites = { track ->
                         viewModel.toggleFavorite(track)
@@ -118,9 +124,11 @@ fun ArtistDetailScreen(
                     Spacer(modifier = Modifier.height(32.dp))
                     ArtistSinglesSection(
                         singles = state.singles,
-                        onTrackClick = { id, resume ->
-                            globalPlayerViewModel.setQueue(state.singles, state.singles.indexOfFirst { it.id == id }.coerceAtLeast(0))
-                            onNavigateToPlayer(id, resume)
+                        onTrackClick = { trackId, resumeMs ->
+                            if (state.singles.isNotEmpty()) {
+                                globalPlayerViewModel.playQueue(state.singles, trackId)
+                            }
+                            onNavigateToPlayer(trackId, resumeMs)
                         }
                     )
                 }

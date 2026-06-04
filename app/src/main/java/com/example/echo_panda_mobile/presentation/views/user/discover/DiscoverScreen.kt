@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.echo_panda_mobile.data.model.*
 import com.example.echo_panda_mobile.presentation.components.*
+import com.example.echo_panda_mobile.presentation.navigation.BrowseSection
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.theme.LocalAppLanguage
 import com.example.echo_panda_mobile.presentation.viewmodel.DiscoverViewModel
@@ -33,11 +34,16 @@ fun DiscoverScreen(
     onNavigateToArtist: (String) -> Unit = {},
     onNavigateToAlbum: (String) -> Unit = {},
     onNavigateToSong: (String, Long?) -> Unit = { _, _ -> },
+    onNavigateToBrowse: (String) -> Unit = {},
     viewModel: DiscoverViewModel = viewModel(),
     globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
-    
+    val startVoiceSearch = rememberVoiceSearchLauncher(
+        onResult = { viewModel.startSearchWithQuery(it) },
+        prompt = "Search songs, artists, or albums..."
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -51,7 +57,8 @@ fun DiscoverScreen(
                     query = state.searchQuery,
                     isSearchActive = state.isSearchActive,
                     onQueryChange = viewModel::onSearchQueryChange,
-                    onToggleSearch = viewModel::toggleSearch
+                    onToggleSearch = viewModel::toggleSearch,
+                    onVoiceSearch = startVoiceSearch
                 )
             },
             bottomBar = { EchoPandaBottomBar(selectedNav, onNavSelect) }
@@ -100,7 +107,7 @@ fun DiscoverScreen(
                             fullTitle = "Music Genres",
                             highlightPart = "Genres",
                             highlightColor = EchoPandaColors.AccentBlue,
-                            onViewAll = {}
+                            onViewAll = { onNavigateToBrowse(BrowseSection.GENRES) }
                         )
                         Spacer(Modifier.height(16.dp))
                         Row(
@@ -127,7 +134,7 @@ fun DiscoverScreen(
                             fullTitle = "Mood Playlist",
                             highlightPart = "Playlist",
                             highlightColor = EchoPandaColors.AccentBlue,
-                            onViewAll = {}
+                            onViewAll = { onNavigateToBrowse(BrowseSection.MOOD_PLAYLISTS) }
                         )
                         Spacer(Modifier.height(16.dp))
                         Row(
@@ -154,7 +161,7 @@ fun DiscoverScreen(
                             fullTitle = "New Release Songs",
                             highlightPart = "Songs",
                             highlightColor = EchoPandaColors.AccentBlue,
-                            onViewAll = {}
+                            onViewAll = { onNavigateToBrowse(BrowseSection.NEW_RELEASES) }
                         )
                         Spacer(Modifier.height(8.dp))
                         Column(
@@ -163,9 +170,9 @@ fun DiscoverScreen(
                             state.newReleases.take(4).forEachIndexed { index, track ->
                                 SongCardHorizontal(
                                     track = track,
-                                    onClick = { 
-                                        globalPlayerViewModel.setQueue(state.newReleases, index)
-                                        onNavigateToSong(track.id, track.resumePositionMs) 
+                                    onClick = {
+                                        globalPlayerViewModel.playQueue(state.newReleases, track.id)
+                                        onNavigateToSong(track.id, track.resumePositionMs)
                                     },
                                     onFavoriteClick = { viewModel.toggleFavorite(track) }
                                 )
@@ -179,7 +186,7 @@ fun DiscoverScreen(
                             fullTitle = "Popular Artists",
                             highlightPart = "Artists",
                             highlightColor = EchoPandaColors.AccentBlue,
-                            onViewAll = {}
+                            onViewAll = { onNavigateToBrowse(BrowseSection.POPULAR_ARTISTS) }
                         )
                         Spacer(Modifier.height(16.dp))
                         Row(
@@ -204,7 +211,7 @@ fun DiscoverScreen(
                             fullTitle = "Most Played Songs",
                             highlightPart = "Songs",
                             highlightColor = EchoPandaColors.AccentBlue,
-                            onViewAll = {}
+                            onViewAll = { onNavigateToBrowse(BrowseSection.MOST_PLAYED) }
                         )
                         Spacer(Modifier.height(8.dp))
                         Column(
@@ -213,9 +220,9 @@ fun DiscoverScreen(
                             state.mostPlayedSongs.take(4).forEachIndexed { index, track ->
                                 SongCardHorizontal(
                                     track = track,
-                                    onClick = { 
-                                        globalPlayerViewModel.setQueue(state.mostPlayedSongs, index)
-                                        onNavigateToSong(track.id, track.resumePositionMs) 
+                                    onClick = {
+                                        globalPlayerViewModel.playQueue(state.mostPlayedSongs, track.id)
+                                        onNavigateToSong(track.id, track.resumePositionMs)
                                     },
                                     onFavoriteClick = { viewModel.toggleFavorite(track) }
                                 )
@@ -235,7 +242,8 @@ private fun DiscoverTopBar(
     query: String,
     isSearchActive: Boolean,
     onQueryChange: (String) -> Unit,
-    onToggleSearch: () -> Unit
+    onToggleSearch: () -> Unit,
+    onVoiceSearch: () -> Unit = {}
 ) {
     if (isSearchActive) {
         Row(
@@ -266,9 +274,14 @@ private fun DiscoverTopBar(
                 shape = RoundedCornerShape(12.dp),
                 singleLine = true,
                 trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onVoiceSearch) {
+                            Icon(Icons.Default.Mic, contentDescription = "Voice Search", tint = EchoPandaColors.AccentBlue)
+                        }
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { onQueryChange("") }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
+                            }
                         }
                     }
                 }
@@ -299,14 +312,14 @@ private fun DiscoverTopBar(
                 fontWeight = FontWeight.Bold
             )
             
-            IconButton(onClick = { /* Open Menu */ }) {
-                Icon(
-                    Icons.Default.Menu,
-                    contentDescription = "Menu",
-                    tint = EchoPandaColors.AccentBlue,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
+            Icon(
+                Icons.Default.Mic,
+                contentDescription = "Voice Search",
+                tint = EchoPandaColors.AccentBlue,
+                modifier = Modifier
+                    .size(28.dp)
+                    .clickable { onVoiceSearch() }
+            )
         }
     }
 }

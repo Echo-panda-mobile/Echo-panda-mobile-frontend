@@ -37,7 +37,7 @@ import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 fun UserProfileScreen(
     onBack: () -> Unit,
     onSettings: () -> Unit,
-    onEditProfile: () -> Unit,
+    onNavigateToLikedSongs: () -> Unit,
     onLogoutSuccess: () -> Unit,
     viewModel: UserProfileViewModel = viewModel(factory = UserProfileViewModelFactory(LocalContext.current))
 ) {
@@ -80,8 +80,9 @@ fun UserProfileScreen(
 
     // Edit Profile Dialog
     if (showEditProfileDialog) {
-        var newName by remember { mutableStateOf(uiState.user?.name ?: "") }
-        var newEmail by remember { mutableStateOf(uiState.user?.email ?: "") }
+        var newName by remember(uiState.user?.name) {
+            mutableStateOf(uiState.user?.name ?: "")
+        }
 
         AlertDialog(
             onDismissRequest = { showEditProfileDialog = false },
@@ -100,23 +101,25 @@ fun UserProfileScreen(
                             unfocusedContainerColor = Color.Transparent
                         )
                     )
-                    OutlinedTextField(
-                        value = newEmail,
-                        onValueChange = { newEmail = it },
-                        label = { Text("Email") },
-                        colors = TextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "Email",
+                            fontSize = 12.sp,
+                            color = EchoPandaColors.TextMutedDark
                         )
-                    )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = uiState.user?.email?.takeIf { it.isNotBlank() } ?: "—",
+                            fontSize = 16.sp,
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.updateProfile(newName, newEmail)
+                        viewModel.updateProfile(newName)
                         showEditProfileDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = EchoPandaColors.AccentBlue)
@@ -169,6 +172,28 @@ fun UserProfileScreen(
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
             }
+        } else if (uiState.user == null && uiState.errorMessage != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = uiState.errorMessage ?: "Something went wrong",
+                    color = EchoPandaColors.TextMutedDark,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = { viewModel.loadUserProfile(forceRefreshUser = true) },
+                    colors = ButtonDefaults.buttonColors(containerColor = EchoPandaColors.AccentBlue)
+                ) {
+                    Text("Retry", color = Color.Black)
+                }
+            }
         } else {
             Column(
                 modifier = Modifier
@@ -178,6 +203,18 @@ fun UserProfileScreen(
                     .padding(horizontal = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                uiState.errorMessage?.let { message ->
+                    Text(
+                        text = message,
+                        color = EchoPandaColors.ErrorRed,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Profile Image
@@ -230,16 +267,24 @@ fun UserProfileScreen(
 
                 // Name and Email
                 Text(
-                    text = uiState.user?.name ?: "John Doe",
+                    text = uiState.user?.name?.takeIf { it.isNotBlank() } ?: "—",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
                 Text(
-                    text = uiState.user?.email ?: "john.doe@example.com",
+                    text = uiState.user?.email?.takeIf { it.isNotBlank() } ?: "—",
                     fontSize = 14.sp,
                     color = EchoPandaColors.TextMutedDark
                 )
+                uiState.user?.role?.takeIf { it.isNotBlank() }?.let { role ->
+                    Text(
+                        text = role.replaceFirstChar { it.uppercase() },
+                        fontSize = 12.sp,
+                        color = EchoPandaColors.AccentBlue,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(32.dp))
 
@@ -249,18 +294,13 @@ fun UserProfileScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     ProfileStatCard(
-                        count = uiState.playlists.size.toString(),
+                        count = uiState.playlistCount.toString(),
                         label = "Playlists",
                         modifier = Modifier.weight(1f)
                     )
                     ProfileStatCard(
-                        count = "0",
-                        label = "Followers",
-                        modifier = Modifier.weight(1f)
-                    )
-                    ProfileStatCard(
-                        count = uiState.followingCount.toString(),
-                        label = "Following",
+                        count = uiState.likedSongsCount.toString(),
+                        label = "Liked Songs",
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -288,14 +328,8 @@ fun UserProfileScreen(
                     AccountActionItem(
                         icon = Icons.Default.Favorite,
                         title = "Liked Songs",
-                        subtitle = "View your saved songs",
-                        onClick = { /* Navigate to Liked Songs */ }
-                    )
-                    AccountActionItem(
-                        icon = Icons.Default.FileDownload,
-                        title = "Download Management",
-                        subtitle = "Manage your downloads",
-                        onClick = { /* Navigate to Downloads */ }
+                        subtitle = "${uiState.likedSongsCount} saved songs",
+                        onClick = onNavigateToLikedSongs
                     )
                 }
 
