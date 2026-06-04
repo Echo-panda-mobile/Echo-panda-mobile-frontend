@@ -39,6 +39,10 @@ data class TagData(
     val id: Int,
     val name: String,
     val slug: String? = null,
+    @SerializedName("is_active")
+    val isActive: Boolean = true,
+    @SerializedName("show_as_row")
+    val showAsRow: Boolean = false,
     @SerializedName("songs_count")
     val songsCount: Int = 0
 )
@@ -55,6 +59,10 @@ data class GenreData(
     val id: Int,
     val name: String,
     val slug: String? = null,
+    @SerializedName("is_active")
+    val isActive: Boolean = true,
+    @SerializedName("show_as_row")
+    val showAsRow: Boolean = false,
     @SerializedName("songs_count")
     val songsCount: Int = 0
 )
@@ -74,6 +82,14 @@ data class CreateTagRequest(
 
 data class CreateGenreRequest(
     val name: String
+)
+
+data class UpdateActiveStatusRequest(
+    @SerializedName("is_active") val isActive: Boolean
+)
+
+data class UpdateShowAsRowRequest(
+    @SerializedName("show_as_row") val showAsRow: Boolean
 )
 
 data class CreatedAdminUser(
@@ -136,6 +152,12 @@ interface AdminApiService {
     @PUT("api/mb/admin/tags/{tag}")
     suspend fun updateTag(@Path("tag") tagId: Int, @Body body: CreateTagRequest): TagData
 
+    @PATCH("api/mb/admin/tags/{tag}/status")
+    suspend fun updateTagStatus(@Path("tag") tagId: Int, @Body body: UpdateActiveStatusRequest): TagData
+
+    @PATCH("api/mb/admin/tags/{tag}/show-as-row")
+    suspend fun updateTagShowAsRow(@Path("tag") tagId: Int, @Body body: UpdateShowAsRowRequest): TagData
+
     @DELETE("api/mb/admin/tags/{tag}")
     suspend fun deleteTag(@Path("tag") tagId: Int): Response<Unit>
 
@@ -145,8 +167,20 @@ interface AdminApiService {
     @PUT("api/mb/admin/genres/{genre}")
     suspend fun updateGenre(@Path("genre") genreId: Int, @Body body: CreateGenreRequest): GenreData
 
+    @PATCH("api/mb/admin/genres/{genre}/status")
+    suspend fun updateGenreStatus(@Path("genre") genreId: Int, @Body body: UpdateActiveStatusRequest): GenreData
+
+    @PATCH("api/mb/admin/genres/{genre}/show-as-row")
+    suspend fun updateGenreShowAsRow(@Path("genre") genreId: Int, @Body body: UpdateShowAsRowRequest): GenreData
+
     @DELETE("api/mb/admin/genres/{genre}")
     suspend fun deleteGenre(@Path("genre") genreId: Int): Response<Unit>
+
+    @PATCH("api/mb/admin/songs/{song}/status")
+    suspend fun updateSongStatus(
+        @Path("song") songId: String,
+        @Body body: UpdateActiveStatusRequest
+    ): Response<Unit>
 
     @POST("api/mb/admin/songs/{song}/approve")
     suspend fun approveSong(@Path("song") songId: String): Response<Unit>
@@ -158,6 +192,12 @@ interface AdminApiService {
     suspend fun reportSong(
         @Path("song") songId: String,
         @Body body: AdminModerationReportRequest
+    ): Response<Unit>
+
+    @PATCH("api/mb/admin/albums/{album}/status")
+    suspend fun updateAlbumStatus(
+        @Path("album") albumId: String,
+        @Body body: UpdateActiveStatusRequest
     ): Response<Unit>
 
     @POST("api/mb/admin/albums/{album}/approve")

@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 
 data class AdminAlbumDetailUiState(
     val isLoading: Boolean = true,
+    val isUpdatingStatus: Boolean = false,
     val errorMessage: String? = null,
     val album: Album? = null,
     val actionMessage: String? = null
@@ -50,6 +51,34 @@ class AdminAlbumDetailViewModel(
                     _uiState.value = AdminAlbumDetailUiState(isLoading = false, errorMessage = result.message)
                 }
                 else -> Unit
+            }
+        }
+    }
+
+    fun setAlbumActive(isActive: Boolean) {
+        val album = _uiState.value.album ?: return
+        viewModelScope.launch {
+            val previous = album
+            _uiState.value = _uiState.value.copy(
+                album = album.copy(isActive = isActive),
+                isUpdatingStatus = true,
+                errorMessage = null,
+                actionMessage = null
+            )
+            when (val result = adminRepository.setAlbumActive(albumId, isActive)) {
+                is AdminResult.Success -> {
+                    _uiState.value = _uiState.value.copy(
+                        isUpdatingStatus = false,
+                        actionMessage = if (isActive) "Album is visible on the platform." else "Album has been banned."
+                    )
+                }
+                is AdminResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        album = previous,
+                        isUpdatingStatus = false,
+                        errorMessage = result.message
+                    )
+                }
             }
         }
     }

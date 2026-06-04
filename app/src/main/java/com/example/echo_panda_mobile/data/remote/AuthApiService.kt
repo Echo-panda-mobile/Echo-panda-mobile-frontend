@@ -16,10 +16,15 @@ data class BackendArtist(
     val id: Int,
     val name: String,
     val image_url: String? = null,
+    @SerializedName("cover_image_url") val coverImageUrl: String? = null,
     val firebase_uid: String? = null,
     val provider: String? = null,
     val id_token: String? = null
-)
+) {
+    fun profileImageSource(): String? =
+        image_url?.takeIf { it.isNotBlank() && it != "null" }
+            ?: coverImageUrl?.takeIf { it.isNotBlank() && it != "null" }
+}
 
 data class BackendUser(
     val id: Int,

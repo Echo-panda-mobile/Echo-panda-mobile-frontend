@@ -150,32 +150,7 @@ fun AdminProfileScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            AdminProfileActionItem(
-                icon = Icons.Default.Security,
-                title = "Security Settings",
-                subtitle = "Manage password and 2FA",
-                onClick = {}
-            )
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            AdminProfileActionItem(
-                icon = Icons.Default.Notifications,
-                title = "System Notifications",
-                subtitle = "Alerts and logs configuration",
-                onClick = {}
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            AdminProfileActionItem(
-                icon = Icons.Default.Settings,
-                title = "Platform Settings",
-                subtitle = "Global application configurations",
-                onClick = {}
-            )
-
-            Spacer(modifier = Modifier.height(40.dp))
 
             Button(
                 onClick = { showLogoutDialog = true },

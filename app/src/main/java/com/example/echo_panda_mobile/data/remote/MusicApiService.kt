@@ -45,6 +45,20 @@ data class MbArtistDto(
     @SerializedName("monthly_listeners") val monthlyListeners: String? = null
 )
 
+data class MbGenreDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("slug") val slug: String? = null,
+    @SerializedName("songs_count") val songsCount: Int? = null
+)
+
+data class MbTagDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("slug") val slug: String? = null,
+    @SerializedName("songs_count") val songsCount: Int? = null
+)
+
 data class ArtistImageUrlResponse(
     @SerializedName("url") val url: String? = null,
     @SerializedName("signed_url") val signedUrl: String? = null,
@@ -131,6 +145,7 @@ data class AlbumDto(
     @SerializedName("cover_url") val coverUrl: String? = null,
     @SerializedName("cover_key") val coverKey: String? = null,
     @SerializedName("release_status") val releaseStatus: String? = "published",
+    @SerializedName("is_active") val isActive: Boolean? = true,
     @SerializedName("songs_count") val songsCount: Int? = null,
     @SerializedName("cover_image") val coverImage: String? = null
 ) {
@@ -181,7 +196,8 @@ data class SongDto(
     @SerializedName("cover_key") val coverKey: String? = null,
     @SerializedName("audio_url") val audioUrl: String? = null,
     @SerializedName("album") val album: AlbumDto? = null,
-    @SerializedName("is_favorited") val isFavorite: Boolean? = null
+    @SerializedName("is_favorited") val isFavorite: Boolean? = null,
+    @SerializedName("is_active") val isActive: Boolean? = true
 ) {
     fun getDisplayCoverUrl(): String? = coverUrl ?: coverKey ?: album?.getDisplayCoverUrl()
 }
@@ -315,6 +331,16 @@ interface MusicApiService {
         @Query("limit") limit: Int? = null
     ): Response<BaseResponse<List<MbArtistDto>>>
 
+    @GET("api/mb/genres")
+    suspend fun getGenres(
+        @Query("limit") limit: Int? = null
+    ): Response<BaseResponse<List<MbGenreDto>>>
+
+    @GET("api/mb/tags")
+    suspend fun getTags(
+        @Query("limit") limit: Int? = null
+    ): Response<BaseResponse<List<MbTagDto>>>
+
     @GET("api/artists/{id}")
     suspend fun getArtistDetail(
         @Path("id") artistId: String
@@ -358,7 +384,11 @@ interface MusicApiService {
     @GET("api/songs")
     suspend fun getSongs(
         @Query("search") search: String? = null,
-        @Query("album_id") albumId: Int? = null
+        @Query("album_id") albumId: Int? = null,
+        @Query("category_id") categoryId: Int? = null,
+        @Query("tag_id") tagId: Int? = null,
+        @Query("sort_by") sortBy: String? = null,
+        @Query("per_page") perPage: Int? = null
     ): Response<PaginatedResponse<SongDto>>
 
     @GET("api/songs/{id}")

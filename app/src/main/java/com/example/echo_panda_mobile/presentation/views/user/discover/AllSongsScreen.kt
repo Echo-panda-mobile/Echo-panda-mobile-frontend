@@ -17,27 +17,20 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.echo_panda_mobile.presentation.components.EchoPandaBottomBar
 import com.example.echo_panda_mobile.presentation.components.SongCardHorizontal
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
-import com.example.echo_panda_mobile.presentation.viewmodel.DiscoverViewModel
+import com.example.echo_panda_mobile.presentation.viewmodel.AllSongsViewModel
 import com.example.echo_panda_mobile.presentation.viewmodel.GlobalPlayerViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AllSongsScreen(
-    type: String = "Songs",
     selectedNav: Int = 1,
     onNavSelect: (Int) -> Unit = {},
     onBack: () -> Unit = {},
     onNavigateToPlayer: (String, Long?) -> Unit = { _, _ -> },
-    viewModel: DiscoverViewModel = viewModel(),
+    viewModel: AllSongsViewModel = viewModel(),
     globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
-    
-    val tracks = when (type) {
-        "New Releases" -> state.newReleases
-        "Most Played" -> state.mostPlayedSongs
-        else -> state.newReleases + state.mostPlayedSongs
-    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -46,7 +39,7 @@ fun AllSongsScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        type,
+                        state.title,
                         color = Color.White,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
@@ -64,26 +57,47 @@ fun AllSongsScreen(
         },
         bottomBar = { EchoPandaBottomBar(selectedNav, onNavSelect) }
     ) { padding ->
-        if (state.isLoading && tracks.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
+        when {
+            state.isLoading && state.tracks.isEmpty() -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = EchoPandaColors.AccentBlue)
+                }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(bottom = 16.dp)
-            ) {
-                itemsIndexed(tracks) { index, track ->
-                    SongCardHorizontal(
-                        track = track,
-                        onClick = {
-                            globalPlayerViewModel.setQueue(tracks, index)
-                            onNavigateToPlayer(track.id, track.resumePositionMs)
-                        },
-                        onFavoriteClick = { viewModel.toggleFavorite(track) }
+            state.tracks.isEmpty() -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = state.errorMessage ?: "No songs found",
+                        color = Color.Gray
                     )
+                }
+            }
+            else -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentPadding = PaddingValues(bottom = 16.dp)
+                ) {
+                    itemsIndexed(state.tracks) { index, track ->
+                        SongCardHorizontal(
+                            track = track,
+                            onClick = {
+                                globalPlayerViewModel.setQueue(state.tracks, index)
+                                onNavigateToPlayer(track.id, track.resumePositionMs)
+                            },
+                            onFavoriteClick = { viewModel.toggleFavorite(track) }
+                        )
+                    }
                 }
             }
         }

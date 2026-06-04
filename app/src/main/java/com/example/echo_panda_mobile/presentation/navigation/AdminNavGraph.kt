@@ -82,7 +82,12 @@ fun NavGraphBuilder.adminNavGraph(
             AdminUserDetailScreen(
                 userId = userId,
                 role = role,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onNavigateToAlbumDetail = { albumId ->
+                    val route = Routes.ADMIN_ALBUM_DETAIL.replace("{albumId}", albumId)
+                    android.util.Log.d("NAVIGATION", "Navigating from user detail to: $route")
+                    navController.navigate(route)
+                }
             )
         }
 
@@ -98,7 +103,12 @@ fun NavGraphBuilder.adminNavGraph(
             val albumId = backStackEntry.arguments?.getString("albumId") ?: ""
             AdminAlbumDetailScreen(
                 albumId = albumId,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onNavigateToSongDetail = { songId ->
+                    val route = Routes.ADMIN_SONG_DETAIL.replace("{songId}", songId)
+                    android.util.Log.d("NAVIGATION", "Navigating from album detail to: $route")
+                    navController.navigate(route)
+                }
             )
         }
 

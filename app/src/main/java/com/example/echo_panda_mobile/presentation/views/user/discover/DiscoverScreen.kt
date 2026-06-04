@@ -27,6 +27,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import com.example.echo_panda_mobile.data.model.*
 import com.example.echo_panda_mobile.presentation.components.*
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
@@ -45,6 +48,8 @@ fun DiscoverScreen(
     onNavigateToSong: (String, Long?) -> Unit = { _, _ -> },
     onViewAllArtists: () -> Unit = {},
     onViewAllSongs: (String) -> Unit = {},
+    onNavigateToGenreSongs: (String, String) -> Unit = { _, _ -> },
+    onNavigateToTagSongs: (String, String) -> Unit = { _, _ -> },
     viewModel: DiscoverViewModel = viewModel(),
     globalPlayerViewModel: GlobalPlayerViewModel = viewModel()
 ) {
@@ -153,7 +158,7 @@ fun DiscoverScreen(
                                 fullTitle = "Music Genres",
                                 highlightPart = "Genres",
                                 highlightColor = EchoPandaColors.AccentBlue,
-                                onViewAll = { onNavSelect(2) }
+                                onViewAll = null
                             )
                             Spacer(Modifier.height(16.dp))
                             Row(
@@ -168,20 +173,20 @@ fun DiscoverScreen(
                                         subLabel = genre.subLabel,
                                         colors = genre.placeholderColors,
                                         imageUrl = genre.imageUrl,
-                                        onClick = { onNavSelect(2) }
+                                        onClick = { onNavigateToGenreSongs(genre.id, genre.name) }
                                     )
                                 }
                             }
                             Spacer(Modifier.height(32.dp))
                         }
 
-                        // ── Mood Playlist ─────────────────────────────────────────────
+                        // ── Music Tags ────────────────────────────────────────────────
                         if (state.moodPlaylists.isNotEmpty()) {
                             SectionHeader(
-                                fullTitle = "Mood Playlist",
-                                highlightPart = "Playlist",
+                                fullTitle = "Music Tags",
+                                highlightPart = "Tags",
                                 highlightColor = EchoPandaColors.AccentBlue,
-                                onViewAll = { onNavSelect(3) }
+                                onViewAll = null
                             )
                             Spacer(Modifier.height(16.dp))
                             Row(
@@ -190,13 +195,13 @@ fun DiscoverScreen(
                                     .padding(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                state.moodPlaylists.forEach { playlist ->
+                                state.moodPlaylists.forEach { tag ->
                                     LabeledArtCard(
-                                        title = playlist.name,
-                                        subLabel = playlist.subLabel,
-                                        colors = playlist.placeholderColors,
-                                        imageUrl = playlist.imageUrl,
-                                        onClick = { onNavSelect(3) }
+                                        title = tag.name,
+                                        subLabel = tag.subLabel,
+                                        colors = tag.placeholderColors,
+                                        imageUrl = tag.imageUrl,
+                                        onClick = { onNavigateToTagSongs(tag.id, tag.name) }
                                     )
                                 }
                             }
@@ -305,32 +310,54 @@ private fun DiscoverTopBar(
             IconButton(onClick = onToggleSearch) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
             }
-            TextField(
+            
+            BasicTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 modifier = Modifier
                     .weight(1f)
+                    .height(44.dp)
                     .padding(horizontal = 8.dp),
-                placeholder = { Text("Search songs, artists, albums...", color = Color.Gray) },
-                colors = TextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color(0xFF1A1F2E),
-                    unfocusedContainerColor = Color(0xFF1A1F2E),
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
+                textStyle = TextStyle(
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium
                 ),
-                shape = RoundedCornerShape(12.dp),
                 singleLine = true,
-                trailingIcon = {
-                    Row {
+                cursorBrush = SolidColor(EchoPandaColors.AccentBlue),
+                decorationBox = { innerTextField ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFF1A1F2E), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(Modifier.weight(1f)) {
+                            if (query.isEmpty()) {
+                                Text(
+                                    "Search songs, artists, albums...",
+                                    color = Color.Gray,
+                                    fontSize = 14.sp
+                                )
+                            }
+                            innerTextField()
+                        }
+                        
                         if (query.isNotEmpty()) {
-                            IconButton(onClick = { onQueryChange("") }) {
-                                Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
+                            IconButton(
+                                onClick = { onQueryChange("") },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray, modifier = Modifier.size(16.dp))
                             }
                         }
-                        IconButton(onClick = onVoiceSearch) {
-                            Icon(Icons.Default.Mic, contentDescription = "Voice Search", tint = Color.Gray)
+                        
+                        IconButton(
+                            onClick = onVoiceSearch,
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(Icons.Default.Mic, contentDescription = "Voice Search", tint = Color.Gray, modifier = Modifier.size(18.dp))
                         }
                     }
                 }

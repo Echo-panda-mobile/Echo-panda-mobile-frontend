@@ -181,6 +181,60 @@ class AdminLibraryViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    fun setTagActive(id: Int, isActive: Boolean) {
+        viewModelScope.launch {
+            val previousTags = _uiState.value.tags
+            _uiState.value = _uiState.value.copy(
+                tags = previousTags.map { if (it.id == id) it.copy(isActive = isActive) else it },
+                errorMessage = null,
+                successMessage = null
+            )
+
+            when (val result = adminRepository.setTagActive(id, isActive)) {
+                is AdminResult.Success -> {
+                    _uiState.value = _uiState.value.copy(
+                        tags = _uiState.value.tags.map {
+                            if (it.id == id) result.data else it
+                        }
+                    )
+                }
+                is AdminResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        tags = previousTags,
+                        errorMessage = result.message
+                    )
+                }
+            }
+        }
+    }
+
+    fun setGenreActive(id: Int, isActive: Boolean) {
+        viewModelScope.launch {
+            val previousGenres = _uiState.value.genres
+            _uiState.value = _uiState.value.copy(
+                genres = previousGenres.map { if (it.id == id) it.copy(isActive = isActive) else it },
+                errorMessage = null,
+                successMessage = null
+            )
+
+            when (val result = adminRepository.setGenreActive(id, isActive)) {
+                is AdminResult.Success -> {
+                    _uiState.value = _uiState.value.copy(
+                        genres = _uiState.value.genres.map {
+                            if (it.id == id) result.data else it
+                        }
+                    )
+                }
+                is AdminResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        genres = previousGenres,
+                        errorMessage = result.message
+                    )
+                }
+            }
+        }
+    }
+
     fun refresh() {
         loadLibrary()
     }

@@ -7,6 +7,8 @@ import com.example.echo_panda_mobile.data.remote.CreateAdminArtistRequest
 import com.example.echo_panda_mobile.data.remote.CreateAdminArtistResponse
 import com.example.echo_panda_mobile.data.remote.CreateGenreRequest
 import com.example.echo_panda_mobile.data.remote.CreateTagRequest
+import com.example.echo_panda_mobile.data.remote.UpdateActiveStatusRequest
+import com.example.echo_panda_mobile.data.remote.UpdateShowAsRowRequest
 import com.example.echo_panda_mobile.data.remote.GenreData
 import com.example.echo_panda_mobile.data.remote.TagData
 import com.example.echo_panda_mobile.data.remote.BackendUser
@@ -115,12 +117,42 @@ class AdminRepository(private val tokenStorage: TokenStorage) {
         }
     }
 
+    suspend fun setSongActive(songId: String, isActive: Boolean): AdminResult<Boolean> {
+        return try {
+            val response = api.updateSongStatus(songId, UpdateActiveStatusRequest(isActive))
+            if (response.isSuccessful) {
+                AdminResult.Success(true)
+            } else {
+                AdminResult.Error("Song status update failed (${response.code()}).")
+            }
+        } catch (e: HttpException) {
+            AdminResult.Error(parseHttpError(e))
+        } catch (e: Exception) {
+            AdminResult.Error(e.message ?: "Could not update song status.")
+        }
+    }
+
     suspend fun approveSong(songId: String): AdminResult<Boolean> = moderateSong(songId, AdminModerationAction.APPROVE)
 
     suspend fun hideSong(songId: String): AdminResult<Boolean> = moderateSong(songId, AdminModerationAction.HIDE)
 
     suspend fun reportSong(songId: String, reason: String? = null): AdminResult<Boolean> =
         moderateSong(songId, AdminModerationAction.REPORT, reason)
+
+    suspend fun setAlbumActive(albumId: String, isActive: Boolean): AdminResult<Boolean> {
+        return try {
+            val response = api.updateAlbumStatus(albumId, UpdateActiveStatusRequest(isActive))
+            if (response.isSuccessful) {
+                AdminResult.Success(true)
+            } else {
+                AdminResult.Error("Album status update failed (${response.code()}).")
+            }
+        } catch (e: HttpException) {
+            AdminResult.Error(parseHttpError(e))
+        } catch (e: Exception) {
+            AdminResult.Error(e.message ?: "Could not update album status.")
+        }
+    }
 
     suspend fun approveAlbum(albumId: String): AdminResult<Boolean> = moderateAlbum(albumId, AdminModerationAction.APPROVE)
 
@@ -283,6 +315,28 @@ class AdminRepository(private val tokenStorage: TokenStorage) {
         }
     }
 
+    suspend fun setTagActive(id: Int, isActive: Boolean): AdminResult<TagData> {
+        return try {
+            val response = api.updateTagStatus(id, UpdateActiveStatusRequest(isActive))
+            AdminResult.Success(response)
+        } catch (e: HttpException) {
+            AdminResult.Error(parseHttpError(e))
+        } catch (e: Exception) {
+            AdminResult.Error(e.message ?: "Could not update tag status.")
+        }
+    }
+
+    suspend fun setTagShowAsRow(id: Int, showAsRow: Boolean): AdminResult<TagData> {
+        return try {
+            val response = api.updateTagShowAsRow(id, UpdateShowAsRowRequest(showAsRow))
+            AdminResult.Success(response)
+        } catch (e: HttpException) {
+            AdminResult.Error(parseHttpError(e))
+        } catch (e: Exception) {
+            AdminResult.Error(e.message ?: "Could not update tag row display.")
+        }
+    }
+
     suspend fun deleteTag(id: Int): AdminResult<Boolean> {
         return try {
             val response = api.deleteTag(id)
@@ -361,6 +415,28 @@ class AdminRepository(private val tokenStorage: TokenStorage) {
             AdminResult.Error(parseHttpError(e))
         } catch (e: Exception) {
             AdminResult.Error(e.message ?: "Could not update category.")
+        }
+    }
+
+    suspend fun setGenreActive(id: Int, isActive: Boolean): AdminResult<GenreData> {
+        return try {
+            val response = api.updateGenreStatus(id, UpdateActiveStatusRequest(isActive))
+            AdminResult.Success(response)
+        } catch (e: HttpException) {
+            AdminResult.Error(parseHttpError(e))
+        } catch (e: Exception) {
+            AdminResult.Error(e.message ?: "Could not update category status.")
+        }
+    }
+
+    suspend fun setGenreShowAsRow(id: Int, showAsRow: Boolean): AdminResult<GenreData> {
+        return try {
+            val response = api.updateGenreShowAsRow(id, UpdateShowAsRowRequest(showAsRow))
+            AdminResult.Success(response)
+        } catch (e: HttpException) {
+            AdminResult.Error(parseHttpError(e))
+        } catch (e: Exception) {
+            AdminResult.Error(e.message ?: "Could not update category row display.")
         }
     }
 

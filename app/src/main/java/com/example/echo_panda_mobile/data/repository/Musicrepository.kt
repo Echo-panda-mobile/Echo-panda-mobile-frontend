@@ -109,6 +109,40 @@ class MusicRepository(
         }
     }
 
+    suspend fun resolveArtistProfileImageUrl(artistId: String, rawUrl: String?): String? =
+        withContext(Dispatchers.IO) {
+            fetchSignedArtistImageUrl(artistId) ?: directImageUrl(rawUrl)
+        }
+
+    /** Public catalog index for admin screens — no backend user-directory changes required. */
+    suspend fun fetchArtistCatalogByName(): Map<String, ArtistDto> = withContext(Dispatchers.IO) {
+        val api = apiService ?: return@withContext emptyMap()
+        try {
+            val response = api.getArtists()
+            if (!response.isSuccessful) return@withContext emptyMap()
+            (response.body()?.data ?: emptyList())
+                .filter { it.name.isNotBlank() }
+                .associateBy { it.name.trim().lowercase() }
+        } catch (e: Exception) {
+            Log.w("MusicRepository", "Artist catalog fetch failed", e)
+            emptyMap()
+        }
+    }
+
+    suspend fun resolveArtistProfileImageForUser(
+        userName: String,
+        linkedArtist: BackendArtist? = null,
+        catalogByName: Map<String, ArtistDto>
+    ): String? {
+        val catalogArtist = catalogByName[userName.trim().lowercase()]
+            ?: linkedArtist?.name?.trim()?.lowercase()?.let { catalogByName[it] }
+        val artistId = linkedArtist?.id ?: catalogArtist?.id ?: return null
+        val rawUrl = linkedArtist?.profileImageSource()
+            ?: catalogArtist?.imageUrl
+            ?: catalogArtist?.coverImageUrl
+        return resolveArtistProfileImageUrl(artistId.toString(), rawUrl)
+    }
+
     private suspend fun mergeFavoriteStatus(tracks: List<Track>): List<Track> {
         if (tracks.isEmpty() || apiService == null) return tracks
         return try {
@@ -477,10 +511,29 @@ class MusicRepository(
         }
     }
 
-    suspend fun getAllSongs(search: String? = null): MusicResult<List<Track>> = withContext(Dispatchers.IO) {
+    suspend fun getAllSongs(search: String? = null): MusicResult<List<Track>> =
+        fetchSongs(search = search)
+
+    suspend fun getSongsByGenre(genreId: String): MusicResult<List<Track>> =
+        fetchSongs(categoryId = genreId.toIntOrNull())
+
+    suspend fun getSongsByTag(tagId: String): MusicResult<List<Track>> =
+        fetchSongs(tagId = tagId.toIntOrNull())
+
+    private suspend fun fetchSongs(
+        search: String? = null,
+        categoryId: Int? = null,
+        tagId: Int? = null
+    ): MusicResult<List<Track>> = withContext(Dispatchers.IO) {
         val api = apiService ?: return@withContext MusicResult.Error("API service not initialized")
         try {
-            val response = api.getSongs(search = search)
+            val response = api.getSongs(
+                search = search,
+                categoryId = categoryId,
+                tagId = tagId,
+                sortBy = "latest",
+                perPage = 500
+            )
             if (response.isSuccessful) {
                 val data = response.body()?.data ?: emptyList()
                 val tracks = coroutineScope {
@@ -624,7 +677,8 @@ class MusicRepository(
         title = title,
         artist = artist?.name ?: artistName ?: "Unknown",
         imageUrl = directImageUrl(getDisplayCoverUrl()),
-        placeholderColors = getColorsForId(id.toString())
+        placeholderColors = getColorsForId(id.toString()),
+        isActive = isActive ?: true
     )
 
     private fun SongDto.resolvedTitle(): String =
@@ -642,7 +696,8 @@ class MusicRepository(
             imageUrl = directImageUrl(getDisplayCoverUrl()),
             album = album?.title ?: (if (resolvedArtist != "Unknown") resolvedArtist else null),
             placeholderColors = getColorsForId(resolvedId()),
-            isFavorite = isFavorite ?: false
+            isFavorite = isFavorite ?: false,
+            isActive = isActive ?: true
         )
     }
 
@@ -714,19 +769,47 @@ class MusicRepository(
     }
 
     suspend fun getGenres(): MusicResult<List<Genre>> = withContext(Dispatchers.IO) {
-        val list = listOf(
-            Genre("g1", "Rap Tracks", "Rap Songs", listOf(Color(0xFF3A1A2A), Color(0xFF1A0A12))),
-            Genre("g2", "Pop Tracks", "Pop Songs", listOf(Color(0xFF1A2A4A), Color(0xFF0A1228)))
-        )
-        MusicResult.Success(list)
+        val api = apiService ?: return@withContext MusicResult.Error("API service not initialized")
+        try {
+            val response = api.getGenres(limit = 20)
+            if (response.isSuccessful) {
+                val genres = (response.body()?.data ?: emptyList()).map { dto ->
+                    Genre(
+                        id = dto.id,
+                        name = dto.name,
+                        subLabel = "${dto.songsCount ?: 0} Songs",
+                        placeholderColors = getColorsForId(dto.id)
+                    )
+                }
+                MusicResult.Success(genres)
+            } else {
+                MusicResult.Error("Failed to fetch genres")
+            }
+        } catch (e: Exception) {
+            MusicResult.Error(e.localizedMessage ?: "Network error")
+        }
     }
 
     suspend fun getMoodPlaylists(): MusicResult<List<MoodPlaylist>> = withContext(Dispatchers.IO) {
-        val list = listOf(
-            MoodPlaylist("mo1", "Sad Songs", "Sad Songs", listOf(Color(0xFF1A2030), Color(0xFF0A1018))),
-            MoodPlaylist("mo2", "Workout Songs", "Workout Songs", listOf(Color(0xFF3A2A10), Color(0xFF1A1208)))
-        )
-        MusicResult.Success(list)
+        val api = apiService ?: return@withContext MusicResult.Error("API service not initialized")
+        try {
+            val response = api.getTags(limit = 20)
+            if (response.isSuccessful) {
+                val tags = (response.body()?.data ?: emptyList()).map { dto ->
+                    MoodPlaylist(
+                        id = dto.id,
+                        name = dto.name,
+                        subLabel = "${dto.songsCount ?: 0} Songs",
+                        placeholderColors = getColorsForId(dto.id)
+                    )
+                }
+                MusicResult.Success(tags)
+            } else {
+                MusicResult.Error("Failed to fetch tags")
+            }
+        } catch (e: Exception) {
+            MusicResult.Error(e.localizedMessage ?: "Network error")
+        }
     }
 
     suspend fun getNewReleases(): MusicResult<List<Track>> = getAllSongs()

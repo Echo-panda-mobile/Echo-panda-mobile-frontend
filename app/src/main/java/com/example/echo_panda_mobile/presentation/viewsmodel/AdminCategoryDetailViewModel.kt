@@ -76,4 +76,44 @@ class AdminCategoryDetailViewModel(application: Application) : AndroidViewModel(
             }
         }
     }
+
+    fun setCategoryActive(isActive: Boolean) {
+        val genre = _uiState.value.genre ?: return
+        viewModelScope.launch {
+            val previous = genre
+            _uiState.value = _uiState.value.copy(
+                genre = genre.copy(isActive = isActive),
+                errorMessage = null,
+                successMessage = null
+            )
+            when (val result = repository.setGenreActive(genre.id, isActive)) {
+                is AdminResult.Success -> {
+                    _uiState.value = _uiState.value.copy(genre = result.data)
+                }
+                is AdminResult.Error -> {
+                    _uiState.value = _uiState.value.copy(genre = previous, errorMessage = result.message)
+                }
+            }
+        }
+    }
+
+    fun setCategoryShowAsRow(showAsRow: Boolean) {
+        val genre = _uiState.value.genre ?: return
+        viewModelScope.launch {
+            val previous = genre
+            _uiState.value = _uiState.value.copy(
+                genre = genre.copy(showAsRow = showAsRow),
+                errorMessage = null,
+                successMessage = null
+            )
+            when (val result = repository.setGenreShowAsRow(genre.id, showAsRow)) {
+                is AdminResult.Success -> {
+                    _uiState.value = _uiState.value.copy(genre = result.data)
+                }
+                is AdminResult.Error -> {
+                    _uiState.value = _uiState.value.copy(genre = previous, errorMessage = result.message)
+                }
+            }
+        }
+    }
 }

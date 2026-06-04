@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 
 data class AdminSongDetailUiState(
     val isLoading: Boolean = true,
+    val isUpdatingStatus: Boolean = false,
     val errorMessage: String? = null,
     val song: Track? = null,
     val actionMessage: String? = null
@@ -50,6 +51,34 @@ class AdminSongDetailViewModel(
                     _uiState.value = AdminSongDetailUiState(isLoading = false, errorMessage = result.message)
                 }
                 else -> Unit
+            }
+        }
+    }
+
+    fun setSongActive(isActive: Boolean) {
+        val song = _uiState.value.song ?: return
+        viewModelScope.launch {
+            val previous = song
+            _uiState.value = _uiState.value.copy(
+                song = song.copy(isActive = isActive),
+                isUpdatingStatus = true,
+                errorMessage = null,
+                actionMessage = null
+            )
+            when (val result = adminRepository.setSongActive(songId, isActive)) {
+                is AdminResult.Success -> {
+                    _uiState.value = _uiState.value.copy(
+                        isUpdatingStatus = false,
+                        actionMessage = if (isActive) "Song is visible on the platform." else "Song has been banned."
+                    )
+                }
+                is AdminResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        song = previous,
+                        isUpdatingStatus = false,
+                        errorMessage = result.message
+                    )
+                }
             }
         }
     }

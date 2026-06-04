@@ -42,6 +42,9 @@ import kotlinx.coroutines.launch
 import com.example.echo_panda_mobile.presentation.viewmodel.PlaylistSelectionViewModel
 import com.example.echo_panda_mobile.presentation.viewmodel.PlaylistSelectionUiState
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 // ─── Navigation Components ──────────────────
 
 enum class BottomNavTab(val key: String, val icon: ImageVector, val index: Int) {
@@ -156,8 +159,8 @@ fun AdminBottomBar(selectedIndex: Int, onSelect: (Int) -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminTopBar(
-    searchQuery: String,
-    onSearchQueryChange: (String) -> Unit,
+    searchQuery: String = "",
+    onSearchQueryChange: (String) -> Unit = {},
     onProfileClick: () -> Unit
 ) {
     Surface(
@@ -170,43 +173,14 @@ fun AdminTopBar(
                 .padding(horizontal = 16.dp, vertical = 12.dp)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Search Bar
-            TextField(
-                value = searchQuery,
-                onValueChange = onSearchQueryChange,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(24.dp)),
-                placeholder = {
-                    Text(
-                        "Search...",
-                        color = Color.White.copy(alpha = 0.4f),
-                        fontSize = 14.sp
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = Color.White.copy(alpha = 0.4f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFF161C24),
-                    unfocusedContainerColor = Color(0xFF161C24),
-                    disabledContainerColor = Color(0xFF161C24),
-                    cursorColor = Color(0xFF00E5FF),
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
-                ),
-                singleLine = true,
-                shape = RoundedCornerShape(24.dp)
+            Text(
+                text = "Admin",
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
             )
 
             // Profile Icon
@@ -874,7 +848,7 @@ fun MiniPlayer(
 }
 
 @Composable
-fun LabeledArtCard(title: String, subLabel: String, colors: List<Color>, imageUrl: String? = null, modifier: Modifier = Modifier, size: Dp = 110.dp, onClick: () -> Unit = {}) {
+fun LabeledArtCard(title: String, subLabel: String = "", colors: List<Color>, imageUrl: String? = null, modifier: Modifier = Modifier, size: Dp = 110.dp, onClick: () -> Unit = {}) {
     val finalMod = if (size != Dp.Unspecified) modifier.width(size) else modifier
     Column(modifier = finalMod.clickable { onClick() }) {
         SquareArtCard(
@@ -885,7 +859,9 @@ fun LabeledArtCard(title: String, subLabel: String, colors: List<Color>, imageUr
         )
         Spacer(Modifier.height(10.dp))
         Text(text = title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-        Text(text = subLabel, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+        if (subLabel.isNotEmpty()) {
+            Text(text = subLabel, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+        }
     }
 }
 

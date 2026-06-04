@@ -120,42 +120,8 @@ fun AdminAddArtistScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                "Verification & Status",
-                color = AccentPurple,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(12.dp))
 
-            // Verification Status
-            Text(
-                "Verification Status",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Row(
-                modifier = Modifier.padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                listOf("pending", "approved", "rejected").forEach { status ->
-                    RoleChip(
-                        status.replaceFirstChar { it.uppercase() },
-                        uiState.verificationStatus == status
-                    ) {
-                        viewModel.onVerificationStatusChange(status)
-                    }
-                }
-            }
 
-            ArtistInputField(
-                label = "Verification Reason (optional)",
-                value = uiState.verificationReason,
-                onValueChange = viewModel::onVerificationReasonChange,
-                placeholder = "Why this artist was approved/rejected",
-                isMultiline = true
-            )
 
             // Is Active Toggle
             Row(
@@ -183,62 +149,6 @@ fun AdminAddArtistScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                "Artist type",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Row(
-                modifier = Modifier.padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                RoleChip("Single", uiState.artistType == "Single") {
-                    viewModel.onArtistTypeChange("Single")
-                }
-                RoleChip("Group", uiState.artistType == "Group") {
-                    viewModel.onArtistTypeChange("Group")
-                }
-            }
-
-            if (uiState.artistType == "Single") {
-                Text(
-                    "Gender",
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Row(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    RoleChip("Male", uiState.gender == "Male") {
-                        viewModel.onGenderChange("Male")
-                    }
-                    RoleChip("Female", uiState.gender == "Female") {
-                        viewModel.onGenderChange("Female")
-                    }
-                }
-            } else {
-                Text(
-                    "Gender",
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Surface(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    color = CardBg,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = "They (default for groups)",
-                        color = TextMuted,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        fontSize = 14.sp
-                    )
-                }
-            }
 
             uiState.errorMessage?.let { message ->
                 Spacer(modifier = Modifier.height(16.dp))

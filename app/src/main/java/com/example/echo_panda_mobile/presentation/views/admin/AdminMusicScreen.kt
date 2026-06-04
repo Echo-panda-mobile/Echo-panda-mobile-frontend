@@ -36,8 +36,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -58,6 +56,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import com.example.echo_panda_mobile.data.model.Album
 import com.example.echo_panda_mobile.data.model.Track
 import com.example.echo_panda_mobile.presentation.components.AdminBottomBar
@@ -145,23 +146,21 @@ fun AdminMusicScreen(
 
                 when (selectedFilter) {
                     "Song" -> SongManagementSection(
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { searchQuery = it },
                         songs = uiState.songs.filter {
                             listOf(it.title, it.artist, it.album.orEmpty()).joinToString(" ").contains(searchQuery, ignoreCase = true)
                         },
-                        onNavigateToDetail = onNavigateToSongDetail,
-                        onApprove = { id -> viewModel.approveSong(id) { if (it == null) viewModel.refresh() } },
-                        onHide = { id -> viewModel.hideSong(id) { if (it == null) viewModel.refresh() } },
-                        onReport = { id -> viewModel.reportSong(id) { if (it == null) viewModel.refresh() } }
+                        onNavigateToDetail = onNavigateToSongDetail
                     )
 
                     else -> AlbumManagementSection(
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { searchQuery = it },
                         albums = uiState.albums.filter {
                             listOf(it.title, it.artist).joinToString(" ").contains(searchQuery, ignoreCase = true)
                         },
-                        onNavigateToDetail = onNavigateToAlbumDetail,
-                        onApprove = { id -> viewModel.approveAlbum(id) { if (it == null) viewModel.refresh() } },
-                        onHide = { id -> viewModel.hideAlbum(id) { if (it == null) viewModel.refresh() } },
-                        onReport = { id -> viewModel.reportAlbum(id) { if (it == null) viewModel.refresh() } }
+                        onNavigateToDetail = onNavigateToAlbumDetail
                     )
                 }
             }
@@ -171,11 +170,10 @@ fun AdminMusicScreen(
 
 @Composable
 private fun SongManagementSection(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     songs: List<Track>,
-    onNavigateToDetail: (String) -> Unit,
-    onApprove: (String) -> Unit,
-    onHide: (String) -> Unit,
-    onReport: (String) -> Unit
+    onNavigateToDetail: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -190,21 +188,46 @@ private fun SongManagementSection(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        TextField(
-            value = "",
-            onValueChange = {},
-            modifier = Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(12.dp)),
-            placeholder = { Text("Search by title or artist...", color = Color.White.copy(alpha = 0.3f), fontSize = 14.sp) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(20.dp)) },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.White.copy(alpha = 0.05f),
-                unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
+        BasicTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp),
+            textStyle = TextStyle(
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium
             ),
-            singleLine = true
+            singleLine = true,
+            cursorBrush = SolidColor(AccentPurple),
+            decorationBox = { innerTextField ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.3f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Box(Modifier.weight(1f)) {
+                        if (searchQuery.isEmpty()) {
+                            Text(
+                                "Search by title or artist...",
+                                color = Color.White.copy(alpha = 0.3f),
+                                fontSize = 14.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
+            }
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -219,12 +242,12 @@ private fun SongManagementSection(
                 Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     MusicHeaderText("SONG & ARTIST", Modifier.weight(3f))
                     MusicHeaderText("ALBUM", Modifier.weight(2f))
-                    MusicHeaderText("ACTIONS", Modifier.weight(0.8f), textAlign = TextAlign.End)
+                    MusicHeaderText("ACTION", Modifier.weight(0.8f), textAlign = TextAlign.End)
                 }
                 HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
                 LazyColumn(modifier = Modifier.heightIn(max = 500.dp)) {
                     items(songs, key = { it.id }) { song ->
-                        SongRow(song, onNavigateToDetail, onApprove, onHide, onReport)
+                        SongRow(song, onNavigateToDetail)
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(alpha = 0.03f))
                     }
                 }
@@ -235,11 +258,10 @@ private fun SongManagementSection(
 
 @Composable
 private fun AlbumManagementSection(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     albums: List<Album>,
-    onNavigateToDetail: (String) -> Unit,
-    onApprove: (String) -> Unit,
-    onHide: (String) -> Unit,
-    onReport: (String) -> Unit
+    onNavigateToDetail: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -254,21 +276,46 @@ private fun AlbumManagementSection(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        TextField(
-            value = "",
-            onValueChange = {},
-            modifier = Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(12.dp)),
-            placeholder = { Text("Search by album or artist...", color = Color.White.copy(alpha = 0.3f), fontSize = 14.sp) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(20.dp)) },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.White.copy(alpha = 0.05f),
-                unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
+        BasicTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp),
+            textStyle = TextStyle(
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium
             ),
-            singleLine = true
+            singleLine = true,
+            cursorBrush = SolidColor(AccentPurple),
+            decorationBox = { innerTextField ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.3f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Box(Modifier.weight(1f)) {
+                        if (searchQuery.isEmpty()) {
+                            Text(
+                                "Search by album or artist...",
+                                color = Color.White.copy(alpha = 0.3f),
+                                fontSize = 14.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
+            }
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -283,12 +330,12 @@ private fun AlbumManagementSection(
                 Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     MusicHeaderText("ALBUM", Modifier.weight(3f))
                     MusicHeaderText("ARTIST", Modifier.weight(2f))
-                    MusicHeaderText("ACTIONS", Modifier.weight(0.8f), textAlign = TextAlign.End)
+                    MusicHeaderText("ACTION", Modifier.weight(0.8f), textAlign = TextAlign.End)
                 }
                 HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
                 LazyColumn(modifier = Modifier.heightIn(max = 500.dp)) {
                     items(albums, key = { it.id }) { album ->
-                        AlbumRow(album, onNavigateToDetail, onApprove, onHide, onReport)
+                        AlbumRow(album, onNavigateToDetail)
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(alpha = 0.03f))
                     }
                 }
@@ -300,10 +347,7 @@ private fun AlbumManagementSection(
 @Composable
 private fun SongRow(
     song: Track,
-    onNavigateToDetail: (String) -> Unit,
-    onApprove: (String) -> Unit,
-    onHide: (String) -> Unit,
-    onReport: (String) -> Unit
+    onNavigateToDetail: (String) -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -332,13 +376,10 @@ private fun SongRow(
 
         Box(modifier = Modifier.weight(0.8f), contentAlignment = Alignment.CenterEnd) {
             IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.MoreVert, contentDescription = "Actions", tint = TextMuted, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.MoreVert, contentDescription = "Action", tint = TextMuted, modifier = Modifier.size(18.dp))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }, modifier = Modifier.background(CardBg)) {
                 DropdownMenuItem(text = { Text("View Detail", color = Color.White, fontSize = 14.sp) }, onClick = { showMenu = false; onNavigateToDetail(song.id) })
-                DropdownMenuItem(text = { Text("Approve", color = Color.White, fontSize = 14.sp) }, onClick = { showMenu = false; onApprove(song.id) })
-                DropdownMenuItem(text = { Text("Hide", color = Color.White, fontSize = 14.sp) }, onClick = { showMenu = false; onHide(song.id) })
-                DropdownMenuItem(text = { Text("Report", color = Color.White, fontSize = 14.sp) }, onClick = { showMenu = false; onReport(song.id) })
             }
         }
     }
@@ -347,10 +388,7 @@ private fun SongRow(
 @Composable
 private fun AlbumRow(
     album: Album,
-    onNavigateToDetail: (String) -> Unit,
-    onApprove: (String) -> Unit,
-    onHide: (String) -> Unit,
-    onReport: (String) -> Unit
+    onNavigateToDetail: (String) -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -378,13 +416,10 @@ private fun AlbumRow(
 
         Box(modifier = Modifier.weight(0.8f), contentAlignment = Alignment.CenterEnd) {
             IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.MoreVert, contentDescription = "Actions", tint = TextMuted, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.MoreVert, contentDescription = "Action", tint = TextMuted, modifier = Modifier.size(18.dp))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }, modifier = Modifier.background(CardBg)) {
                 DropdownMenuItem(text = { Text("View Detail", color = Color.White, fontSize = 14.sp) }, onClick = { showMenu = false; onNavigateToDetail(album.id) })
-                DropdownMenuItem(text = { Text("Approve", color = Color.White, fontSize = 14.sp) }, onClick = { showMenu = false; onApprove(album.id) })
-                DropdownMenuItem(text = { Text("Hide", color = Color.White, fontSize = 14.sp) }, onClick = { showMenu = false; onHide(album.id) })
-                DropdownMenuItem(text = { Text("Report", color = Color.White, fontSize = 14.sp) }, onClick = { showMenu = false; onReport(album.id) })
             }
         }
     }

@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,6 +27,8 @@ private val BgDark = Color(0xFF05070D)
 private val CardBg = Color(0xFF161C24)
 private val AccentPurple = Color(0xFFFF00FF)
 private val TextMuted = Color.White.copy(alpha = 0.5f)
+private val ActiveGreen = Color(0xFF00C853)
+private val InactiveRed = Color(0xFFFF5252)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -140,6 +143,21 @@ fun AdminTagDetailScreen(
             DetailItem("Slug", uiState.tag?.slug ?: "-", Icons.Default.Link)
             DetailItem("Songs Count", uiState.tag?.songsCount?.toString() ?: "0", Icons.Default.MusicNote)
 
+            DetailToggleRow(
+                label = "Active",
+                description = "Visible on the home page when enabled",
+                checked = uiState.tag?.isActive ?: false,
+                enabled = uiState.tag != null && !uiState.isLoading,
+                onCheckedChange = { viewModel.setTagActive(it) }
+            )
+            DetailToggleRow(
+                label = "Show as row",
+                description = "Display albums in a horizontal row on the home page",
+                checked = uiState.tag?.showAsRow ?: false,
+                enabled = uiState.tag != null && !uiState.isLoading,
+                onCheckedChange = { viewModel.setTagShowAsRow(it) }
+            )
+
             Spacer(modifier = Modifier.height(48.dp))
 
             // Action Buttons
@@ -198,6 +216,47 @@ fun AdminTagDetailScreen(
             }
             
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun DetailToggleRow(
+    label: String,
+    description: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        color = CardBg,
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                Text(description, color = TextMuted, fontSize = 12.sp)
+            }
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                enabled = enabled,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = ActiveGreen,
+                    uncheckedThumbColor = Color.White,
+                    uncheckedTrackColor = InactiveRed,
+                    uncheckedBorderColor = Color.Transparent
+                ),
+                modifier = Modifier.scale(0.85f)
+            )
         }
     }
 }

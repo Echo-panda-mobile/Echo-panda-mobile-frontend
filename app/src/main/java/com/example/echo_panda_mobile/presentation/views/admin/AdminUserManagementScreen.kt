@@ -34,8 +34,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -54,6 +52,10 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.example.echo_panda_mobile.data.remote.BackendUser
 import com.example.echo_panda_mobile.presentation.components.AdminBottomBar
 import com.example.echo_panda_mobile.presentation.components.AdminTopBar
@@ -154,18 +156,27 @@ fun AdminUserManagementScreen(
                     "Users" -> UserListSection(
                         roleName = "User",
                         users = visibleUsers,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { searchQuery = it },
+                        artistImageUrlsByUserId = uiState.artistImageUrlsByUserId,
                         onNavigateToDetail = onNavigateToDetail,
                         onAddClick = {}
                     )
                     "Artists" -> UserListSection(
                         roleName = "Artist",
                         users = visibleUsers,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { searchQuery = it },
+                        artistImageUrlsByUserId = uiState.artistImageUrlsByUserId,
                         onNavigateToDetail = onNavigateToDetail,
                         onAddClick = onNavigateToAddArtist
                     )
                     else -> UserListSection(
                         roleName = "Admin",
                         users = visibleUsers,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { searchQuery = it },
+                        artistImageUrlsByUserId = uiState.artistImageUrlsByUserId,
                         onNavigateToDetail = onNavigateToDetail,
                         onAddClick = {}
                     )
@@ -179,6 +190,9 @@ fun AdminUserManagementScreen(
 fun UserListSection(
     roleName: String,
     users: List<BackendUser>,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    artistImageUrlsByUserId: Map<Int, String> = emptyMap(),
     onNavigateToDetail: (String, String) -> Unit,
     onAddClick: () -> Unit
 ) {
@@ -210,54 +224,56 @@ fun UserListSection(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextField(
-                value = "",
-                onValueChange = {},
+            BasicTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
                 modifier = Modifier
                     .weight(1f)
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(12.dp)),
-                placeholder = {
-                    Text(
-                        "Search is available from the top bar",
-                        color = Color.White.copy(alpha = 0.3f),
-                        fontSize = 12.sp
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.3f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                enabled = false,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = CardBg,
-                    unfocusedContainerColor = CardBg,
-                    disabledContainerColor = CardBg,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    disabledTextColor = Color.White
+                    .height(44.dp),
+                textStyle = TextStyle(
+                    color = Color.White,
+                    fontSize = 14.sp
                 ),
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                decorationBox = { innerTextField ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(CardBg.copy(alpha = 0.8f), RoundedCornerShape(14.dp))
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.4f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Box(Modifier.weight(1f)) {
+                            if (searchQuery.isEmpty()) {
+                                Text(
+                                    "Search $roleName...",
+                                    color = Color.White.copy(alpha = 0.4f),
+                                    fontSize = 14.sp
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
+                }
             )
 
             if (roleName == "Artist") {
                 Button(
                     onClick = onAddClick,
-                    modifier = Modifier.height(44.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AccentPurple,
                         contentColor = Color.White
                     ),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+                    contentPadding = PaddingValues(horizontal = 20.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
@@ -285,8 +301,7 @@ fun UserListSection(
             ) {
                 HeaderText("USER", Modifier.weight(3f))
                 HeaderText("EMAIL", Modifier.weight(2f))
-                HeaderText("ROLE", Modifier.weight(1f))
-                HeaderText("ACTIONS", Modifier.weight(1f), textAlign = TextAlign.End)
+                HeaderText("ACTION", Modifier.weight(1f), textAlign = TextAlign.End)
             }
         }
 
@@ -307,7 +322,11 @@ fun UserListSection(
             } else {
                 LazyColumn {
                     items(users, key = { it.id }) { user ->
-                        UserRow(user, onNavigateToDetail)
+                        UserRow(
+                            user = user,
+                            imageUrl = artistImageUrlsByUserId[user.id],
+                            onNavigateToDetail = onNavigateToDetail
+                        )
                         if (user != users.last()) {
                             HorizontalDivider(
                                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -339,7 +358,11 @@ private fun HeaderText(
 }
 
 @Composable
-fun UserRow(user: BackendUser, onNavigateToDetail: (String, String) -> Unit) {
+fun UserRow(
+    user: BackendUser,
+    imageUrl: String? = null,
+    onNavigateToDetail: (String, String) -> Unit
+) {
     var showMenu by remember { mutableStateOf(false) }
 
     Row(
@@ -356,12 +379,21 @@ fun UserRow(user: BackendUser, onNavigateToDetail: (String, String) -> Unit) {
                     .background(AccentPurple.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = user.name.firstOrNull()?.toString() ?: "",
-                    color = AccentPurple,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
-                )
+                if (!imageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = "Artist profile photo",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Text(
+                        text = user.name.firstOrNull()?.toString() ?: "",
+                        color = AccentPurple,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(10.dp))
             Text(user.name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -376,17 +408,9 @@ fun UserRow(user: BackendUser, onNavigateToDetail: (String, String) -> Unit) {
             }
         }
 
-        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = user.role.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 13.sp
-            )
-        }
-
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
             IconButton(onClick = { showMenu = true }) {
-                Icon(Icons.Default.MoreVert, contentDescription = "Actions", tint = TextMuted)
+                Icon(Icons.Default.MoreVert, contentDescription = "Action", tint = TextMuted)
             }
 
             DropdownMenu(

@@ -122,39 +122,7 @@ fun AdminDashboardScreen(
                 ) {
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Header Section
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "Admin Panel",
-                                color = Color.White,
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                            Text(
-                                text = "EchoPanda Management",
-                                color = Color.White.copy(alpha = 0.5f),
-                                fontSize = 14.sp
-                            )
-                        }
 
-                        IconButton(
-                            onClick = onLogout,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White.copy(alpha = 0.05f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Logout,
-                                contentDescription = "Logout",
-                                tint = Color.White
-                            )
-                        }
-                    }
 
                     Spacer(modifier = Modifier.height(32.dp))
 
@@ -176,13 +144,15 @@ fun AdminDashboardScreen(
                             label = "Total Users",
                             value = stats?.totalUsers?.toString() ?: "0",
                             icon = Icons.Default.People,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            onClick = { onNavSelect(1) }
                         )
                         StatCard(
                             label = "Active Artists",
                             value = stats?.activeArtists?.toString() ?: "0",
                             icon = Icons.Default.MusicNote,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            onClick = { onNavSelect(1) }
                         )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
@@ -194,33 +164,15 @@ fun AdminDashboardScreen(
                             label = "Total Admins",
                             value = stats?.totalAdmins?.toString() ?: "0",
                             icon = Icons.Default.Security,
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            label = "Flagged Content",
-                            value = stats?.flaggedContent?.toString() ?: "0",
-                            icon = Icons.Default.Warning,
                             modifier = Modifier.weight(1f),
-                            color = Color(0xFFFF5252)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        StatCard(
-                            label = "Pending Reports",
-                            value = stats?.pendingReports?.toString() ?: "0",
-                            icon = Icons.Default.Report,
-                            modifier = Modifier.weight(1f),
-                            color = Color(0xFFFFAB40)
+                            onClick = { onNavSelect(1) }
                         )
                         StatCard(
                             label = "Total Genres",
                             value = stats?.totalGenres?.toString() ?: "0",
                             icon = Icons.Default.Category,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            onClick = { onNavSelect(3) }
                         )
                     }
 
@@ -243,14 +195,16 @@ fun AdminDashboardScreen(
                             value = stats?.totalTags?.toString() ?: "0",
                             icon = Icons.Default.LocalOffer,
                             modifier = Modifier.weight(1f),
-                            color = Color(0xFF00BCD4)
+                            color = Color(0xFF00BCD4),
+                            onClick = { onNavSelect(3) }
                         )
                         StatCard(
                             label = "Total Songs",
                             value = stats?.totalSongs?.toString() ?: "0",
                             icon = Icons.Default.AudioFile,
                             modifier = Modifier.weight(1f),
-                            color = Color(0xFF9C27B0)
+                            color = Color(0xFF9C27B0),
+                            onClick = { onNavSelect(2) }
                         )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
@@ -263,7 +217,8 @@ fun AdminDashboardScreen(
                             value = stats?.totalAlbums?.toString() ?: "0",
                             icon = Icons.Default.Album,
                             modifier = Modifier.weight(1f),
-                            color = Color(0xFF4CAF50)
+                            color = Color(0xFF4CAF50),
+                            onClick = { onNavSelect(2) }
                         )
                         // Placeholder card for balance
                         StatCard(
@@ -271,7 +226,8 @@ fun AdminDashboardScreen(
                             value = "Active",
                             icon = Icons.Default.CheckCircle,
                             modifier = Modifier.weight(1f),
-                            color = Color(0xFF4CAF50)
+                            color = Color(0xFF4CAF50),
+                            onClick = { /* Already on dashboard */ }
                         )
                     }
 
@@ -288,9 +244,11 @@ fun StatCard(
     value: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    color: Color = AccentCyan
+    color: Color = AccentCyan,
+    onClick: () -> Unit = {}
 ) {
     Surface(
+        onClick = onClick,
         modifier = modifier.height(110.dp),
         color = CardBg,
         shape = RoundedCornerShape(20.dp),

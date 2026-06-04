@@ -25,6 +25,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import com.example.echo_panda_mobile.data.remote.GenreData
 import com.example.echo_panda_mobile.data.remote.TagData
 import com.example.echo_panda_mobile.presentation.components.AdminBottomBar
@@ -144,7 +147,8 @@ fun AdminLibraryScreen(
                     onNavigateToTagAlbums = onNavigateToTagAlbums,
                     onCreateTag = { viewModel.createTag(it) },
                     onDeleteTag = { viewModel.deleteTag(it) },
-                    onUpdateTag = { id, name -> viewModel.updateTag(id, name) }
+                    onUpdateTag = { id, name -> viewModel.updateTag(id, name) },
+                    onToggleTagActive = { id, isActive -> viewModel.setTagActive(id, isActive) }
                 )
                 "Category" -> CategoryLibrarySection(
                     genres = uiState.genres,
@@ -152,7 +156,8 @@ fun AdminLibraryScreen(
                     onNavigateToCategoryAlbums = onNavigateToCategoryAlbums,
                     onCreateCategory = { viewModel.createGenre(it) },
                     onDeleteCategory = { viewModel.deleteGenre(it) },
-                    onUpdateCategory = { id, name -> viewModel.updateGenre(id, name) }
+                    onUpdateCategory = { id, name -> viewModel.updateGenre(id, name) },
+                    onToggleCategoryActive = { id, isActive -> viewModel.setGenreActive(id, isActive) }
                 )
             }
         }
@@ -166,7 +171,8 @@ fun CategoryLibrarySection(
     onNavigateToCategoryAlbums: (String) -> Unit,
     onCreateCategory: (String) -> Unit,
     onDeleteCategory: (Int) -> Unit,
-    onUpdateCategory: (Int, String) -> Unit
+    onUpdateCategory: (Int, String) -> Unit,
+    onToggleCategoryActive: (Int, Boolean) -> Unit
 ) {
     var listSearchQuery by remember { mutableStateOf("") }
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -214,31 +220,46 @@ fun CategoryLibrarySection(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            TextField(
+            BasicTextField(
                 value = listSearchQuery,
                 onValueChange = { listSearchQuery = it },
                 modifier = Modifier
                     .weight(1f)
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(12.dp)),
-                placeholder = { Text("Search categories...", color = TextMuted, fontSize = 14.sp) },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = null,
-                        tint = TextMuted,
-                        modifier = Modifier.size(20.dp)
-                    )
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.White.copy(alpha = 0.05f),
-                    unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+                    .height(44.dp),
+                textStyle = TextStyle(
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium
                 ),
-                singleLine = true
+                singleLine = true,
+                cursorBrush = SolidColor(AccentPurple),
+                decorationBox = { innerTextField ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            tint = TextMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Box(Modifier.weight(1f)) {
+                            if (listSearchQuery.isEmpty()) {
+                                Text(
+                                    "Search categories...",
+                                    color = TextMuted,
+                                    fontSize = 14.sp
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
+                }
             )
 
             IconButton(
@@ -394,10 +415,11 @@ fun CategoryLibrarySection(
                             onNavigateToCategoryDetail = onNavigateToCategoryDetail,
                             onNavigateToCategoryAlbums = onNavigateToCategoryAlbums,
                             onDelete = { categoryToDelete = genre },
-                            onEdit = { 
+                            onEdit = {
                                 categoryToEdit = genre
                                 editedCategoryName = genre.name
-                            }
+                            },
+                            onToggleActive = { isActive -> onToggleCategoryActive(genre.id, isActive) }
                         )
                         if (genre != filteredGenres.last()) {
                             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(alpha = 0.03f))
@@ -415,9 +437,9 @@ fun CategoryRowItem(
     onNavigateToCategoryDetail: (String) -> Unit,
     onNavigateToCategoryAlbums: (String) -> Unit,
     onDelete: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    onToggleActive: (Boolean) -> Unit
 ) {
-    var isChecked by remember { mutableStateOf(true) }
     var showMenu by remember { mutableStateOf(false) }
 
     Row(
@@ -437,8 +459,8 @@ fun CategoryRowItem(
 
         Box(modifier = Modifier.weight(1.5f), contentAlignment = Alignment.Center) {
             Switch(
-                checked = isChecked,
-                onCheckedChange = { isChecked = it },
+                checked = genre.isActive,
+                onCheckedChange = onToggleActive,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.White,
                     checkedTrackColor = ActiveGreen,
@@ -452,7 +474,7 @@ fun CategoryRowItem(
 
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
             IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.MoreVert, contentDescription = "Actions", tint = TextMuted, modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.MoreVert, contentDescription = "Action", tint = TextMuted, modifier = Modifier.size(20.dp))
             }
 
             DropdownMenu(
@@ -477,14 +499,6 @@ fun CategoryRowItem(
                     leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp)) }
                 )
                 DropdownMenuItem(
-                    text = { Text("Manage Albums", color = Color.White) },
-                    onClick = {
-                        showMenu = false
-                        onNavigateToCategoryAlbums(genre.id.toString())
-                    },
-                    leadingIcon = { Icon(Icons.Default.Album, contentDescription = null, tint = AccentPurple, modifier = Modifier.size(18.dp)) }
-                )
-                DropdownMenuItem(
                     text = { Text("Delete Category", color = Color(0xFFFF5252)) },
                     onClick = {
                         showMenu = false
@@ -504,7 +518,8 @@ fun CollectionTagsSection(
     onNavigateToTagAlbums: (String) -> Unit,
     onCreateTag: (String) -> Unit,
     onDeleteTag: (Int) -> Unit,
-    onUpdateTag: (Int, String) -> Unit
+    onUpdateTag: (Int, String) -> Unit,
+    onToggleTagActive: (Int, Boolean) -> Unit
 ) {
     var listSearchQuery by remember { mutableStateOf("") }
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -561,31 +576,46 @@ fun CollectionTagsSection(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            TextField(
+            BasicTextField(
                 value = listSearchQuery,
                 onValueChange = { listSearchQuery = it },
                 modifier = Modifier
                     .weight(1f)
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(12.dp)),
-                placeholder = { Text("Search tags...", color = TextMuted, fontSize = 14.sp) },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = null,
-                        tint = TextMuted,
-                        modifier = Modifier.size(20.dp)
-                    )
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.White.copy(alpha = 0.05f),
-                    unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+                    .height(44.dp),
+                textStyle = TextStyle(
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium
                 ),
-                singleLine = true
+                singleLine = true,
+                cursorBrush = SolidColor(AccentPurple),
+                decorationBox = { innerTextField ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            tint = TextMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Box(Modifier.weight(1f)) {
+                            if (listSearchQuery.isEmpty()) {
+                                Text(
+                                    "Search tags...",
+                                    color = TextMuted,
+                                    fontSize = 14.sp
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
+                }
             )
 
             IconButton(
@@ -744,7 +774,8 @@ fun CollectionTagsSection(
                             onEdit = {
                                 tagToEdit = tag
                                 editedTagName = tag.name
-                            }
+                            },
+                            onToggleActive = { isActive -> onToggleTagActive(tag.id, isActive) }
                         )
                         if (tag != filteredTags.last()) {
                             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(alpha = 0.03f))
@@ -762,9 +793,9 @@ fun CollectionTagRow(
     onNavigateToTagDetail: (String) -> Unit,
     onNavigateToTagAlbums: (String) -> Unit,
     onDelete: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    onToggleActive: (Boolean) -> Unit
 ) {
-    var isChecked by remember { mutableStateOf(true) }
     var showMenu by remember { mutableStateOf(false) }
 
     Row(
@@ -784,8 +815,8 @@ fun CollectionTagRow(
 
         Box(modifier = Modifier.weight(1.5f), contentAlignment = Alignment.Center) {
             Switch(
-                checked = isChecked,
-                onCheckedChange = { isChecked = it },
+                checked = tag.isActive,
+                onCheckedChange = onToggleActive,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.White,
                     checkedTrackColor = ActiveGreen,
@@ -799,7 +830,7 @@ fun CollectionTagRow(
 
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
             IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.MoreVert, contentDescription = "Actions", tint = TextMuted, modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.MoreVert, contentDescription = "Action", tint = TextMuted, modifier = Modifier.size(20.dp))
             }
 
             DropdownMenu(
@@ -822,14 +853,6 @@ fun CollectionTagRow(
                         onNavigateToTagDetail(tag.id.toString())
                     },
                     leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp)) }
-                )
-                DropdownMenuItem(
-                    text = { Text("Manage Albums", color = Color.White) },
-                    onClick = {
-                        showMenu = false
-                        onNavigateToTagAlbums(tag.id.toString())
-                    },
-                    leadingIcon = { Icon(Icons.Default.Album, contentDescription = null, tint = AccentPurple, modifier = Modifier.size(18.dp)) }
                 )
                 DropdownMenuItem(
                     text = { Text("Delete Tag", color = Color(0xFFFF5252)) },

@@ -76,4 +76,44 @@ class AdminTagDetailViewModel(application: Application) : AndroidViewModel(appli
             }
         }
     }
+
+    fun setTagActive(isActive: Boolean) {
+        val tag = _uiState.value.tag ?: return
+        viewModelScope.launch {
+            val previous = tag
+            _uiState.value = _uiState.value.copy(
+                tag = tag.copy(isActive = isActive),
+                errorMessage = null,
+                successMessage = null
+            )
+            when (val result = repository.setTagActive(tag.id, isActive)) {
+                is AdminResult.Success -> {
+                    _uiState.value = _uiState.value.copy(tag = result.data)
+                }
+                is AdminResult.Error -> {
+                    _uiState.value = _uiState.value.copy(tag = previous, errorMessage = result.message)
+                }
+            }
+        }
+    }
+
+    fun setTagShowAsRow(showAsRow: Boolean) {
+        val tag = _uiState.value.tag ?: return
+        viewModelScope.launch {
+            val previous = tag
+            _uiState.value = _uiState.value.copy(
+                tag = tag.copy(showAsRow = showAsRow),
+                errorMessage = null,
+                successMessage = null
+            )
+            when (val result = repository.setTagShowAsRow(tag.id, showAsRow)) {
+                is AdminResult.Success -> {
+                    _uiState.value = _uiState.value.copy(tag = result.data)
+                }
+                is AdminResult.Error -> {
+                    _uiState.value = _uiState.value.copy(tag = previous, errorMessage = result.message)
+                }
+            }
+        }
+    }
 }

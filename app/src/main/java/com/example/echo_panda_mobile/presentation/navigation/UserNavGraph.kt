@@ -1,5 +1,6 @@
 package com.example.echo_panda_mobile.presentation.navigation
 
+import android.net.Uri
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
@@ -19,6 +20,12 @@ import com.example.echo_panda_mobile.presentation.views.user.profile.UserSetting
 import com.example.echo_panda_mobile.presentation.views.user.artist.ArtistDetailScreen
 import com.example.echo_panda_mobile.presentation.views.user.artist.AllArtistsScreen
 import com.example.echo_panda_mobile.presentation.views.user.discover.AllSongsScreen
+
+private fun NavController.navigateToAllSongs(type: String, title: String = "") {
+    val encodedType = Uri.encode(type)
+    val encodedTitle = Uri.encode(title)
+    navigate("user/all_songs/$encodedType?title=$encodedTitle")
+}
 
 fun NavGraphBuilder.userNavGraph(
     navController: NavController,
@@ -93,8 +100,13 @@ fun NavGraphBuilder.userNavGraph(
                     navController.navigate(Routes.USER_ALL_ARTISTS)
                 },
                 onViewAllSongs = { type ->
-                    val route = Routes.USER_ALL_SONGS.replace("{type}", type)
-                    navController.navigate(route)
+                    navController.navigateToAllSongs(type)
+                },
+                onNavigateToGenreSongs = { genreId, genreName ->
+                    navController.navigateToAllSongs("genre-$genreId", genreName)
+                },
+                onNavigateToTagSongs = { tagId, tagName ->
+                    navController.navigateToAllSongs("tag-$tagId", tagName)
                 }
             )
         }
@@ -113,11 +125,15 @@ fun NavGraphBuilder.userNavGraph(
 
         composable(
             route = Routes.USER_ALL_SONGS,
-            arguments = listOf(navArgument("type") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val type = backStackEntry.arguments?.getString("type") ?: "Songs"
+            arguments = listOf(
+                navArgument("type") { type = NavType.StringType },
+                navArgument("title") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                }
+            )
+        ) {
             AllSongsScreen(
-                type = type,
                 selectedNav = selectedNav,
                 onNavSelect = onNavSelect,
                 onBack = { navController.popBackStack() },

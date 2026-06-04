@@ -27,7 +27,7 @@ object Routes {
     const val USER_PROFILE      = "user/profile"
     const val USER_SETTINGS     = "user/settings"
     const val USER_ALL_ARTISTS  = "user/all_artists"
-    const val USER_ALL_SONGS    = "user/all_songs/{type}"
+    const val USER_ALL_SONGS    = "user/all_songs/{type}?title={title}"
 
     // ── Artist destinations (inside artist_graph) ─────────────────────────────
     const val ARTIST_DASHBOARD = "artist/home"
@@ -141,6 +141,7 @@ object Routes {
         route == null                          -> 0
         route.startsWith(USER_HOME)            -> 0
         route.startsWith(USER_DISCOVER)        -> 1
+        route.startsWith("user/all_songs")   -> 1
         route.startsWith(USER_ALBUMS)          -> 2
         route.startsWith("user/album_detail")  -> 2
         route.startsWith(USER_LIBRARY)         -> 3
