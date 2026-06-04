@@ -197,8 +197,16 @@ fun PlayerScreen(
                     IconButton(onClick = { /* Shuffle */ }) {
                         Icon(Icons.Default.Shuffle, contentDescription = "Shuffle", tint = Color.White.copy(alpha = 0.5f))
                     }
-                    IconButton(onClick = { viewModel.previous() }) {
-                        Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(36.dp))
+                    IconButton(
+                        onClick = { viewModel.skipToPrevious() },
+                        enabled = state.canSkipPrevious
+                    ) {
+                        Icon(
+                            Icons.Default.SkipPrevious,
+                            contentDescription = "Previous",
+                            tint = if (state.canSkipPrevious) Color.White else Color.White.copy(alpha = 0.3f),
+                            modifier = Modifier.size(36.dp)
+                        )
                     }
                     Box(
                         modifier = Modifier
@@ -215,8 +223,16 @@ fun PlayerScreen(
                             modifier = Modifier.size(40.dp)
                         )
                     }
-                    IconButton(onClick = { viewModel.next() }) {
-                        Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(36.dp))
+                    IconButton(
+                        onClick = { viewModel.skipToNext() },
+                        enabled = state.canSkipNext
+                    ) {
+                        Icon(
+                            Icons.Default.SkipNext,
+                            contentDescription = "Next",
+                            tint = if (state.canSkipNext) Color.White else Color.White.copy(alpha = 0.3f),
+                            modifier = Modifier.size(36.dp)
+                        )
                     }
                     IconButton(onClick = { /* Visualizer */ }) {
                         Icon(Icons.Default.BarChart, contentDescription = "Visualizer", tint = Color.White.copy(alpha = 0.5f))

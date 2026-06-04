@@ -51,7 +51,12 @@ fun AppNavigation() {
     // null  = still resolving (show spinner)
     // non-null = ready, hand off to NavHost
     var startRoute by remember { mutableStateOf<String?>(null) }
-    var userRole by remember { mutableStateOf<String?>(null) }
+    // Seed role from encrypted storage so cold start does not block on /firebase/session.
+    var userRole by remember {
+        mutableStateOf(
+            if (auth.currentUser != null) tokenStorage.getRole() else null
+        )
+    }
 
     // Keep currentUser in sync with Firebase (handles logout from other screens)
     DisposableEffect(auth) {
@@ -60,13 +65,10 @@ fun AppNavigation() {
         onDispose { auth.removeAuthStateListener(listener) }
     }
 
-    // Resolve the correct start destination once per session.
-    LaunchedEffect(currentUser) {
-        android.util.Log.d("AppNavigation", "━━━ AUTH STATE CHECK ━━━")
-        
+    // Resolve the correct start destination (login / logout / role changes).
+    LaunchedEffect(currentUser, userRole) {
         val prefs = navController.context
             .getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-
         val hasSeenIntroGlobal = prefs.getBoolean("has_seen_intro", false)
         val localToken = tokenStorage.getToken()
         val localRole = tokenStorage.getRole()
@@ -75,34 +77,31 @@ fun AppNavigation() {
         android.util.Log.d("AppNavigation", "Local Token: ${if (localToken.isNullOrBlank()) "MISSING" else "PRESENT"}")
         android.util.Log.d("AppNavigation", "Local Role: $localRole")
 
-        if (currentUser != null || !localToken.isNullOrBlank()) {
-            val profile = authRepo.getCurrentUserProfile()
-            userRole = profile?.role ?: localRole
-            android.util.Log.d("AppNavigation", "Authenticated as: ${profile?.email ?: "Local User"}, Role: $userRole")
-        } else {
+        if (currentUser == null) {
             userRole = null
-            android.util.Log.d("AppNavigation", "Not authenticated")
+        } else if (userRole == null) {
+            userRole = tokenStorage.getRole() ?: "user"
         }
 
-        // Only compute the initial NavHost destination once per cold start.
-        if (startRoute != null) {
-            android.util.Log.d("AppNavigation", "Start route already set to: $startRoute")
-            return@LaunchedEffect
+        val destination = when {
+            !hasSeenIntroGlobal -> Routes.INTRO
+            currentUser == null -> Routes.LOGIN
+            userRole == null    -> null
+            else                -> Routes.getHomeRoute(userRole)
         }
 
-        val destination = if (!hasSeenIntroGlobal) {
-            android.util.Log.d("AppNavigation", "Navigation: Showing Intro")
-            Routes.INTRO
-        } else if (currentUser == null && localToken.isNullOrBlank()) {
-            android.util.Log.d("AppNavigation", "Navigation: Showing Login")
-            Routes.LOGIN
-        } else {
-            val route = Routes.getHomeRoute(userRole)
-            android.util.Log.d("AppNavigation", "Navigation: Auto-login to $route")
-            route
+        if (destination != null && startRoute != destination) {
+            startRoute = destination
         }
+    }
 
-        startRoute = destination
+    // Refresh role/token in the background once per session (TTL inside AuthRepository).
+    LaunchedEffect(currentUser?.uid) {
+        if (currentUser == null) return@LaunchedEffect
+        val profile = authRepo.getCurrentUserProfile()
+        profile?.role?.let { refreshedRole ->
+            if (refreshedRole != userRole) userRole = refreshedRole
+        }
     }
 
     // ── Bottom nav helpers ────────────────────────────────────────────────────
@@ -127,12 +126,28 @@ fun AppNavigation() {
     }
 
     // ── Main nav graph ────────────────────────────────────────────────────────
-    if (startRoute != null) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            NavHost(
-                navController = navController,
-                startDestination = startRoute!!
-            ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        NavHost(
+            navController = navController,
+            startDestination = startRoute!!   // guaranteed non-null here
+        ) {
+
+            // ── Auth ──────────────────────────────────────────────────────────
+            composable(Routes.LOGIN) {
+                LoginScreen(
+                    onBack = { navController.popBackStack() },
+                    onAuthenticateSuccess = { destination ->
+                        userRole = tokenStorage.getRole()
+                            ?: authRepo.getCachedUser()?.role
+                        navController.navigate(destination) {
+                            popUpTo(Routes.LOGIN) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    },
+                    onNavigateToSignUp = { navController.navigate(Routes.SIGNUP) },
+                    onNavigateToForgotPassword = { navController.navigate(Routes.FORGOT_PASSWORD) }
+                )
+            }
 
                 // ── Auth ──────────────────────────────────────────────────────────
                 composable(Routes.LOGIN) {
@@ -179,16 +194,35 @@ fun AppNavigation() {
                     )
                 }
 
-                composable(Routes.VERIFY_EMAIL) {
-                    SuccessAccountScreen(
-                        onGoHome = {
-                            scope.launch {
-                                val profile = authRepo.getCurrentUserProfile()
-                                val nextRoute = Routes.getHomeRoute(profile?.role)
-                                navController.navigate(nextRoute) {
-                                    popUpTo(Routes.VERIFY_EMAIL) { inclusive = true }
-                                    launchSingleTop = true
-                                }
+            // ── Role-based graphs ─────────────────────────────────────────────
+            userNavGraph(navController, selectedNav, onNavSelect)
+            artistNavGraph(navController)
+            adminNavGraph(navController, selectedNav, onNavSelect)
+
+            // ── Onboarding ────────────────────────────────────────────────────
+            composable(Routes.INTRO) {
+                EchoPandaOnboardingView(
+                    onFinished = {
+                        // Mark onboarding as seen globally so next app open skips intro
+                        navController.context
+                            .getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                            .edit()
+                            .putBoolean("has_seen_intro", true)
+                            .apply()
+
+                        // Determine the correct destination after onboarding
+                        if (currentUser == null) {
+                            navController.navigate(Routes.LOGIN) {
+                                popUpTo(Routes.INTRO) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        } else {
+                            val nextRoute = Routes.getHomeRoute(
+                                userRole ?: tokenStorage.getRole()
+                            )
+                            navController.navigate(nextRoute) {
+                                popUpTo(Routes.INTRO) { inclusive = true }
+                                launchSingleTop = true
                             }
                         }
                     )
@@ -250,30 +284,21 @@ fun AppNavigation() {
             val isPlayerScreen = currentRoute?.startsWith("user/player") == true
             val isAuthScreen = currentRoute == Routes.LOGIN || currentRoute == Routes.SIGNUP
 
-            if (!isPlayerScreen && !isAuthScreen) {
-                val playerState by globalPlayerViewModel.playerState.collectAsState()
-                
-                if (playerState.currentTrack != null) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 80.dp)
-                    ) {
-                        MiniPlayer(
-                            track = playerState.currentTrack!!,
-                            isPlaying = playerState.isPlaying,
-                            progress = playerState.progress,
-                            onTogglePlay = { globalPlayerViewModel.togglePlayPause() },
-                            onNext = { globalPlayerViewModel.nextTrack() },
-                            onPrevious = { globalPlayerViewModel.previousTrack() },
-                            onClose = { globalPlayerViewModel.stopPlayback() },
-                            onClick = {
-                                val route = Routes.USER_PLAYER.replace(
-                                    "{trackId}",
-                                    playerState.currentTrack!!.id
-                                )
-                                navController.navigate(route)
-                            }
+        if (playerState.currentTrack != null && !isPlayerScreen && !isAuthScreen) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 80.dp)
+            ) {
+                MiniPlayer(
+                    track        = playerState.currentTrack!!,
+                    isPlaying    = playerState.isPlaying,
+                    onTogglePlay = { globalPlayerViewModel.togglePlayPause() },
+                    onNext       = { globalPlayerViewModel.nextTrack() },
+                    onPrevious   = { globalPlayerViewModel.previousTrack() },
+                    onClick      = {
+                        navController.navigate(
+                            Routes.USER_PLAYER.replace("{trackId}", playerState.currentTrack!!.id)
                         )
                     }
                 }

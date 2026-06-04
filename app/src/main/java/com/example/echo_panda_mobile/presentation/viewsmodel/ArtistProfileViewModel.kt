@@ -53,18 +53,8 @@ class ArtistProfileViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                val user = authRepository.getCurrentUserProfile()
-                var currentBio = _uiState.value.bio
-                
-                // Fetch artist-specific details (like bio) if the user is an artist
-                val artistId = user?.artistId ?: tokenStorage?.getArtistId()?.takeIf { it != -1 }
-                if (artistId != null && artistRepository != null) {
-                    val artistResult = artistRepository.getArtistProfile(artistId.toString())
-                    if (artistResult.isSuccess) {
-                        currentBio = artistResult.getOrNull()?.bio ?: currentBio
-                    }
-                }
-
+                val user = authRepository.getCachedUser()
+                    ?: authRepository.getCurrentUserProfile()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isUpdating = false,

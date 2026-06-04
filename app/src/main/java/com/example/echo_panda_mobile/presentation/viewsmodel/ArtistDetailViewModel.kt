@@ -40,7 +40,7 @@ class ArtistDetailViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             
-            val user = authRepository.getCurrentUser()
+            val user = authRepository.getCachedUser()
             
             // 1. Get artist detail directly from API
             val artistResult = musicRepository.getArtistById(artistId)

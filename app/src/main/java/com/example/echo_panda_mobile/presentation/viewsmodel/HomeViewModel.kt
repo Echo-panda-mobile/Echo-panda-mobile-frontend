@@ -15,12 +15,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 data class HomeUiState(
     val isLoading: Boolean          = true,
     val recentPlaylists: List<Playlist>    = emptyList(),
     val popularArtists: List<Artist>       = emptyList(),
+    val randomArtists: List<Artist>        = emptyList(),
     val topAlbums: List<Album>             = emptyList(),
     val topMixes: List<Playlist>           = emptyList(),
     val recentListening: List<Playlist>    = emptyList(),
@@ -45,31 +45,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(isLoading = true) }
 
             try {
-                // Load user profile with a timeout to prevent hanging on Firestore issues
-                val user = withTimeoutOrNull(3000) {
-                    authRepository.getCurrentUser()
-                }
+                val user = authRepository.getCachedUser()
+                val profilePhotoUrl = authRepository.resolveProfilePhotoUrl()
 
                 // Load music data in parallel
                 val recentDef     = async { musicRepository.getRecentPlaylists() }
-                val artistsDef    = async { musicRepository.getPopularArtists() }
+                val artistsDef    = async { musicRepository.getPopularArtists(limit = 20) }
+                val randomArtistsDef = async { musicRepository.getRandomArtists(limit = 8) }
                 val albumsDef     = async { musicRepository.getTopAlbums() }
                 val featuredDef   = async { musicRepository.getFeaturedArtist() }
                 val recentListenDef = async { musicRepository.getRecentListening() }
                 
-                val recent        = (recentDef.await()       as? MusicResult.Success<*>)?.data as? List<Playlist> ?: emptyList()
-                val artists       = (artistsDef.await()      as? MusicResult.Success<*>)?.data as? List<Artist>   ?: emptyList()
-                val albums        = (albumsDef.await()       as? MusicResult.Success<*>)?.data as? List<Album>    ?: emptyList()
-                val featured      = (featuredDef.await()     as? MusicResult.Success<*>)?.data as? FeaturedArtist
-                val recentListen  = (recentListenDef.await() as? MusicResult.Success<*>)?.data as? List<Playlist> ?: emptyList()
+                val recent        = (recentDef.await()       as? MusicResult.Success<*>?)?.data as? List<Playlist> ?: emptyList()
+                val artists       = (artistsDef.await()      as? MusicResult.Success<*>?)?.data as? List<Artist>   ?: emptyList()
+                val randomArtists = (randomArtistsDef.await() as? MusicResult.Success<*>?)?.data as? List<Artist> ?: emptyList()
+                val albums        = (albumsDef.await()       as? MusicResult.Success<*>?)?.data as? List<Album>    ?: emptyList()
+                val featured      = (featuredDef.await()     as? MusicResult.Success<*>?)?.data as? FeaturedArtist
+                val recentListen  = (recentListenDef.await() as? MusicResult.Success<*>?)?.data as? List<Playlist> ?: emptyList()
 
                 _uiState.update { 
                     it.copy(
                         isLoading        = false,
                         userName         = user?.name ?: "User",
-                        userPhotoUrl     = user?.getDisplayPhotoUrl(),
+                        userPhotoUrl     = profilePhotoUrl ?: user?.photoUrl,
                         recentPlaylists  = recent,
                         popularArtists   = artists,
+                        randomArtists    = randomArtists,
                         topAlbums        = albums,
                         featuredArtist   = featured,
                         recentListening  = recentListen
@@ -86,4 +87,41 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refresh() = loadAll()
+
+    fun refreshContinueListening() {
+        viewModelScope.launch {
+            try {
+                val recentDef = async { musicRepository.getRecentPlaylists() }
+                val recentListenDef = async { musicRepository.getRecentListening() }
+                val randomArtistsDef = async { musicRepository.getRandomArtists(limit = 8) }
+                val recent = (recentDef.await() as? MusicResult.Success<*>?)?.data as? List<Playlist> ?: emptyList()
+                val recentListen =
+                    (recentListenDef.await() as? MusicResult.Success<*>?)?.data as? List<Playlist> ?: emptyList()
+                val randomArtists =
+                    (randomArtistsDef.await() as? MusicResult.Success<*>?)?.data as? List<Artist> ?: emptyList()
+                _uiState.update {
+                    it.copy(
+                        recentPlaylists = recent,
+                        recentListening = recentListen,
+                        randomArtists = randomArtists
+                    )
+                }
+            } catch (_: Exception) {
+                // Keep existing lists on transient failure
+            }
+        }
+    }
+
+    fun refreshUserHeader() {
+        viewModelScope.launch {
+            val user = authRepository.getCachedUser()
+            val profilePhotoUrl = authRepository.resolveProfilePhotoUrl()
+            _uiState.update {
+                it.copy(
+                    userName = user?.name ?: it.userName,
+                    userPhotoUrl = profilePhotoUrl ?: user?.photoUrl
+                )
+            }
+        }
+    }
 }

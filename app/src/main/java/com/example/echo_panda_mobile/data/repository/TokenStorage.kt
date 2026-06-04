@@ -54,56 +54,45 @@ class TokenStorage(context: Context) {
         return sharedPreferences.getString("user_role", null)
     }
 
-    fun saveEmail(email: String) {
-        if (email.isNotBlank()) {
-            sharedPreferences.edit().putString("user_email", email).apply()
-            android.util.Log.d("TokenStorage", "Saved email: $email")
-        }
+    fun saveUserProfile(
+        userId: Int,
+        name: String,
+        email: String,
+        role: String,
+        photoUrl: String? = null
+    ) {
+        sharedPreferences.edit()
+            .putInt("user_id", userId)
+            .putString("user_name", name)
+            .putString("user_email", email)
+            .putString("user_role", role)
+            .apply {
+                if (photoUrl != null) putString("user_photo_url", photoUrl)
+                else remove("user_photo_url")
+            }
     }
 
-    fun getEmail(): String? {
-        return sharedPreferences.getString("user_email", null)
+    fun getUserId(): Int? {
+        val id = sharedPreferences.getInt("user_id", -1)
+        return id.takeIf { it >= 0 }
     }
 
-    fun saveName(name: String) {
-        if (name.isNotBlank()) {
-            sharedPreferences.edit().putString("user_name", name).apply()
-            android.util.Log.d("TokenStorage", "Saved name: $name")
-        }
-    }
+    fun getName(): String? = sharedPreferences.getString("user_name", null)
 
-    fun getName(): String? {
-        return sharedPreferences.getString("user_name", null)
-    }
+    fun getEmail(): String? = sharedPreferences.getString("user_email", null)
 
-    fun saveUserId(userId: Int) {
-        sharedPreferences.edit().putInt("user_id", userId).apply()
-        android.util.Log.d("TokenStorage", "Saved user_id: $userId")
-    }
-
-    fun getUserId(): Int {
-        return sharedPreferences.getInt("user_id", -1)
-    }
-
-    fun saveArtistId(artistId: Int) {
-        sharedPreferences.edit().putInt("artist_id", artistId).apply()
-        android.util.Log.d("TokenStorage", "Saved artist_id: $artistId")
-    }
-
-    fun getArtistId(): Int {
-        return sharedPreferences.getInt("artist_id", -1)
-    }
+    fun getPhotoUrl(): String? = sharedPreferences.getString("user_photo_url", null)
 
     fun clearSession() {
         sharedPreferences.edit()
             .remove("auth_token")
             .remove("user_role")
-            .remove("user_email")
-            .remove("user_name")
             .remove("user_id")
-            .remove("artist_id")
-            .commit()
-        android.util.Log.d("TokenStorage", "✓ Cleared session")
+            .remove("user_name")
+            .remove("user_email")
+            .remove("user_photo_url")
+            .apply()
+        UserSessionCache.invalidate()
     }
 
     fun clear() {
