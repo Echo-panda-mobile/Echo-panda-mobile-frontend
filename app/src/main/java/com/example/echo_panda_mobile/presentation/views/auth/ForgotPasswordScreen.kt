@@ -39,7 +39,7 @@ private val Outline = Color(0xFF202024)
 fun ForgotPasswordScreen(
     onBack: () -> Unit,
     onPasswordResetSent: () -> Unit = {}, // Default empty if not used, or keep for navigation
-    viewModel: ForgotPasswordViewModel = viewModel()
+    viewModel: ForgotPasswordViewModel = viewModel(factory = com.example.echo_panda_mobile.presentation.viewsmodel.ForgotPasswordViewModelFactory(androidx.compose.ui.platform.LocalContext.current))
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
@@ -116,7 +116,7 @@ fun ForgotPasswordScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Enter your email, we'll  reset your password and you can add new password .",
+                text = "Enter your email address and we'll send you a link to reset your password.",
                 color = TextMuted,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Normal,

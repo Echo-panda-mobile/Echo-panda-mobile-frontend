@@ -53,7 +53,7 @@ private val TextMuted = Color(0xFF7E8B97)       // Subdued corporate metadata gr
 fun SignUpScreen(
     onBack: () -> Unit,
     onSignUpSuccess: (String) -> Unit,
-    viewModel: RegisterViewModel = viewModel()
+    viewModel: RegisterViewModel = viewModel(factory = com.example.echo_panda_mobile.presentation.viewsmodel.RegisterViewModelFactory(LocalContext.current))
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
