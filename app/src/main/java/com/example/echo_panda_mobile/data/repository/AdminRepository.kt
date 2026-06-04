@@ -1,5 +1,6 @@
 package com.example.echo_panda_mobile.data.repository
 
+import com.example.echo_panda_mobile.data.debug.AdminAuthDebug
 import com.example.echo_panda_mobile.data.remote.AdminApiService
 import com.example.echo_panda_mobile.data.remote.AdminModerationReportRequest
 import com.example.echo_panda_mobile.data.remote.CreateAdminArtistRequest
@@ -174,18 +175,25 @@ class AdminRepository(private val tokenStorage: TokenStorage) {
         }
     }
 
-    private fun parseHttpError(e: HttpException): String = when (e.code()) {
-        404 -> "API endpoint not found. Please ensure the server is up to date."
-        403 -> "You do not have permission to perform this action."
-        401 -> "Session expired. Please log in again as admin."
-        else -> {
-            val body = e.response()?.errorBody()?.string().orEmpty()
-            if (body.contains("email", ignoreCase = true) &&
-                (body.contains("taken", ignoreCase = true) || body.contains("unique", ignoreCase = true))
-            ) {
-                "This email is already registered."
-            } else {
-                body.takeIf { it.isNotBlank() } ?: "Request failed (${e.code()})."
+    private fun parseHttpError(e: HttpException): String {
+        val body = e.response()?.errorBody()?.string().orEmpty()
+        val requestUrl = e.response()?.raw()?.request?.url?.toString()
+        AdminAuthDebug.log(
+            "ADMIN-HTTP",
+            "HTTP ${e.code()} url=$requestUrl routeKind=${requestUrl?.let(AdminAuthDebug::routeKind)?.label} body=${body.take(200)}"
+        )
+        return when (e.code()) {
+            404 -> "API endpoint not found. Deploy the latest backend (api/mb/admin routes)."
+            403 -> "You do not have permission to perform this action."
+            401 -> "Session expired. Please log in again as admin."
+            else -> {
+                if (body.contains("email", ignoreCase = true) &&
+                    (body.contains("taken", ignoreCase = true) || body.contains("unique", ignoreCase = true))
+                ) {
+                    "This email is already registered."
+                } else {
+                    body.takeIf { it.isNotBlank() } ?: "Request failed (${e.code()})."
+                }
             }
         }
     }

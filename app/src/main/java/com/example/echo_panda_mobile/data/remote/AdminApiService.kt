@@ -108,65 +108,65 @@ data class AnalyticsPoint(
 )
 
 interface AdminApiService {
-    @GET("admin/analytics")
+    // Mobile admin API — Sanctum Bearer token (backend: routes/api/mobile-admin.php)
+    @GET("api/mb/admin/analytics")
     suspend fun getAnalytics(): AdminAnalyticsResponse
 
-    // Admin tags and genres (Note: These are WEB routes, session-auth only)
-    @GET("admin/tags")
+    @GET("api/mb/admin/tags")
     suspend fun getTags(): TagResponse
 
-    @GET("admin/genres")
+    @GET("api/mb/admin/genres")
     suspend fun getGenres(): GenreResponse
 
-    @GET("admin/albums")
+    @GET("api/mb/admin/albums")
     suspend fun getAlbums(
         @Query("tag_id") tagId: Int? = null,
         @Query("genre_id") genreId: Int? = null
     ): AlbumResponse
 
-    @POST("admin/artists")
+    @POST("api/mb/admin/artists")
     suspend fun createArtist(@Body body: CreateAdminArtistRequest): CreateAdminArtistResponse
 
-    @POST("admin/tags")
+    @POST("api/mb/admin/tags")
     suspend fun createTag(@Body body: CreateTagRequest): TagData
 
-    @POST("admin/genres")
+    @POST("api/mb/admin/genres")
     suspend fun createGenre(@Body body: CreateGenreRequest): GenreData
 
-    @PUT("admin/tags/{tag}")
+    @PUT("api/mb/admin/tags/{tag}")
     suspend fun updateTag(@Path("tag") tagId: Int, @Body body: CreateTagRequest): TagData
 
-    @DELETE("admin/tags/{tag}")
+    @DELETE("api/mb/admin/tags/{tag}")
     suspend fun deleteTag(@Path("tag") tagId: Int): Response<Unit>
 
-    @PUT("admin/albums/{album}")
+    @PUT("api/mb/admin/albums/{album}")
     suspend fun updateAlbum(@Path("album") albumId: Int, @Body body: Map<String, @JvmSuppressWildcards Any>): AlbumDto
 
-    @PUT("admin/genres/{genre}")
+    @PUT("api/mb/admin/genres/{genre}")
     suspend fun updateGenre(@Path("genre") genreId: Int, @Body body: CreateGenreRequest): GenreData
 
-    @DELETE("admin/genres/{genre}")
+    @DELETE("api/mb/admin/genres/{genre}")
     suspend fun deleteGenre(@Path("genre") genreId: Int): Response<Unit>
 
-    @POST("admin/songs/{song}/approve")
+    @POST("api/mb/admin/songs/{song}/approve")
     suspend fun approveSong(@Path("song") songId: String): Response<Unit>
 
-    @POST("admin/songs/{song}/hide")
+    @POST("api/mb/admin/songs/{song}/hide")
     suspend fun hideSong(@Path("song") songId: String): Response<Unit>
 
-    @POST("admin/songs/{song}/report")
+    @POST("api/mb/admin/songs/{song}/report")
     suspend fun reportSong(
         @Path("song") songId: String,
         @Body body: AdminModerationReportRequest
     ): Response<Unit>
 
-    @POST("admin/albums/{album}/approve")
+    @POST("api/mb/admin/albums/{album}/approve")
     suspend fun approveAlbum(@Path("album") albumId: String): Response<Unit>
 
-    @POST("admin/albums/{album}/hide")
+    @POST("api/mb/admin/albums/{album}/hide")
     suspend fun hideAlbum(@Path("album") albumId: String): Response<Unit>
 
-    @POST("admin/albums/{album}/report")
+    @POST("api/mb/admin/albums/{album}/report")
     suspend fun reportAlbum(
         @Path("album") albumId: String,
         @Body body: AdminModerationReportRequest

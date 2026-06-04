@@ -1,6 +1,6 @@
 package com.example.echo_panda_mobile.data.remote
 
-import android.util.Log
+import com.example.echo_panda_mobile.data.debug.AdminAuthDebug
 import com.example.echo_panda_mobile.data.repository.TokenStorage
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -33,12 +33,12 @@ class AuthInterceptor(private val tokenStorage: TokenStorage) : Interceptor {
         val request = requestBuilder.build()
         return try {
             val response = chain.proceed(request)
-            if (response.code == 403) {
-                Log.e("AuthInterceptor", "403 Forbidden for URL: ${request.url}")
+            if (isOurDomain && (url.contains("/admin/") || url.contains("/api/"))) {
+                AdminAuthDebug.logIncomingResponse(url, response, response.peekBody(512).string())
             }
             response
         } catch (e: Exception) {
-            Log.e("AuthInterceptor", "Connection Error: ${e.message}")
+            AdminAuthDebug.log("HTTP-OUT", "Connection error for $url: ${e.message}")
             throw e
         }
     }
