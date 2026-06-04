@@ -301,38 +301,6 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
         }
     }
 
-    suspend fun checkEmailExistsInFirestore(email: String): Boolean {
-        return try {
-            val query = firestore.collection("users")
-                .whereEqualTo("email", email.trim())
-                .get()
-                .await()
-            !query.isEmpty
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    suspend fun storeNewPasswordInFirestore(email: String, newPassword: String): AuthResult<Unit> {
-        return try {
-            val query = firestore.collection("users")
-                .whereEqualTo("email", email.trim())
-                .get()
-                .await()
-
-            if (query.isEmpty) return AuthResult.Error("User not found in Firestore.")
-
-            val docId = query.documents[0].id
-            firestore.collection("users").document(docId)
-                .update("password", newPassword)
-                .await()
-
-            AuthResult.Success(Unit)
-        } catch (e: Exception) {
-            AuthResult.Error(e.message ?: "Failed to update password in Firestore.")
-        }
-    }
-
     private suspend fun syncBackendSession(firebaseUser: FirebaseUser, provider: String): AuthResult<AuthResponse> {
         return try {
             val idToken = firebaseUser.getIdToken(true).await().token

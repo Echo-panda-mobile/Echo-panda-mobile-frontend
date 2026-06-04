@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -194,7 +195,9 @@ fun AppNavigation() {
                 }
 
                 composable(Routes.FORGOT_PASSWORD) {
-                    val forgotPasswordViewModel: ForgotPasswordViewModel = viewModel()
+                    val forgotPasswordViewModel: ForgotPasswordViewModel = viewModel(
+                        factory = com.example.echo_panda_mobile.presentation.viewsmodel.ForgotPasswordViewModelFactory(LocalContext.current)
+                    )
                     val uiState by forgotPasswordViewModel.uiState.collectAsState()
 
                     LaunchedEffect(uiState.navigateTo) {
