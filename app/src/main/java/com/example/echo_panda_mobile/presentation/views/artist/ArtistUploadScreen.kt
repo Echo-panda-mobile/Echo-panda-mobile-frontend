@@ -41,6 +41,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.echo_panda_mobile.data.model.User
 import com.example.echo_panda_mobile.data.remote.AlbumDto
+import com.example.echo_panda_mobile.data.remote.MbGenreDto
+import com.example.echo_panda_mobile.data.remote.MbTagDto
 import com.example.echo_panda_mobile.presentation.components.ArtistBottomBar
 import com.example.echo_panda_mobile.presentation.navigation.Routes
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
@@ -69,24 +71,21 @@ fun ArtistUploadScreen(
     val currentUploadingFile by viewModel.currentUploadingFile.collectAsState()
     val albums by viewModel.albums.collectAsState()
     val isAlbumsLoading by viewModel.isAlbumsLoading.collectAsState()
+    val genres by viewModel.genres.collectAsState()
+    val tags by viewModel.tags.collectAsState()
+    val isCatalogLoading by viewModel.isCatalogLoading.collectAsState()
     
     var currentStep by remember { mutableStateOf(UploadStep.AUDIO) }
     
     // Form State
     var title by remember { mutableStateOf("") }
-    var genre by remember { mutableStateOf("") }
-    var lyrics by remember { mutableStateOf("") }
+    var selectedGenreId by remember { mutableStateOf<String?>(null) }
+    var selectedTagId by remember { mutableStateOf<String?>(null) }
     var selectedAudioUri by remember { mutableStateOf<Uri?>(null) }
     var audioInfo by remember { mutableStateOf<FileInfo?>(null) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var selectedAlbum by remember { mutableStateOf<AlbumDto?>(null) }
     
-    // Advanced fields
-    var bpm by remember { mutableStateOf("") }
-    var isExplicit by remember { mutableStateOf(false) }
-    var mood by remember { mutableStateOf("") }
-    var artists by remember { mutableStateOf("") }
-    var showAdvanced by remember { mutableStateOf(false) }
     var validationError by remember { mutableStateOf("") }
 
     val audioLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -178,31 +177,24 @@ fun ArtistUploadScreen(
                             SongDetailsStep(
                                 title = title,
                                 onTitleChange = { title = it; validationError = "" },
-                                genre = genre,
-                                onGenreChange = { genre = it; validationError = "" },
-                                mood = mood,
-                                onMoodChange = { mood = it },
+                                genres = genres,
+                                tags = tags,
+                                isCatalogLoading = isCatalogLoading,
+                                selectedGenreId = selectedGenreId,
+                                onGenreSelected = { selectedGenreId = it; validationError = "" },
+                                selectedTagId = selectedTagId,
+                                onTagSelected = { selectedTagId = it; validationError = "" },
                                 selectedAlbum = selectedAlbum,
                                 onAlbumSelect = { selectedAlbum = it },
                                 albums = albums,
                                 isAlbumsLoading = isAlbumsLoading,
                                 selectedImageUri = selectedImageUri,
                                 onImageClick = { imageLauncher.launch("image/*") },
-                                showAdvanced = showAdvanced,
-                                onToggleAdvanced = { showAdvanced = !showAdvanced },
-                                bpm = bpm,
-                                onBpmChange = { bpm = it },
-                                isExplicit = isExplicit,
-                                onExplicitChange = { isExplicit = it },
-                                artists = artists,
-                                onArtistsChange = { artists = it },
-                                lyrics = lyrics,
-                                onLyricsChange = { lyrics = it },
                                 onBack = { currentStep = UploadStep.AUDIO },
                                 onNext = {
                                     when {
                                         title.isBlank() -> validationError = "Song title is required"
-                                        genre.isBlank() -> validationError = "Genre is required"
+                                        selectedGenreId.isNullOrBlank() -> validationError = "Genre is required"
                                         else -> currentStep = UploadStep.PUBLISH
                                     }
                                 }
@@ -219,26 +211,20 @@ fun ArtistUploadScreen(
                         ) {
                             ReviewPublishStep(
                                 title = title,
-                                genre = genre,
+                                genreName = genres.find { it.id == selectedGenreId }?.name ?: "—",
+                                tagName = tags.find { it.id == selectedTagId }?.name,
                                 albumName = selectedAlbum?.title ?: "Single",
                                 audioInfo = audioInfo,
                                 imageUri = selectedImageUri,
                                 onBack = { currentStep = UploadStep.DETAILS },
                                 onPublish = {
-                                    val metadataLyrics = buildString {
-                                        if (bpm.isNotBlank()) append("[BPM: $bpm]\n")
-                                        if (mood.isNotBlank()) append("[Mood: $mood]\n")
-                                        if (artists.isNotBlank()) append("[Featured: $artists]\n")
-                                        if (isExplicit) append("[Explicit Content]\n")
-                                        append(lyrics.trim())
-                                    }
-                                    
                                     viewModel.uploadSong(
                                         context = context,
                                         title = title.trim(),
                                         albumId = selectedAlbum?.id,
-                                        genre = genre.trim(),
-                                        lyrics = metadataLyrics.ifBlank { null },
+                                        categoryId = selectedGenreId,
+                                        tagId = selectedTagId?.toIntOrNull(),
+                                        lyrics = null,
                                         audioUri = selectedAudioUri,
                                         coverUri = selectedImageUri,
                                         trackNumber = 1
@@ -282,16 +268,12 @@ fun ArtistUploadScreen(
                             viewModel.resetState()
                             // Reset form
                             title = ""
-                            genre = ""
-                            lyrics = ""
+                            selectedGenreId = null
+                            selectedTagId = null
                             selectedAudioUri = null
                             audioInfo = null
                             selectedImageUri = null
                             selectedAlbum = null
-                            bpm = ""
-                            mood = ""
-                            artists = ""
-                            isExplicit = false
                             currentStep = UploadStep.AUDIO
                         }
                     )
@@ -522,30 +504,24 @@ private fun AudioUploadStep(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SongDetailsStep(
     title: String,
     onTitleChange: (String) -> Unit,
-    genre: String,
-    onGenreChange: (String) -> Unit,
-    mood: String,
-    onMoodChange: (String) -> Unit,
+    genres: List<MbGenreDto>,
+    tags: List<MbTagDto>,
+    isCatalogLoading: Boolean,
+    selectedGenreId: String?,
+    onGenreSelected: (String) -> Unit,
+    selectedTagId: String?,
+    onTagSelected: (String?) -> Unit,
     selectedAlbum: AlbumDto?,
     onAlbumSelect: (AlbumDto?) -> Unit,
     albums: List<AlbumDto>,
     isAlbumsLoading: Boolean,
     selectedImageUri: Uri?,
     onImageClick: () -> Unit,
-    showAdvanced: Boolean,
-    onToggleAdvanced: () -> Unit,
-    bpm: String,
-    onBpmChange: (String) -> Unit,
-    isExplicit: Boolean,
-    onExplicitChange: (Boolean) -> Unit,
-    artists: String,
-    onArtistsChange: (String) -> Unit,
-    lyrics: String,
-    onLyricsChange: (String) -> Unit,
     onBack: () -> Unit,
     onNext: () -> Unit
 ) {
@@ -666,34 +642,28 @@ private fun SongDetailsStep(
             }
         }
 
-        UploadField(label = "Genre *", value = genre, onValueChange = onGenreChange, placeholder = "e.g. Pop, Hip Hop")
-        
-        // Advanced Toggle
-        Row(
-            modifier = Modifier.fillMaxWidth().clickable { onToggleAdvanced() }.padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Advanced Settings", color = EchoPandaColors.AccentBlue, fontWeight = FontWeight.Bold)
-            Icon(if (showAdvanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = EchoPandaColors.AccentBlue)
+        UploadGenreDropdown(
+            genres = genres,
+            selectedId = selectedGenreId,
+            enabled = !isCatalogLoading,
+            onSelected = onGenreSelected,
+        )
+
+        UploadTagDropdown(
+            tags = tags,
+            selectedId = selectedTagId,
+            enabled = !isCatalogLoading,
+            onSelected = onTagSelected,
+        )
+
+        if (isCatalogLoading && genres.isEmpty()) {
+            Text(
+                "Loading genres and tags…",
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 12.sp,
+            )
         }
-        
-        if (showAdvanced) {
-            UploadField(label = "Mood", value = mood, onValueChange = onMoodChange, placeholder = "e.g. Happy, Chill")
-            
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                UploadField(label = "BPM", value = bpm, onValueChange = onBpmChange, placeholder = "e.g. 120", modifier = Modifier.weight(1f))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Explicit", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
-                    Switch(checked = isExplicit, onCheckedChange = onExplicitChange, modifier = Modifier.scale(0.8f))
-                }
-            }
-            
-            UploadField(label = "Featured Artists", value = artists, onValueChange = onArtistsChange, placeholder = "Separate with commas")
-            
-            UploadField(label = "Lyrics", value = lyrics, onValueChange = onLyricsChange, placeholder = "Paste lyrics here...", singleLine = false, maxChars = 10000)
-        }
-        
+
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             OutlinedButton(
                 onClick = onBack,
@@ -718,7 +688,8 @@ private fun SongDetailsStep(
 @Composable
 private fun ReviewPublishStep(
     title: String,
-    genre: String,
+    genreName: String,
+    tagName: String?,
     albumName: String,
     audioInfo: FileInfo?,
     imageUri: Uri?,
@@ -756,7 +727,10 @@ private fun ReviewPublishStep(
         
         SummaryItem(icon = Icons.Default.AudioFile, label = "Audio File", value = audioInfo?.name ?: "Unknown")
         SummaryItem(icon = Icons.Default.Timer, label = "Duration", value = audioInfo?.let { formatTime(it.duration) } ?: "0:00")
-        SummaryItem(icon = Icons.Default.Category, label = "Genre", value = genre)
+        SummaryItem(icon = Icons.Default.Category, label = "Genre", value = genreName)
+        if (!tagName.isNullOrBlank()) {
+            SummaryItem(icon = Icons.Default.Label, label = "Tag", value = tagName)
+        }
         
         Spacer(Modifier.weight(1f))
         
@@ -851,6 +825,148 @@ fun UploadProgressDialog(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UploadGenreDropdown(
+    genres: List<MbGenreDto>,
+    selectedId: String?,
+    enabled: Boolean,
+    onSelected: (String) -> Unit,
+) {
+    UploadCatalogDropdown(
+        label = "Genre *",
+        options = genres.map { it.id to it.name },
+        selectedId = selectedId,
+        enabled = enabled,
+        placeholder = "Select genre",
+        onSelected = onSelected,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UploadTagDropdown(
+    tags: List<MbTagDto>,
+    selectedId: String?,
+    enabled: Boolean,
+    onSelected: (String?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLabel = tags.find { it.id == selectedId }?.name ?: "None"
+
+    Column {
+        Text("Tag", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(8.dp))
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { if (enabled) expanded = !expanded },
+        ) {
+            OutlinedTextField(
+                value = selectedLabel,
+                onValueChange = {},
+                readOnly = true,
+                enabled = enabled,
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                colors = uploadDropdownColors(),
+                shape = RoundedCornerShape(12.dp),
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(Color(0xFF1E2736)),
+            ) {
+                DropdownMenuItem(
+                    text = { Text("None", color = Color.White) },
+                    onClick = {
+                        onSelected(null)
+                        expanded = false
+                    },
+                )
+                tags.forEach { tag ->
+                    DropdownMenuItem(
+                        text = { Text(tag.name, color = Color.White) },
+                        onClick = {
+                            onSelected(tag.id)
+                            expanded = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UploadCatalogDropdown(
+    label: String,
+    options: List<Pair<String, String>>,
+    selectedId: String?,
+    enabled: Boolean,
+    placeholder: String,
+    onSelected: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLabel = options.find { it.first == selectedId }?.second ?: placeholder
+
+    Column {
+        Text(label, color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(8.dp))
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { if (enabled) expanded = !expanded },
+        ) {
+            OutlinedTextField(
+                value = selectedLabel,
+                onValueChange = {},
+                readOnly = true,
+                enabled = enabled,
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                colors = uploadDropdownColors(),
+                shape = RoundedCornerShape(12.dp),
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(Color(0xFF1E2736)),
+            ) {
+                if (options.isEmpty()) {
+                    DropdownMenuItem(
+                        text = { Text("No options available", color = Color.White.copy(alpha = 0.5f)) },
+                        onClick = { expanded = false },
+                        enabled = false,
+                    )
+                } else {
+                    options.forEach { (id, name) ->
+                        DropdownMenuItem(
+                            text = { Text(name, color = Color.White) },
+                            onClick = {
+                                onSelected(id)
+                                expanded = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun uploadDropdownColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = Color.White,
+    unfocusedTextColor = Color.White,
+    focusedBorderColor = EchoPandaColors.AccentBlue,
+    unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
+    focusedContainerColor = Color(0xFF121A26),
+    unfocusedContainerColor = Color(0xFF121A26),
+    disabledTextColor = Color.White.copy(alpha = 0.5f),
+    disabledBorderColor = Color.White.copy(alpha = 0.05f),
+    disabledContainerColor = Color(0xFF121A26).copy(alpha = 0.5f),
+)
 
 @Composable
 private fun UploadField(

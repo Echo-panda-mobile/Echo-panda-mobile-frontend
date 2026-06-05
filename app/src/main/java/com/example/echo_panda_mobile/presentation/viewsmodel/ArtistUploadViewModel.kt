@@ -14,6 +14,8 @@ import com.example.echo_panda_mobile.R
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.remote.AlbumDto
+import com.example.echo_panda_mobile.data.remote.MbGenreDto
+import com.example.echo_panda_mobile.data.remote.MbTagDto
 import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.remote.PresignedUrlResponse
 import com.example.echo_panda_mobile.data.repository.ArtistRepository
@@ -56,8 +58,18 @@ class ArtistUploadViewModel(
     private val _isAlbumsLoading = MutableStateFlow(false)
     val isAlbumsLoading: StateFlow<Boolean> = _isAlbumsLoading.asStateFlow()
 
+    private val _genres = MutableStateFlow<List<MbGenreDto>>(emptyList())
+    val genres: StateFlow<List<MbGenreDto>> = _genres.asStateFlow()
+
+    private val _tags = MutableStateFlow<List<MbTagDto>>(emptyList())
+    val tags: StateFlow<List<MbTagDto>> = _tags.asStateFlow()
+
+    private val _isCatalogLoading = MutableStateFlow(true)
+    val isCatalogLoading: StateFlow<Boolean> = _isCatalogLoading.asStateFlow()
+
     init {
         loadMyAlbums()
+        loadFormOptions()
     }
 
     fun loadMyAlbums() {
@@ -65,6 +77,24 @@ class ArtistUploadViewModel(
             _isAlbumsLoading.value = true
             repository.getMyAlbums() // This updates the repository.albums flow
             _isAlbumsLoading.value = false
+        }
+    }
+
+    fun loadFormOptions() {
+        viewModelScope.launch {
+            _isCatalogLoading.value = true
+            val result = repository.getSongFormOptions()
+            if (result.isSuccess) {
+                val (genres, tags) = result.getOrNull() ?: (emptyList<MbGenreDto>() to emptyList())
+                _genres.value = genres
+                _tags.value = tags
+            } else {
+                android.util.Log.e(
+                    "ArtistUploadViewModel",
+                    "Failed to load genres/tags: ${result.exceptionOrNull()?.message}"
+                )
+            }
+            _isCatalogLoading.value = false
         }
     }
 
@@ -78,7 +108,8 @@ class ArtistUploadViewModel(
         context: Context,
         title: String,
         albumId: Int?,
-        genre: String?,
+        categoryId: String?,
+        tagId: Int? = null,
         lyrics: String?,
         audioUri: Uri?,
         coverUri: Uri?,
@@ -185,7 +216,8 @@ class ArtistUploadViewModel(
                     title = title.trim(),
                     duration = duration,
                     trackNumber = trackNumber,
-                    genre = genre?.trim(),
+                    categoryId = categoryId?.trim(),
+                    tagId = tagId,
                     lyrics = lyrics?.trim(),
                     audioKey = audioKey,
                     coverKey = coverKey

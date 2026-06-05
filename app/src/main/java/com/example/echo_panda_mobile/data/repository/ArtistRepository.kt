@@ -238,7 +238,8 @@ class ArtistRepository(
         title: String,
         duration: Int,
         trackNumber: Int,
-        genre: String?,
+        categoryId: String?,
+        tagId: Int? = null,
         lyrics: String?,
         audioKey: String?,
         coverKey: String?
@@ -260,7 +261,8 @@ class ArtistRepository(
                 title = title.trim(),
                 duration = duration,
                 trackNumber = trackNumber,
-                genre = genre?.trim(),
+                categoryId = categoryId?.trim()?.takeIf { it.isNotBlank() },
+                tagId = tagId,
                 lyrics = lyrics?.trim(),
                 originalKey = audioKey,
                 coverKey = coverKey
