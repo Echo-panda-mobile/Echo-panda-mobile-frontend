@@ -53,8 +53,14 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
             val artistsDef   = async { repository.getPopularArtists() }
             val browseDef    = async { repository.getBrowseCategories() }
 
-            allGenres   = (genresDef.await()   as? MusicResult.Success)?.data ?: emptyList()
-            allMoods    = (moodsDef.await()    as? MusicResult.Success)?.data ?: emptyList()
+            val genresResult = genresDef.await()
+            val tagsResult = moodsDef.await()
+            allGenres   = (genresResult as? MusicResult.Success)?.data ?: emptyList()
+            allMoods    = (tagsResult as? MusicResult.Success)?.data ?: emptyList()
+            val loadError = listOfNotNull(
+                (genresResult as? MusicResult.Error)?.message,
+                (tagsResult as? MusicResult.Error)?.message
+            ).firstOrNull()
             allReleases = (releasesDef.await() as? MusicResult.Success)?.data ?: emptyList()
             val mostPlayed = (mostPlayedDef.await() as? MusicResult.Success)?.data ?: emptyList()
             val artists  = (artistsDef.await()  as? MusicResult.Success)?.data ?: emptyList()
@@ -67,7 +73,8 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
                 newReleases      = allReleases,
                 mostPlayedSongs  = mostPlayed,
                 popularArtists   = artists,
-                browseCategories = browse
+                browseCategories = browse,
+                errorMessage     = loadError
             )
         }
     }

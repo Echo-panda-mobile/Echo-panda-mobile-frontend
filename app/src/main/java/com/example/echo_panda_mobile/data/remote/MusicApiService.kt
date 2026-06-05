@@ -49,6 +49,7 @@ data class MbGenreDto(
     @SerializedName("id") val id: String,
     @SerializedName("name") val name: String,
     @SerializedName("slug") val slug: String? = null,
+    @SerializedName("image_url") val imageUrl: String? = null,
     @SerializedName("songs_count") val songsCount: Int? = null
 )
 
@@ -56,6 +57,7 @@ data class MbTagDto(
     @SerializedName("id") val id: String,
     @SerializedName("name") val name: String,
     @SerializedName("slug") val slug: String? = null,
+    @SerializedName("image_url") val imageUrl: String? = null,
     @SerializedName("songs_count") val songsCount: Int? = null
 )
 
@@ -336,10 +338,16 @@ interface MusicApiService {
         @Query("limit") limit: Int? = null
     ): Response<BaseResponse<List<MbGenreDto>>>
 
+    @GET("api/genres")
+    suspend fun getPublicGenres(): Response<BaseResponse<List<MbGenreDto>>>
+
     @GET("api/mb/tags")
     suspend fun getTags(
         @Query("limit") limit: Int? = null
     ): Response<BaseResponse<List<MbTagDto>>>
+
+    @GET("api/tags")
+    suspend fun getPublicTags(): Response<BaseResponse<List<MbTagDto>>>
 
     @GET("api/artists/{id}")
     suspend fun getArtistDetail(
@@ -349,6 +357,16 @@ interface MusicApiService {
     @GET("api/artists/{artist}/image-url")
     suspend fun getArtistImageUrl(
         @Path("artist") artistId: String
+    ): Response<ArtistImageUrlResponse>
+
+    @GET("api/genres/{genre}/image-url")
+    suspend fun getGenreImageUrl(
+        @Path("genre") genreId: String
+    ): Response<ArtistImageUrlResponse>
+
+    @GET("api/tags/{tag}/image-url")
+    suspend fun getTagImageUrl(
+        @Path("tag") tagId: String
     ): Response<ArtistImageUrlResponse>
 
     // ─── Albums ───

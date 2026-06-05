@@ -127,6 +127,15 @@ fun DiscoverScreen(
                     ) {
                         Spacer(Modifier.height(16.dp))
 
+                        state.errorMessage?.let { message ->
+                            Text(
+                                text = message,
+                                color = Color(0xFFFF8A80),
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                            )
+                        }
+
                         if (state.isSearchActive && state.searchResults.isNotEmpty()) {
                             SectionHeader(
                                 fullTitle = "Search Results: Albums",
@@ -152,15 +161,15 @@ fun DiscoverScreen(
                             Spacer(Modifier.height(32.dp))
                         }
 
-                        // ── Music Genres ──────────────────────────────────────────────
+                        // ── Categories (genres) ───────────────────────────────────────
+                        SectionHeader(
+                            fullTitle = "Categories",
+                            highlightPart = "Categories",
+                            highlightColor = EchoPandaColors.AccentBlue,
+                            onViewAll = null
+                        )
+                        Spacer(Modifier.height(16.dp))
                         if (state.genres.isNotEmpty()) {
-                            SectionHeader(
-                                fullTitle = "Music Genres",
-                                highlightPart = "Genres",
-                                highlightColor = EchoPandaColors.AccentBlue,
-                                onViewAll = null
-                            )
-                            Spacer(Modifier.height(16.dp))
                             Row(
                                 modifier = Modifier
                                     .horizontalScroll(rememberScrollState())
@@ -177,18 +186,25 @@ fun DiscoverScreen(
                                     )
                                 }
                             }
-                            Spacer(Modifier.height(32.dp))
-                        }
-
-                        // ── Music Tags ────────────────────────────────────────────────
-                        if (state.moodPlaylists.isNotEmpty()) {
-                            SectionHeader(
-                                fullTitle = "Music Tags",
-                                highlightPart = "Tags",
-                                highlightColor = EchoPandaColors.AccentBlue,
-                                onViewAll = null
+                        } else if (!state.isLoading) {
+                            Text(
+                                text = "No categories yet. Add active categories in admin.",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 14.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp)
                             )
-                            Spacer(Modifier.height(16.dp))
+                        }
+                        Spacer(Modifier.height(32.dp))
+
+                        // ── Tags ──────────────────────────────────────────────────────
+                        SectionHeader(
+                            fullTitle = "Tags",
+                            highlightPart = "Tags",
+                            highlightColor = EchoPandaColors.AccentBlue,
+                            onViewAll = null
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        if (state.moodPlaylists.isNotEmpty()) {
                             Row(
                                 modifier = Modifier
                                     .horizontalScroll(rememberScrollState())
@@ -205,8 +221,15 @@ fun DiscoverScreen(
                                     )
                                 }
                             }
-                            Spacer(Modifier.height(32.dp))
+                        } else if (!state.isLoading) {
+                            Text(
+                                text = "No tags yet. Add active tags in admin.",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 14.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
                         }
+                        Spacer(Modifier.height(32.dp))
 
                         // ── New Release Songs ─────────────────────────────────────────
                         if (state.newReleases.isNotEmpty()) {

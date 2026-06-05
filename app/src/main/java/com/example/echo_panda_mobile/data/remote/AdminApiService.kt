@@ -39,6 +39,7 @@ data class TagData(
     val id: Int,
     val name: String,
     val slug: String? = null,
+    @SerializedName("image_url") val imageUrl: String? = null,
     @SerializedName("is_active")
     val isActive: Boolean = true,
     @SerializedName("show_as_row")
@@ -59,6 +60,7 @@ data class GenreData(
     val id: Int,
     val name: String,
     val slug: String? = null,
+    @SerializedName("image_url") val imageUrl: String? = null,
     @SerializedName("is_active")
     val isActive: Boolean = true,
     @SerializedName("show_as_row")
@@ -82,6 +84,22 @@ data class CreateTagRequest(
 
 data class CreateGenreRequest(
     val name: String
+)
+
+data class UpdateTagRequest(
+    val name: String? = null,
+    @SerializedName("image_url") val imageUrl: String? = null
+)
+
+data class UpdateGenreRequest(
+    val name: String? = null,
+    @SerializedName("image_url") val imageUrl: String? = null
+)
+
+data class CatalogImagePresignRequest(
+    val filename: String,
+    @SerializedName("content_type") val contentType: String,
+    val size: Long
 )
 
 data class UpdateActiveStatusRequest(
@@ -150,7 +168,13 @@ interface AdminApiService {
     suspend fun createGenre(@Body body: CreateGenreRequest): GenreData
 
     @PUT("api/mb/admin/tags/{tag}")
-    suspend fun updateTag(@Path("tag") tagId: Int, @Body body: CreateTagRequest): TagData
+    suspend fun updateTag(@Path("tag") tagId: Int, @Body body: UpdateTagRequest): TagData
+
+    @POST("api/mb/admin/tags/{tag}/image/presign")
+    suspend fun presignTagImage(
+        @Path("tag") tagId: Int,
+        @Body body: CatalogImagePresignRequest
+    ): Response<PresignedUrlResponse>
 
     @PATCH("api/mb/admin/tags/{tag}/status")
     suspend fun updateTagStatus(@Path("tag") tagId: Int, @Body body: UpdateActiveStatusRequest): TagData
@@ -165,7 +189,13 @@ interface AdminApiService {
     suspend fun updateAlbum(@Path("album") albumId: Int, @Body body: Map<String, @JvmSuppressWildcards Any>): AlbumDto
 
     @PUT("api/mb/admin/genres/{genre}")
-    suspend fun updateGenre(@Path("genre") genreId: Int, @Body body: CreateGenreRequest): GenreData
+    suspend fun updateGenre(@Path("genre") genreId: Int, @Body body: UpdateGenreRequest): GenreData
+
+    @POST("api/mb/admin/genres/{genre}/image/presign")
+    suspend fun presignGenreImage(
+        @Path("genre") genreId: Int,
+        @Body body: CatalogImagePresignRequest
+    ): Response<PresignedUrlResponse>
 
     @PATCH("api/mb/admin/genres/{genre}/status")
     suspend fun updateGenreStatus(@Path("genre") genreId: Int, @Body body: UpdateActiveStatusRequest): GenreData

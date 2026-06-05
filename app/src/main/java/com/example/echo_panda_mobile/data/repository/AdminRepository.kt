@@ -5,12 +5,17 @@ import com.example.echo_panda_mobile.data.remote.AdminApiService
 import com.example.echo_panda_mobile.data.remote.AdminModerationReportRequest
 import com.example.echo_panda_mobile.data.remote.CreateAdminArtistRequest
 import com.example.echo_panda_mobile.data.remote.CreateAdminArtistResponse
+import com.example.echo_panda_mobile.data.remote.CatalogImagePresignRequest
 import com.example.echo_panda_mobile.data.remote.CreateGenreRequest
 import com.example.echo_panda_mobile.data.remote.CreateTagRequest
 import com.example.echo_panda_mobile.data.remote.UpdateActiveStatusRequest
+import com.example.echo_panda_mobile.data.remote.UpdateGenreRequest
 import com.example.echo_panda_mobile.data.remote.UpdateShowAsRowRequest
+import com.example.echo_panda_mobile.data.remote.UpdateTagRequest
 import com.example.echo_panda_mobile.data.remote.GenreData
 import com.example.echo_panda_mobile.data.remote.TagData
+import com.example.echo_panda_mobile.util.S3UploadManager
+import java.io.File
 import com.example.echo_panda_mobile.data.remote.BackendUser
 import com.example.echo_panda_mobile.data.remote.AuthApiService
 import com.example.echo_panda_mobile.data.remote.RetrofitClient
@@ -29,12 +34,18 @@ enum class AdminModerationAction {
     REPORT
 }
 
-class AdminRepository(private val tokenStorage: TokenStorage) {
+class AdminRepository(
+    private val tokenStorage: TokenStorage,
+    private val s3UploadManager: S3UploadManager = S3UploadManager()
+) {
     private val api: AdminApiService
         get() = RetrofitClient.getAdminService(tokenStorage)
 
     private val authApi: AuthApiService
         get() = RetrofitClient.getAuthService(tokenStorage)
+
+    private val musicApi
+        get() = RetrofitClient.getMusicService(tokenStorage)
 
     data class AdminDirectoryData(
         val normalUsers: List<BackendUser>,
@@ -306,12 +317,114 @@ class AdminRepository(private val tokenStorage: TokenStorage) {
 
     suspend fun updateTag(id: Int, name: String): AdminResult<TagData> {
         return try {
-            val response = api.updateTag(id, CreateTagRequest(name))
+            val response = api.updateTag(id, UpdateTagRequest(name = name))
             AdminResult.Success(response)
         } catch (e: HttpException) {
             AdminResult.Error(parseHttpError(e))
         } catch (e: Exception) {
             AdminResult.Error(e.message ?: "Could not update tag.")
+        }
+    }
+
+    suspend fun resolveTagImageUrl(tagId: Int, rawUrl: String?): String? {
+        val raw = rawUrl?.takeIf { it.isNotBlank() && it != "null" } ?: return null
+        if (raw.startsWith("http")) return raw
+        return try {
+            val response = musicApi.getTagImageUrl(tagId.toString())
+            if (response.isSuccessful) {
+                response.body()?.signedUrl?.takeIf { it.isNotBlank() }
+                    ?: response.body()?.url?.takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    suspend fun resolveGenreImageUrl(genreId: Int, rawUrl: String?): String? {
+        val raw = rawUrl?.takeIf { it.isNotBlank() && it != "null" } ?: return null
+        if (raw.startsWith("http")) return raw
+        return try {
+            val response = musicApi.getGenreImageUrl(genreId.toString())
+            if (response.isSuccessful) {
+                response.body()?.signedUrl?.takeIf { it.isNotBlank() }
+                    ?: response.body()?.url?.takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    suspend fun uploadTagImage(tagId: Int, file: File): AdminResult<TagData> {
+        return try {
+            val presignResponse = api.presignTagImage(
+                tagId,
+                CatalogImagePresignRequest(
+                    filename = file.name,
+                    contentType = "image/jpeg",
+                    size = file.length()
+                )
+            )
+            if (!presignResponse.isSuccessful || presignResponse.body() == null) {
+                val errorBody = presignResponse.errorBody()?.string()
+                return AdminResult.Error(errorBody ?: "Failed to prepare tag image upload.")
+            }
+
+            val presigned = presignResponse.body()!!
+            val uploaded = s3UploadManager.uploadToS3(
+                uploadUrl = presigned.uploadUrl,
+                file = file,
+                contentType = "image/jpeg",
+                headers = presigned.headers
+            )
+            if (!uploaded) {
+                return AdminResult.Error("Failed to upload tag image to storage.")
+            }
+
+            val response = api.updateTag(tagId, UpdateTagRequest(imageUrl = presigned.key))
+            AdminResult.Success(response)
+        } catch (e: HttpException) {
+            AdminResult.Error(parseHttpError(e))
+        } catch (e: Exception) {
+            AdminResult.Error(e.message ?: "Could not upload tag image.")
+        }
+    }
+
+    suspend fun uploadGenreImage(genreId: Int, file: File): AdminResult<GenreData> {
+        return try {
+            val presignResponse = api.presignGenreImage(
+                genreId,
+                CatalogImagePresignRequest(
+                    filename = file.name,
+                    contentType = "image/jpeg",
+                    size = file.length()
+                )
+            )
+            if (!presignResponse.isSuccessful || presignResponse.body() == null) {
+                val errorBody = presignResponse.errorBody()?.string()
+                return AdminResult.Error(errorBody ?: "Failed to prepare category image upload.")
+            }
+
+            val presigned = presignResponse.body()!!
+            val uploaded = s3UploadManager.uploadToS3(
+                uploadUrl = presigned.uploadUrl,
+                file = file,
+                contentType = "image/jpeg",
+                headers = presigned.headers
+            )
+            if (!uploaded) {
+                return AdminResult.Error("Failed to upload category image to storage.")
+            }
+
+            val response = api.updateGenre(genreId, UpdateGenreRequest(imageUrl = presigned.key))
+            AdminResult.Success(response)
+        } catch (e: HttpException) {
+            AdminResult.Error(parseHttpError(e))
+        } catch (e: Exception) {
+            AdminResult.Error(e.message ?: "Could not upload category image.")
         }
     }
 
@@ -409,7 +522,7 @@ class AdminRepository(private val tokenStorage: TokenStorage) {
 
     suspend fun updateGenre(id: Int, name: String): AdminResult<GenreData> {
         return try {
-            val response = api.updateGenre(id, CreateGenreRequest(name))
+            val response = api.updateGenre(id, UpdateGenreRequest(name = name))
             AdminResult.Success(response)
         } catch (e: HttpException) {
             AdminResult.Error(parseHttpError(e))

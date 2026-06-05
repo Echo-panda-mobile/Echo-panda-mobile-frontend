@@ -1,20 +1,26 @@
 package com.example.echo_panda_mobile.presentation.viewsmodel
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.remote.TagData
 import com.example.echo_panda_mobile.data.repository.AdminRepository
 import com.example.echo_panda_mobile.data.repository.AdminResult
 import com.example.echo_panda_mobile.data.repository.TokenStorage
+import com.example.echo_panda_mobile.util.ImageCompressor
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class AdminTagDetailUiState(
     val isLoading: Boolean = false,
+    val isUploadingImage: Boolean = false,
     val tag: TagData? = null,
+    val displayImageUrl: String? = null,
     val errorMessage: String? = null,
     val successMessage: String? = null,
     val isDeleted: Boolean = false
@@ -22,7 +28,7 @@ data class AdminTagDetailUiState(
 
 class AdminTagDetailViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = AdminRepository(TokenStorage(application))
-    
+
     private val _uiState = MutableStateFlow(AdminTagDetailUiState())
     val uiState: StateFlow<AdminTagDetailUiState> = _uiState.asStateFlow()
 
@@ -33,7 +39,12 @@ class AdminTagDetailViewModel(application: Application) : AndroidViewModel(appli
                 is AdminResult.Success -> {
                     val tag = result.data.find { it.id.toString() == tagId }
                     if (tag != null) {
-                        _uiState.value = _uiState.value.copy(isLoading = false, tag = tag)
+                        val imageUrl = repository.resolveTagImageUrl(tag.id, tag.imageUrl)
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            tag = tag,
+                            displayImageUrl = imageUrl
+                        )
                     } else {
                         _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Tag not found")
                     }
@@ -45,14 +56,56 @@ class AdminTagDetailViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
+    fun uploadTagImage(uri: Uri) {
+        val tag = _uiState.value.tag ?: return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isUploadingImage = true,
+                errorMessage = null,
+                successMessage = null
+            )
+
+            val compressedFile = withContext(Dispatchers.IO) {
+                ImageCompressor.compress(getApplication(), uri, "tag_image")
+            }
+            if (compressedFile == null) {
+                _uiState.value = _uiState.value.copy(
+                    isUploadingImage = false,
+                    errorMessage = "Failed to process image"
+                )
+                return@launch
+            }
+
+            when (val result = repository.uploadTagImage(tag.id, compressedFile)) {
+                is AdminResult.Success -> {
+                    val imageUrl = repository.resolveTagImageUrl(result.data.id, result.data.imageUrl)
+                    _uiState.value = _uiState.value.copy(
+                        isUploadingImage = false,
+                        tag = result.data,
+                        displayImageUrl = imageUrl,
+                        successMessage = "Tag image updated successfully"
+                    )
+                }
+                is AdminResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        isUploadingImage = false,
+                        errorMessage = result.message
+                    )
+                }
+            }
+        }
+    }
+
     fun updateTag(id: Int, name: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
             when (val result = repository.updateTag(id, name)) {
                 is AdminResult.Success -> {
+                    val imageUrl = repository.resolveTagImageUrl(result.data.id, result.data.imageUrl)
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         tag = result.data,
+                        displayImageUrl = imageUrl,
                         successMessage = "Tag updated successfully"
                     )
                 }
@@ -88,7 +141,8 @@ class AdminTagDetailViewModel(application: Application) : AndroidViewModel(appli
             )
             when (val result = repository.setTagActive(tag.id, isActive)) {
                 is AdminResult.Success -> {
-                    _uiState.value = _uiState.value.copy(tag = result.data)
+                    val imageUrl = repository.resolveTagImageUrl(result.data.id, result.data.imageUrl)
+                    _uiState.value = _uiState.value.copy(tag = result.data, displayImageUrl = imageUrl)
                 }
                 is AdminResult.Error -> {
                     _uiState.value = _uiState.value.copy(tag = previous, errorMessage = result.message)
@@ -108,7 +162,8 @@ class AdminTagDetailViewModel(application: Application) : AndroidViewModel(appli
             )
             when (val result = repository.setTagShowAsRow(tag.id, showAsRow)) {
                 is AdminResult.Success -> {
-                    _uiState.value = _uiState.value.copy(tag = result.data)
+                    val imageUrl = repository.resolveTagImageUrl(result.data.id, result.data.imageUrl)
+                    _uiState.value = _uiState.value.copy(tag = result.data, displayImageUrl = imageUrl)
                 }
                 is AdminResult.Error -> {
                     _uiState.value = _uiState.value.copy(tag = previous, errorMessage = result.message)

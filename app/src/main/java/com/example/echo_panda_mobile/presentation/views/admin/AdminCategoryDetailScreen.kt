@@ -1,8 +1,11 @@
 package com.example.echo_panda_mobile.presentation.views.admin
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -15,11 +18,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.echo_panda_mobile.presentation.viewsmodel.AdminCategoryDetailViewModel
 
 private val BgDark = Color(0xFF05070D)
@@ -37,6 +43,13 @@ fun AdminCategoryDetailScreen(
     viewModel: AdminCategoryDetailViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { viewModel.uploadGenreImage(it) }
+    }
 
     // State for editing mode
     var isEditing by remember { mutableStateOf(false) }
@@ -97,20 +110,56 @@ fun AdminCategoryDetailScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
             
-            // Icon Header
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(AccentPurple.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Category,
-                    contentDescription = null,
-                    tint = AccentPurple,
-                    modifier = Modifier.size(50.dp)
-                )
+            Box(contentAlignment = Alignment.BottomEnd) {
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(AccentPurple.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val imageUrl = uiState.displayImageUrl
+                    when {
+                        !imageUrl.isNullOrBlank() -> {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(imageUrl)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "Category image",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                        uiState.isUploadingImage -> {
+                            CircularProgressIndicator(color = AccentPurple, modifier = Modifier.size(28.dp))
+                        }
+                        else -> {
+                            Icon(
+                                Icons.Default.Category,
+                                contentDescription = null,
+                                tint = AccentPurple,
+                                modifier = Modifier.size(50.dp)
+                            )
+                        }
+                    }
+                }
+
+                IconButton(
+                    onClick = { photoPickerLauncher.launch("image/*") },
+                    enabled = uiState.genre != null && !uiState.isUploadingImage && !uiState.isLoading,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(AccentPurple)
+                ) {
+                    Icon(
+                        Icons.Default.CameraAlt,
+                        contentDescription = "Upload category image",
+                        tint = Color.Black,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
