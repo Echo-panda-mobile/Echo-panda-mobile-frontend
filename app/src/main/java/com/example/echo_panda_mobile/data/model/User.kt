@@ -1,12 +1,14 @@
 package com.example.echo_panda_mobile.data.model
 
+import com.google.gson.annotations.SerializedName
+
 data class User(
     val id: Int,
     val name: String,
     val email: String,
     val role: String,
     val token: String,
-    val photoUrl: String? = null,
+    @SerializedName("image_url") val photoUrl: String? = null,
     val artistId: Int? = null
 ) {
     fun getDisplayPhotoUrl(): String? {

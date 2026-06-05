@@ -78,6 +78,8 @@ class AllSongsViewModel(
                         it.copy(isLoading = false, errorMessage = result.message)
                     }
                 }
+
+                else -> {}
             }
         }
     }

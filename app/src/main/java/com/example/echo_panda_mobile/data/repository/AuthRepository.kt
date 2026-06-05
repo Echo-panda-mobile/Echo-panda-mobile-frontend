@@ -1,9 +1,12 @@
 package com.example.echo_panda_mobile.data.repository
 
 import com.example.echo_panda_mobile.data.model.*
-import androidx.core.net.toUri
-import com.example.echo_panda_mobile.data.remote.RetrofitClient
+import com.example.echo_panda_mobile.data.remote.BackendUser
 import com.example.echo_panda_mobile.data.remote.FirebaseSessionRequest
+import com.example.echo_panda_mobile.data.remote.PresignedUrlResponse
+import com.example.echo_panda_mobile.data.remote.RetrofitClient
+import com.example.echo_panda_mobile.data.remote.UpdateProfileRequest
+import com.example.echo_panda_mobile.data.remote.UserPresignRequest
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
@@ -43,7 +46,8 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
                 response.user.role.lowercase().trim()
             }
             
-            val updatedUser = response.user.copy(role = finalRole)
+            val resolvedPhoto = resolveUserProfileImageUrl(response.user.id, response.user.photoUrl)
+            val updatedUser = response.user.copy(role = finalRole, photoUrl = resolvedPhoto)
             val finalResponse = response.copy(user = updatedUser)
 
             tokenStorage.saveToken(finalResponse.token)
@@ -155,38 +159,94 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
     }
 
     suspend fun getCurrentUserProfile(): User? {
-        val firebaseUser = firebaseAuth.currentUser
-        val email = tokenStorage.getEmail() ?: firebaseUser?.email ?: ""
-        
-        if (email.isNotBlank()) {
-            if (findDocumentByEmail("admins", email) != null) {
-                return createLocalUser(firebaseUser, email, "admin")
-            }
-            if (findDocumentByEmail("artists", email) != null) {
-                return createLocalUser(firebaseUser, email, "artist")
-            }
+        val token = tokenStorage.getToken()
+        if (!token.isNullOrBlank()) {
+            fetchBackendUser()?.let { return it }
         }
 
-        if (firebaseUser == null) return null
-        
+        val firebaseUser = firebaseAuth.currentUser ?: return null
+
         return when (val sync = syncBackendSession(firebaseUser, provider = "session_restore")) {
             is AuthResult.Success -> sync.data.user
             else -> null
         }
     }
 
-    private suspend fun createLocalUser(firebaseUser: FirebaseUser?, email: String, role: String): User {
+    private suspend fun fetchBackendUser(): User? {
+        return try {
+            val backend = authApi.me().user
+            mapBackendUser(backend)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private suspend fun mapBackendUser(backend: BackendUser): User {
+        val token = tokenStorage.getToken() ?: ""
+        val role = backend.role.trim().lowercase()
+        val artistId = backend.artist_id ?: backend.artist?.id
+        val resolvedPhoto = resolveUserProfileImageUrl(backend.id, backend.imageUrl)
+
         tokenStorage.saveRole(role)
-        val artistId = tokenStorage.getArtistId()
+        tokenStorage.saveEmail(backend.email)
+        tokenStorage.saveName(backend.name)
+        tokenStorage.saveUserId(backend.id)
+        if (artistId != null) {
+            tokenStorage.saveArtistId(artistId)
+        }
+
         return User(
-            id = firebaseUser?.uid?.hashCode() ?: email.hashCode(),
-            name = firebaseUser?.displayName ?: role.replaceFirstChar { it.uppercase() },
-            email = email,
+            id = backend.id,
+            name = backend.name,
+            email = backend.email,
             role = role,
-            token = tokenStorage.getToken() ?: "",
-            photoUrl = firebaseUser?.photoUrl?.toString(),
-            artistId = if (artistId != -1) artistId else null
+            token = token,
+            photoUrl = resolvedPhoto,
+            artistId = artistId
         )
+    }
+
+    suspend fun resolveUserProfileImageUrl(userId: Int, rawUrl: String?): String? {
+        val raw = rawUrl?.takeIf { it.isNotBlank() && it != "null" } ?: return null
+        if (raw.startsWith("http") || raw.startsWith("content://") || raw.startsWith("file://")) {
+            return raw
+        }
+
+        return try {
+            val response = authApi.getUserImageUrl(userId)
+            if (response.isSuccessful) {
+                response.body()?.signedUrl?.takeIf { it.isNotBlank() }
+                    ?: response.body()?.url?.takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    suspend fun getUserImagePresignedUrl(
+        fileName: String,
+        contentType: String,
+        size: Long
+    ): Result<PresignedUrlResponse> {
+        return try {
+            val response = authApi.presignUserImage(
+                UserPresignRequest(
+                    filename = fileName,
+                    contentType = contentType,
+                    size = size
+                )
+            )
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val errorBody = response.errorBody()?.string()
+                Result.failure(Exception("HTTP ${response.code()}: $errorBody"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     suspend fun getCurrentUser(): User? = getCurrentUserProfile()
@@ -231,15 +291,28 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
     suspend fun updateUserProfile(name: String, email: String, role: String? = null, photoUrl: String? = null): AuthResult<Unit> {
         val firebaseUser = firebaseAuth.currentUser
         val currentEmail = firebaseUser?.email ?: tokenStorage.getEmail() ?: return AuthResult.Error("User not signed in.")
-        
+
         return try {
             val normalizedName = name.trim()
             val normalizedEmail = email.trim().ifBlank { currentEmail }
+            val imageKey = photoUrl?.takeUnless { it.startsWith("content://") || it.startsWith("file://") }
+
+            val response = authApi.updateProfile(
+                UpdateProfileRequest(
+                    name = normalizedName,
+                    email = normalizedEmail,
+                    imageUrl = imageKey
+                )
+            )
+
+            if (!response.isSuccessful) {
+                val errorBody = response.errorBody()?.string()
+                return AuthResult.Error(errorBody ?: "Could not update profile. Please try again.")
+            }
 
             if (firebaseUser != null) {
                 val profileUpdates = com.google.firebase.auth.UserProfileChangeRequest.Builder()
                     .setDisplayName(normalizedName)
-                    .setPhotoUri(photoUrl?.toUri())
                     .build()
                 firebaseUser.updateProfile(profileUpdates).await()
             }
@@ -253,13 +326,17 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
 
             val data = mutableMapOf<String, Any>("name" to normalizedName)
             if (normalizedEmail.isNotBlank()) data["email"] = normalizedEmail
-            photoUrl?.let { data["photoUrl"] = it }
 
             if (collection == "users" && firebaseUser != null) {
                 firestore.collection("users").document(firebaseUser.uid).set(data, SetOptions.merge()).await()
             } else {
                 val doc = findDocumentByEmail(collection, currentEmail)
                 doc?.reference?.set(data, SetOptions.merge())?.await()
+            }
+
+            tokenStorage.saveName(normalizedName)
+            if (normalizedEmail.isNotBlank()) {
+                tokenStorage.saveEmail(normalizedEmail)
             }
 
             AuthResult.Success(Unit)
@@ -328,13 +405,18 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
 
             RetrofitClient.resetAll()
 
+            val resolvedPhoto = resolveUserProfileImageUrl(
+                response.user.id,
+                response.user.imageUrl
+            )
+
             val user = User(
                 id = response.user.id,
                 name = response.user.name,
                 email = response.user.email,
                 role = normalizedRole,
                 token = response.token,
-                photoUrl = firebaseUser.photoUrl?.toString(),
+                photoUrl = resolvedPhoto,
                 artistId = if (artistId != -1) artistId else null
             )
             

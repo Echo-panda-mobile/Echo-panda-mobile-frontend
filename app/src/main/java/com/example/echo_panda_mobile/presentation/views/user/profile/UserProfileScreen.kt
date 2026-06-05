@@ -49,13 +49,12 @@ fun UserProfileScreen(
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
     val ptrState = rememberPullToRefreshState()
+    val context = LocalContext.current
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let {
-            viewModel.updateProfileImage(it.toString())
-        }
+        uri?.let { viewModel.updateProfileImage(context, it) }
     }
 
     var showLogoutDialog by remember { mutableStateOf(false) }
@@ -212,15 +211,21 @@ fun UserProfileScreen(
                                 .background(Color(0xFF0F2537)),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (uiState.user?.photoUrl != null) {
+                            val profilePhotoUrl = uiState.user?.getDisplayPhotoUrl()
+                            if (profilePhotoUrl != null) {
                                 AsyncImage(
-                                    model = ImageRequest.Builder(LocalContext.current)
-                                        .data(uiState.user?.photoUrl)
+                                    model = ImageRequest.Builder(context)
+                                        .data(profilePhotoUrl)
                                         .crossfade(true)
                                         .build(),
                                     contentDescription = "Profile Picture",
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop
+                                )
+                            } else if (uiState.isUpdating) {
+                                CircularProgressIndicator(
+                                    color = EchoPandaColors.AccentBlue,
+                                    modifier = Modifier.size(32.dp)
                                 )
                             } else {
                                 Icon(
@@ -235,6 +240,7 @@ fun UserProfileScreen(
                         // Edit Profile Picture Icon
                         IconButton(
                             onClick = { photoPickerLauncher.launch("image/*") },
+                            enabled = !uiState.isUpdating,
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)

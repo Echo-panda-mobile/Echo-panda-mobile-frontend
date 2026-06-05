@@ -4,6 +4,9 @@ import com.google.gson.annotations.SerializedName
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
+import retrofit2.http.Path
+import retrofit2.Response
 
 data class FirebaseSessionRequest(
     val id_token: String,
@@ -32,8 +35,26 @@ data class BackendUser(
     val name: String,
     val email: String,
     val role: String,
+    @SerializedName("image_url") val imageUrl: String? = null,
     val artist_id: Int? = null,
     val artist: BackendArtist? = null
+)
+
+data class UpdateProfileRequest(
+    val name: String,
+    val email: String,
+    @SerializedName("image_url") val imageUrl: String? = null
+)
+
+data class UpdateProfileResponse(
+    val message: String? = null,
+    val user: BackendUser
+)
+
+data class UserPresignRequest(
+    val filename: String,
+    @SerializedName("content_type") val contentType: String,
+    val size: Long
 )
 
 data class FirebaseSessionResponse(
@@ -62,6 +83,18 @@ interface AuthApiService {
 
     @GET("api/me")
     suspend fun me(): MeResponse
+
+    @GET("api/profile")
+    suspend fun profile(): MeResponse
+
+    @PUT("api/profile")
+    suspend fun updateProfile(@Body body: UpdateProfileRequest): Response<UpdateProfileResponse>
+
+    @POST("api/upload/user-image/presign")
+    suspend fun presignUserImage(@Body body: UserPresignRequest): Response<PresignedUrlResponse>
+
+    @GET("api/users/{user}/image-url")
+    suspend fun getUserImageUrl(@Path("user") userId: Int): Response<ArtistImageUrlResponse>
 
     @GET("api/users/by-role")
     suspend fun usersByRole(): UsersByRoleResponse
