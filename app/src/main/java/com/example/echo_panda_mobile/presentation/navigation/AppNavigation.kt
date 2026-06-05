@@ -247,7 +247,7 @@ fun AppNavigation() {
             }
 
             // ── Global Mini Player ────────────────────────────────────────────────
-            val isPlayerScreen = currentRoute?.startsWith("user/player") == true
+            val isPlayerScreen = currentRoute?.contains("player") == true
             val isAuthScreen = currentRoute == Routes.LOGIN || currentRoute == Routes.SIGNUP
 
             if (!isPlayerScreen && !isAuthScreen) {

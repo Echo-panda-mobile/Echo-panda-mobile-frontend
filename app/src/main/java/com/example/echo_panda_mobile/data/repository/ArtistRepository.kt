@@ -375,16 +375,44 @@ class ArtistRepository(
         }
     }
 
-    suspend fun getArtistProfile(artistId: String): Result<ArtistDto> = withContext(Dispatchers.IO) {
+    suspend fun resolveArtistImageUrl(artistId: String): String? = withContext(Dispatchers.IO) {
         try {
-            val response = apiService.getArtistDetail(artistId)
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+            val response = apiService.getArtistImageUrl(artistId)
+            if (response.isSuccessful) {
+                response.body()?.signedUrl?.takeIf { it.isNotBlank() }
+                    ?: response.body()?.url?.takeIf { it.isNotBlank() }
             } else {
-                Result.failure(Exception("Failed to fetch artist profile"))
+                null
             }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Public catalog list includes bio; used when single-artist detail route is unavailable. */
+    suspend fun getArtistFromCatalog(artistId: String): Result<ArtistDto> = withContext(Dispatchers.IO) {
+        try {
+            val response = apiService.getArtists()
+            if (!response.isSuccessful || response.body() == null) {
+                return@withContext Result.failure(Exception("Failed to fetch artist catalog"))
+            }
+            val artist = response.body()!!.data.find { it.id.toString() == artistId }
+                ?: return@withContext Result.failure(Exception("Artist not found"))
+            Result.success(artist)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    suspend fun getArtistProfile(artistId: String): Result<ArtistDto> = withContext(Dispatchers.IO) {
+        try {
+            val detailResponse = apiService.getArtistDetail(artistId)
+            if (detailResponse.isSuccessful && detailResponse.body() != null) {
+                return@withContext Result.success(detailResponse.body()!!)
+            }
+            getArtistFromCatalog(artistId)
+        } catch (e: Exception) {
+            getArtistFromCatalog(artistId)
         }
     }
 
@@ -401,7 +429,8 @@ class ArtistRepository(
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!.data)
             } else {
-                Result.failure(Exception("Failed to update artist profile: ${response.message()}"))
+                val errorBody = response.errorBody()?.string()
+                Result.failure(Exception(errorBody ?: "Failed to update artist profile: ${response.message()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)

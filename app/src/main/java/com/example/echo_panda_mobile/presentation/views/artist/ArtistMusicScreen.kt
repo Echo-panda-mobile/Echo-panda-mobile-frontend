@@ -129,7 +129,7 @@ fun ArtistMusicScreen(
                                     song = song,
                                     onDelete = { viewModel.deleteSong(song.id.toString()) },
                                     onClick = {
-                                        onNavigate(Routes.USER_PLAYER.replace("{trackId}", song.id.toString()))
+                                        onNavigate(Routes.ARTIST_PLAYER.replace("{trackId}", song.id.toString()))
                                     }
                                 )
                             }

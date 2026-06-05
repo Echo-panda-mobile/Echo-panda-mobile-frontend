@@ -83,7 +83,10 @@ fun ArtistDashboardScreen(
                             
                             Spacer(Modifier.height(32.dp))
                             
-                            TopSongAnalyticsSection(topTrack = state.data.topTrack)
+                            TopSongAnalyticsSection(
+                                topTrack = state.data.topTrack,
+                                onNavigate = onNavigate
+                            )
                             
                             Spacer(Modifier.height(32.dp))
                             
@@ -227,24 +230,7 @@ private fun DashboardStatsGrid(stats: DashboardStats) {
                 modifier = Modifier.weight(1f)
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatCard(
-                title = "Followers",
-                value = stats.followers,
-                growth = "+5%",
-                icon = Icons.Default.Favorite,
-                color = Color(0xFFF472B6),
-                modifier = Modifier.weight(1f)
-            )
-            StatCard(
-                title = "Total Revenue",
-                value = "$${String.format("%.0f", stats.monthlyRevenue)}",
-                growth = "+18%",
-                icon = Icons.Default.Payments,
-                color = Color(0xFF4ADE80),
-                modifier = Modifier.weight(1f)
-            )
-        }
+
     }
 }
 
@@ -292,14 +278,22 @@ private fun StatCard(
 }
 
 @Composable
-private fun TopSongAnalyticsSection(topTrack: TopTrack) {
+private fun TopSongAnalyticsSection(
+    topTrack: TopTrack,
+    onNavigate: (String) -> Unit
+) {
     Column {
         Text("Top Song Analytics", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
         Surface(
             color = Color(0xFF121A26),
             shape = RoundedCornerShape(24.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, EchoPandaColors.AccentBlue.copy(alpha = 0.1f))
+            border = androidx.compose.foundation.BorderStroke(1.dp, EchoPandaColors.AccentBlue.copy(alpha = 0.1f)),
+            modifier = Modifier.clickable { 
+                if (topTrack.id.isNotBlank()) {
+                    onNavigate(Routes.ARTIST_PLAYER.replace("{trackId}", topTrack.id))
+                }
+            }
         ) {
             Row(
                 modifier = Modifier.padding(20.dp),
@@ -332,7 +326,11 @@ private fun TopSongAnalyticsSection(topTrack: TopTrack) {
                 }
                 
                 IconButton(
-                    onClick = { /* Navigate to track analytics */ },
+                    onClick = { 
+                        if (topTrack.id.isNotBlank()) {
+                            onNavigate(Routes.ARTIST_PLAYER.replace("{trackId}", topTrack.id))
+                        }
+                    },
                     modifier = Modifier.background(Color.White.copy(alpha = 0.05f), CircleShape)
                 ) {
                     Icon(Icons.Default.ChevronRight, null, tint = Color.White)

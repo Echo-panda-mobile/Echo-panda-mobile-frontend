@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -106,8 +107,8 @@ fun ArtistProfileScreen(
                                         .background(Color(0xFF121A26)),
                                     border = androidx.compose.foundation.BorderStroke(4.dp, Color(0xFF05070D))
                                 ) {
-                                    val photoUrl = uiState.user?.getDisplayPhotoUrl()
-                                    if (photoUrl != null) {
+                                    val photoUrl = uiState.artistImageUrl
+                                    if (!photoUrl.isNullOrBlank()) {
                                         AsyncImage(
                                             model = ImageRequest.Builder(context)
                                                 .data(photoUrl)
@@ -170,14 +171,7 @@ fun ArtistProfileScreen(
                             .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Artist Stats Row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            ArtistStatItem(value = uiState.followers, label = "Followers")
-                            ArtistStatItem(value = uiState.monthlyListeners, label = "Monthly Listeners")
-                        }
+
                         
                         Spacer(Modifier.height(32.dp))
                         
@@ -196,8 +190,8 @@ fun ArtistProfileScreen(
                                 )
                                 Spacer(Modifier.height(8.dp))
                                 Text(
-                                    text = uiState.bio,
-                                    color = Color.White.copy(alpha = 0.7f),
+                                    text = uiState.bio.trim().ifBlank { "no bio yet" },
+                                    color = Color.White.copy(alpha = if (uiState.bio.isBlank()) 0.4f else 0.7f),
                                     fontSize = 14.sp,
                                     lineHeight = 20.sp
                                 )
@@ -223,13 +217,10 @@ fun ArtistProfileScreen(
                         ProfileOption(
                             icon = Icons.Default.Album, 
                             title = "Manage Albums",
+                            isLast = true,
                             onClick = { onNavigate(Routes.ARTIST_ALBUMS) }
                         )
-                        ProfileOption(
-                            icon = Icons.Default.Analytics, 
-                            title = "View Analytics",
-                            onClick = { onNavigate(Routes.ARTIST_ANALYTICS) }
-                        )
+
                         
                         Spacer(Modifier.height(32.dp))
                         
@@ -248,21 +239,15 @@ fun ArtistProfileScreen(
                             onClick = { onNavigate(Routes.ARTIST_EDIT_PROFILE) }
                         )
                         ProfileOption(
-                            icon = Icons.Default.Security, 
-                            title = "Account Security",
-                            onClick = { onNavigate(Routes.ARTIST_SECURITY) }
-                        )
-                        ProfileOption(
-                            icon = Icons.Default.Settings, 
-                            title = "Preferences",
-                            onClick = { onNavigate(Routes.ARTIST_PREFERENCES) }
-                        )
-                        ProfileOption(
-                            icon = Icons.AutoMirrored.Filled.HelpOutline, 
-                            title = "Help & Support",
+                            icon = Icons.AutoMirrored.Filled.Logout,
+                            title = "Logout",
                             isLast = true,
-                            onClick = { onNavigate(Routes.ARTIST_HELP_SUPPORT) }
+                            onClick = { 
+                                viewModel.logout()
+                                onNavigate(Routes.LOGIN)
+                            }
                         )
+
                         
                         Spacer(Modifier.height(32.dp))
                     }

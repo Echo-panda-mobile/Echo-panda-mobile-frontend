@@ -50,10 +50,10 @@ fun ArtistEditProfileScreen(
         }
     }
     
-    LaunchedEffect(uiState.user) {
+    LaunchedEffect(uiState.user, uiState.bio) {
         uiState.user?.let {
-            if (name.isEmpty()) name = it.name
-            if (bio.isEmpty()) bio = uiState.bio
+            name = it.name
+            bio = uiState.bio
         }
     }
     
@@ -110,7 +110,8 @@ fun ArtistEditProfileScreen(
                             .background(Color(0xFF121A26)),
                         border = androidx.compose.foundation.BorderStroke(2.dp, Color.White.copy(alpha = 0.1f)),
                     ) {
-                        val displayImage = selectedImageUri ?: uiState.user?.getDisplayPhotoUrl()
+                        val displayImage = selectedImageUri
+                            ?: uiState.artistImageUrl?.takeIf { it.isNotBlank() }
                         if (displayImage != null) {
                             AsyncImage(
                                 model = ImageRequest.Builder(context)
@@ -147,6 +148,7 @@ fun ArtistEditProfileScreen(
                 // Form Fields
                 Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                     EditField(label = "Display Name", value = name, onValueChange = { name = it })
+                    ReadOnlyField(label = "Email", value = uiState.user?.email.orEmpty())
                     EditField(label = "Biography", value = bio, onValueChange = { bio = it }, singleLine = false)
                 }
             }
@@ -162,6 +164,28 @@ fun ArtistEditProfileScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ReadOnlyField(label: String, value: String) {
+    Column {
+        Text(label, color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            enabled = false,
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                disabledTextColor = Color.White.copy(alpha = 0.6f),
+                disabledBorderColor = Color.White.copy(alpha = 0.08f),
+                disabledContainerColor = Color(0xFF0D121C),
+            ),
+            shape = RoundedCornerShape(12.dp),
+            singleLine = true,
+        )
     }
 }
 

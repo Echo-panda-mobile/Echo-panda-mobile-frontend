@@ -83,7 +83,13 @@ fun NavGraphBuilder.artistNavGraph(
         composable(Routes.ARTIST_PROFILE) {
             ArtistProfileScreen(onNavigate = { route -> 
                 android.util.Log.d("NAVIGATION", "ArtistProfile navigating to: $route")
-                navController.navigate(route) 
+                if (route == Routes.LOGIN) {
+                    navController.navigate(route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                } else {
+                    navController.navigate(route)
+                }
             })
         }
 
@@ -131,6 +137,19 @@ fun NavGraphBuilder.artistNavGraph(
 
         composable(Routes.ARTIST_EDIT_PROFILE) {
             ArtistEditProfileScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(
+            route = Routes.ARTIST_PLAYER,
+            arguments = listOf(
+                androidx.navigation.navArgument("trackId") { type = androidx.navigation.NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val trackId = backStackEntry.arguments?.getString("trackId") ?: ""
+            ArtistPlayerScreen(
+                trackId = trackId,
+                onBack = { navController.popBackStack() }
+            )
         }
     }
 }

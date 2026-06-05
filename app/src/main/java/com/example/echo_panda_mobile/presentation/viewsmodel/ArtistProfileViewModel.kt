@@ -25,7 +25,9 @@ import android.net.Uri
 data class ArtistProfileUiState(
     val isLoading: Boolean = true,
     val user: User? = null,
-    val bio: String = "Independent artist sharing music on Echo Panda.",
+    val bio: String = "",
+    val artistImageUrl: String? = null,
+    val artistImageKey: String? = null,
     val followers: String = "0",
     val monthlyListeners: String = "0",
     val errorMessage: String? = null,
@@ -54,14 +56,19 @@ class ArtistProfileViewModel(
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
                 val user = authRepository.getCurrentUserProfile()
-                var currentBio = _uiState.value.bio
-                
-                // Fetch artist-specific details (like bio) if the user is an artist
+                var currentBio = ""
+                var imageUrl: String? = null
+                var imageKey: String? = null
+
                 val artistId = user?.artistId ?: tokenStorage?.getArtistId()?.takeIf { it != -1 }
                 if (artistId != null && artistRepository != null) {
                     val artistResult = artistRepository.getArtistProfile(artistId.toString())
                     if (artistResult.isSuccess) {
-                        currentBio = artistResult.getOrNull()?.bio ?: currentBio
+                        val artist = artistResult.getOrNull()
+                        currentBio = artist?.bio.orEmpty()
+                        imageKey = artist?.imageUrl?.takeIf { it.isNotBlank() && it != "null" }
+                            ?: artist?.coverImageUrl?.takeIf { it.isNotBlank() && it != "null" }
+                        imageUrl = artistRepository.resolveArtistImageUrl(artistId.toString())
                     }
                 }
 
@@ -70,6 +77,8 @@ class ArtistProfileViewModel(
                     isUpdating = false,
                     user = user,
                     bio = currentBio,
+                    artistImageUrl = imageUrl,
+                    artistImageKey = imageKey,
                     errorMessage = if (user == null) "Failed to load profile" else null
                 )
             } catch (e: Exception) {
@@ -84,33 +93,48 @@ class ArtistProfileViewModel(
 
     fun updateProfile(name: String, bio: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isUpdating = true)
+            _uiState.value = _uiState.value.copy(isUpdating = true, errorMessage = null)
             val currentUser = uiState.value.user ?: return@launch
-            
-            // 1. Update Base User Profile
-            val result = authRepository.updateUserProfile(
+            val artistId = currentUser.artistId ?: tokenStorage?.getArtistId()?.takeIf { it != -1 }
+
+            val nameResult = authRepository.updateUserProfile(
                 name = name,
                 email = currentUser.email,
-                role = "artist",
-                photoUrl = currentUser.photoUrl
+                role = "artist"
             )
 
-            // 2. Update Artist Specific Table (bio and name)
-            val artistId = currentUser.artistId ?: tokenStorage?.getArtistId()?.takeIf { it != -1 }
+            var bioError: String? = null
             if (artistId != null && artistRepository != null) {
-                artistRepository.updateArtistProfile(artistId, name, currentUser.photoUrl, bio)
+                val artistResult = artistRepository.updateArtistProfile(
+                    artistId = artistId,
+                    name = name,
+                    imageUrl = uiState.value.artistImageKey,
+                    bio = bio
+                )
+                if (artistResult.isFailure) {
+                    bioError = artistResult.exceptionOrNull()?.message
+                        ?: "Could not save biography. The server may not support artist profile updates yet."
+                }
             }
-            
-            when (result) {
+
+            when (nameResult) {
                 is AuthResult.Success -> {
-                    _uiState.value = _uiState.value.copy(bio = bio, isUpdating = false)
-                    _updateSuccess.emit(Unit)
-                    loadProfile()
+                    if (bioError != null) {
+                        _uiState.value = _uiState.value.copy(
+                            isUpdating = false,
+                            bio = bio,
+                            errorMessage = bioError
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(bio = bio, isUpdating = false)
+                        _updateSuccess.emit(Unit)
+                        loadProfile()
+                    }
                 }
                 is AuthResult.Error -> {
                     _uiState.value = _uiState.value.copy(
                         isUpdating = false,
-                        errorMessage = result.message
+                        errorMessage = nameResult.message
                     )
                 }
                 else -> Unit
@@ -120,74 +144,79 @@ class ArtistProfileViewModel(
 
     fun updateProfileImage(context: Context, uri: Uri) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isUpdating = true)
+            _uiState.value = _uiState.value.copy(isUpdating = true, errorMessage = null)
             val currentUser = uiState.value.user ?: return@launch
-            
+            val artistId = currentUser.artistId ?: tokenStorage?.getArtistId()?.takeIf { it != -1 }
+            if (artistId == null || artistRepository == null) {
+                _uiState.value = _uiState.value.copy(
+                    isUpdating = false,
+                    errorMessage = "Artist profile not found"
+                )
+                return@launch
+            }
+
             try {
-                // 1. Compress image
                 val compressedFile = withContext(Dispatchers.IO) { compressImage(context, uri) }
                 if (compressedFile == null) {
                     _uiState.value = _uiState.value.copy(isUpdating = false, errorMessage = "Failed to process image")
                     return@launch
                 }
 
-                var finalPhotoUrl = uri.toString()
-
-                // 2. Upload to S3 if repository is available
-                if (artistRepository != null) {
-                    val presignedResult = artistRepository.getPresignedUrl(
-                        purpose = "artist_profile",
-                        fileName = compressedFile.name,
-                        contentType = "image/jpeg",
-                        size = compressedFile.length()
-                    )
-
-                    if (presignedResult.isSuccess) {
-                        val presignedData = presignedResult.getOrThrow()
-                        val uploadSuccess = s3UploadManager.uploadToS3(
-                            uploadUrl = presignedData.uploadUrl,
-                            file = compressedFile,
-                            contentType = "image/jpeg",
-                            headers = presignedData.headers
-                        )
-
-                        if (uploadSuccess) {
-                            // Use the key returned by the backend
-                            finalPhotoUrl = presignedData.key
-                        }
-                    }
-                }
-
-                // 3. Update profile with the new URL/Key
-                val result = authRepository.updateUserProfile(
-                    name = currentUser.name,
-                    email = currentUser.email,
-                    role = "artist",
-                    photoUrl = finalPhotoUrl
+                val presignedResult = artistRepository.getPresignedUrl(
+                    purpose = "artist_image",
+                    fileName = compressedFile.name,
+                    contentType = "image/jpeg",
+                    size = compressedFile.length()
                 )
-                
-                // 4. Update Artist Table (cover_image_url)
-                val artistId = currentUser.artistId ?: tokenStorage?.getArtistId()?.takeIf { it != -1 }
-                if (artistId != null && artistRepository != null) {
-                    artistRepository.updateArtistProfile(artistId, currentUser.name, finalPhotoUrl, uiState.value.bio)
+
+                if (presignedResult.isFailure) {
+                    _uiState.value = _uiState.value.copy(
+                        isUpdating = false,
+                        errorMessage = presignedResult.exceptionOrNull()?.message ?: "Failed to prepare upload"
+                    )
+                    return@launch
                 }
 
-                when (result) {
-                    is AuthResult.Success -> {
-                        loadProfile()
-                    }
-                    is AuthResult.Error -> {
-                        _uiState.value = _uiState.value.copy(
-                            isUpdating = false,
-                            errorMessage = result.message
-                        )
-                    }
-                    else -> {
-                        _uiState.value = _uiState.value.copy(isUpdating = false)
-                    }
+                val presignedData = presignedResult.getOrThrow()
+                val uploadSuccess = s3UploadManager.uploadToS3(
+                    uploadUrl = presignedData.uploadUrl,
+                    file = compressedFile,
+                    contentType = "image/jpeg",
+                    headers = presignedData.headers
+                )
+
+                if (!uploadSuccess) {
+                    _uiState.value = _uiState.value.copy(isUpdating = false, errorMessage = "Failed to upload image")
+                    return@launch
+                }
+
+                val imageKey = presignedData.key
+                val artistResult = artistRepository.updateArtistProfile(
+                    artistId = artistId,
+                    name = currentUser.name,
+                    imageUrl = imageKey,
+                    bio = uiState.value.bio
+                )
+
+                if (artistResult.isSuccess) {
+                    val signedUrl = artistRepository.resolveArtistImageUrl(artistId.toString())
+                    _uiState.value = _uiState.value.copy(
+                        isUpdating = false,
+                        artistImageKey = imageKey,
+                        artistImageUrl = signedUrl ?: imageKey
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isUpdating = false,
+                        errorMessage = artistResult.exceptionOrNull()?.message
+                            ?: "Image uploaded but could not update artist profile"
+                    )
                 }
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isUpdating = false, errorMessage = e.message)
+                _uiState.value = _uiState.value.copy(
+                    isUpdating = false,
+                    errorMessage = e.message ?: "Failed to update profile image"
+                )
             }
         }
     }
@@ -227,6 +256,12 @@ class ArtistProfileViewModel(
     
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            authRepository.logout()
+        }
     }
 }
 
