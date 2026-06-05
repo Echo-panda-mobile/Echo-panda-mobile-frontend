@@ -140,6 +140,19 @@ fun NavGraphBuilder.artistNavGraph(
         }
 
         composable(
+            route = Routes.ARTIST_EDIT_SONG,
+            arguments = listOf(
+                androidx.navigation.navArgument("trackId") { type = androidx.navigation.NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val trackId = backStackEntry.arguments?.getString("trackId") ?: ""
+            ArtistEditSongScreen(
+                songId = trackId,
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(
             route = Routes.ARTIST_PLAYER,
             arguments = listOf(
                 androidx.navigation.navArgument("trackId") { type = androidx.navigation.NavType.StringType }

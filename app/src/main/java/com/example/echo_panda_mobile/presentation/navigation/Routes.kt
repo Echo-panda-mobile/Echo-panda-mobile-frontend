@@ -44,6 +44,7 @@ object Routes {
     const val ARTIST_HELP_SUPPORT  = "artist/help_support"
     const val ARTIST_SECURITY      = "artist/security"
     const val ARTIST_EDIT_PROFILE  = "artist/edit_profile"
+    const val ARTIST_EDIT_SONG     = "artist/edit_song/{trackId}"
     const val ARTIST_PLAYER        = "artist/player/{trackId}"
 
     // ── Admin destinations (inside admin_graph) ───────────────────────────────

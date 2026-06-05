@@ -30,10 +30,18 @@ data class ActivityItem(
     val timestamp: Long = 0
 )
 
+data class TopListenedSong(
+    val id: String = "",
+    val title: String = "",
+    val imageUrl: String? = null,
+    val playCount: Int = 0
+)
+
 data class ArtistDashboardData(
     val user: User,
     val stats: DashboardStats,
     val topTrack: TopTrack,
+    val topListenedSongs: List<TopListenedSong> = emptyList(),
     val recentActivities: List<ActivityItem>,
     val globalReach: List<Pair<String, String>> = listOf(
         "United States" to "45%",
@@ -74,6 +82,15 @@ object DashboardMockData {
         ActivityItem(id = "4", text = "New fan reached 1K followers")
     )
 
+    fun getMockTopListenedSongs() = listOf(
+        TopListenedSong(id = "1", title = "Summer Nights", playCount = 456200),
+        TopListenedSong(id = "2", title = "Midnight Drive", playCount = 312800),
+        TopListenedSong(id = "3", title = "Neon Dreams", playCount = 245100),
+        TopListenedSong(id = "4", title = "City Lights", playCount = 198400),
+        TopListenedSong(id = "5", title = "Ocean Wave", playCount = 156700),
+        TopListenedSong(id = "6", title = "Starfall", playCount = 124300)
+    )
+
     fun getMockDashboardData(user: User = User(
         id = 1,
         name = "Artist",
@@ -84,6 +101,7 @@ object DashboardMockData {
         user = user,
         stats = getMockStats(),
         topTrack = getMockTopTrack(),
+        topListenedSongs = getMockTopListenedSongs(),
         recentActivities = getMockActivities()
     )
 }

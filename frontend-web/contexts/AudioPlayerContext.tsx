@@ -1,45 +1,9 @@
-import React, { createContext, useContext, useState, useRef, useEffect, ReactNode } from 'react';
-import { buildApiUrl } from '../backend/backendUrls';
+import React, { useState, useRef, useEffect, useCallback, ReactNode } from 'react';
 import { getSignedSongAudioUrl, getSignedSongCoverUrl } from '../backend/songMediaApi';
+import { trackInteraction } from '../backend/recommendationService';
+import { AudioPlayerContext, SongData, useAudioPlayer } from './AudioPlayerContextCore';
 
-interface SongData {
-  id: string;
-  title: string;
-  artist: string;
-  coverUrl: string;
-  audioUrl?: string | null;
-  duration?: number;
-}
-
-interface AudioPlayerContextType {
-  currentSong: SongData | null;
-  isPlaying: boolean;
-  currentTime: number;
-  duration: number;
-  volume: number;
-  isMuted: boolean;
-  isShuffled: boolean;
-  isRepeated: boolean;
-  playSong: (song: SongData) => void;
-  togglePlayPause: () => void;
-  seekTo: (time: number) => void;
-  setVolume: (volume: number) => void;
-  toggleMute: () => void;
-  toggleShuffle: () => void;
-  toggleRepeat: () => void;
-  playNext: () => void;
-  playPrevious: () => void;
-}
-
-const AudioPlayerContext = createContext<AudioPlayerContextType | undefined>(undefined);
-
-export const useAudioPlayer = () => {
-  const context = useContext(AudioPlayerContext);
-  if (!context) {
-    throw new Error('useAudioPlayer must be used within AudioPlayerProvider');
-  }
-  return context;
-};
+export { useAudioPlayer };
 
 interface AudioPlayerProviderProps {
   children: ReactNode;
@@ -48,6 +12,7 @@ interface AudioPlayerProviderProps {
 export const AudioPlayerProvider: React.FC<AudioPlayerProviderProps> = ({ children }) => {
   const [currentSong, setCurrentSong] = useState<SongData | null>(null);
   const [queue, setQueue] = useState<SongData[]>([]);
+  const autoplayPoolRef = useRef<SongData[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -60,110 +25,107 @@ export const AudioPlayerProvider: React.FC<AudioPlayerProviderProps> = ({ childr
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const loadSong = async (song: SongData) => {
-    if (!audioRef.current) {
-      return;
-    }
-
-    setCurrentTime(0);
-
-    try {
-      const [signed, signedCover] = await Promise.all([
-        getSignedSongAudioUrl(song.id),
-        getSignedSongCoverUrl(song.id),
-      ]);
-
-      if (!signed) {
-        throw new Error('Missing signed URL');
-      }
-
-      const nextSong = {
-        ...song,
-        coverUrl: signedCover || song.coverUrl,
-      };
-
-      setCurrentSong(nextSong);
-
-      console.log('🎵 AudioContext: Audio signed URL:', signed);
-      try {
-        audioRef.current.crossOrigin = 'anonymous';
-      } catch (e) {
-        /* ignore if not supported */
-      }
-      audioRef.current.src = signed;
-      audioRef.current.load();
-      setIsPlaying(true);
-      console.log('✅ AudioContext: Song loaded, isPlaying set to true');
-    } catch (err) {
-      console.error('❌ AudioContext: Failed to acquire signed url:', err);
-    }
-  };
-
-  // Initialize audio element
+  // Initialize audio element only once
   useEffect(() => {
-    audioRef.current = new Audio();
-    audioRef.current.volume = volume;
+    const audio = new Audio();
+    audio.crossOrigin = 'anonymous';
+    audioRef.current = audio;
 
-    const audio = audioRef.current;
-
-    const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
-    };
-
-    const handleLoadedMetadata = () => {
-      setDuration(audio.duration);
-    };
-
-    const handleEnded = () => {
-      if (isRepeated) {
-        audio.currentTime = 0;
-        audio.play();
-      } else {
-        setIsPlaying(false);
-        setCurrentTime(0);
-        void playNext();
-      }
-    };
-
-    const handleCanPlay = () => {
-      if (isPlaying) {
-        audio.play().catch(error => {
-          console.error('Playback failed:', error);
-          setIsPlaying(false);
-        });
-      }
-    };
+    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const handleLoadedMetadata = () => setDuration(audio.duration);
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('canplay', handleCanPlay);
 
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('canplay', handleCanPlay);
       audio.pause();
       audio.src = '';
     };
-  }, [isRepeated]);
+  }, []);
 
-  // Handle play/pause when isPlaying changes
+  // Update handlers separately to avoid re-creating audio element
   useEffect(() => {
     if (!audioRef.current) return;
+    const audio = audioRef.current;
 
+    const handleEnded = () => {
+      if (currentSong) {
+        trackInteraction(currentSong.id, 'complete');
+      }
+      if (isRepeated) {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+      } else {
+        playNext();
+      }
+    };
+
+    audio.addEventListener('ended', handleEnded);
+    return () => audio.removeEventListener('ended', handleEnded);
+  }, [isRepeated, queue, queueIndex, isShuffled, currentSong]);
+
+  const loadSong = async (song: SongData) => {
+    if (!audioRef.current) return;
+
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    audioRef.current.src = '';
+
+    setIsPlaying(false);
+    setCurrentTime(0);
+
+    try {
+      const [signed, signedCover] = await Promise.all([
+        getSignedSongAudioUrl(song.id).catch(() => null),
+        getSignedSongCoverUrl(song.id).catch(() => null),
+      ]);
+
+      const finalAudioUrl = signed || song.audioUrl;
+      if (!finalAudioUrl) throw new Error('No audio source available');
+
+      const nextSong = {
+        ...song,
+        coverUrl: signedCover || song.coverUrl,
+        audioUrl: finalAudioUrl,
+      };
+
+      setCurrentSong(nextSong);
+      audioRef.current.src = finalAudioUrl;
+      audioRef.current.load();
+
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsPlaying(true);
+            trackInteraction(song.id, 'play');
+          })
+          .catch(e => {
+            console.error('Playback failed:', e);
+            setIsPlaying(false);
+          });
+      }
+
+    } catch (err) {
+      console.error('❌ AudioContext: Failed to load song:', err);
+      setCurrentSong(null);
+      setIsPlaying(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!audioRef.current) return;
     if (isPlaying) {
-      audioRef.current.play().catch(error => {
-        console.error('Playback failed:', error);
-        setIsPlaying(false);
-      });
+      if (audioRef.current.src) {
+        audioRef.current.play().catch(() => setIsPlaying(false));
+      }
     } else {
       audioRef.current.pause();
     }
   }, [isPlaying]);
 
-  // Handle volume changes
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = isMuted ? 0 : volume;
@@ -171,34 +133,26 @@ export const AudioPlayerProvider: React.FC<AudioPlayerProviderProps> = ({ childr
   }, [volume, isMuted]);
 
   const playSong = (song: SongData) => {
-    console.log('🎵 AudioContext: playSong called with:', song);
-
-    // If same song, just toggle play/pause
     if (currentSong?.id === song.id) {
-      console.log('🎵 AudioContext: Same song, toggling play/pause');
       togglePlayPause();
       return;
     }
 
-    setQueue((currentQueue) => {
-      const existingIndex = currentQueue.findIndex((queuedSong) => queuedSong.id === song.id);
-      if (existingIndex >= 0) {
-        setQueueIndex(existingIndex);
-        return currentQueue;
+    setQueue((prev) => {
+      const idx = prev.findIndex(s => s.id === song.id);
+      if (idx !== -1) {
+        setQueueIndex(idx);
+        return prev;
       }
-
-      const nextQueue = [...currentQueue, song];
-      setQueueIndex(nextQueue.length - 1);
-      return nextQueue;
+      const newQueue = [...prev, song];
+      setQueueIndex(newQueue.length - 1);
+      return newQueue;
     });
 
-    console.log('🎵 AudioContext: Loading new song:', song.title);
     void loadSong(song);
   };
 
-  const togglePlayPause = () => {
-    setIsPlaying(prev => !prev);
-  };
+  const togglePlayPause = () => setIsPlaying(prev => !prev);
 
   const seekTo = (time: number) => {
     if (audioRef.current) {
@@ -207,13 +161,11 @@ export const AudioPlayerProvider: React.FC<AudioPlayerProviderProps> = ({ childr
     }
   };
 
-  const setVolume = (newVolume: number) => {
-    const clampedVolume = Math.max(0, Math.min(1, newVolume));
-    setVolumeState(clampedVolume);
-    setPreviousVolume(clampedVolume);
-    if (clampedVolume > 0) {
-      setIsMuted(false);
-    }
+  const setVolume = (v: number) => {
+    const clamped = Math.max(0, Math.min(1, v));
+    setVolumeState(clamped);
+    setPreviousVolume(clamped);
+    if (clamped > 0) setIsMuted(false);
   };
 
   const toggleMute = () => {
@@ -226,69 +178,115 @@ export const AudioPlayerProvider: React.FC<AudioPlayerProviderProps> = ({ childr
     }
   };
 
-  const toggleShuffle = () => {
-    setIsShuffled(prev => !prev);
-  };
+  const toggleShuffle = () => setIsShuffled(prev => !prev);
+  const toggleRepeat = () => setIsRepeated(prev => !prev);
 
-  const toggleRepeat = () => {
-    setIsRepeated(prev => !prev);
-  };
+  const pickWeightedRandomSong = useCallback((pool: SongData[], currentSongId?: string): SongData | null => {
+    const candidates = pool.filter((song) => song.id !== currentSongId);
+    const source = candidates.length > 0 ? candidates : pool;
 
-  const playNext = () => {
-    if (queue.length === 0) {
-      console.log('Next song - queue is empty');
+    if (source.length === 0) {
+      return null;
+    }
+
+    const weighted = source.map((song) => {
+      const recommendationScore = Math.max(0, song.recommendationScore ?? 0);
+      const similarityScore = Math.max(0, song.similarityScore ?? 0);
+      const combinedWeight = (recommendationScore * 0.7) + (similarityScore * 0.3);
+
+      // Keep a floor so low-score songs can still appear occasionally.
+      return {
+        song,
+        weight: Math.max(1, combinedWeight),
+      };
+    });
+
+    const totalWeight = weighted.reduce((sum, item) => sum + item.weight, 0);
+    let target = Math.random() * totalWeight;
+
+    for (const item of weighted) {
+      target -= item.weight;
+      if (target <= 0) {
+        return item.song;
+      }
+    }
+
+    return weighted[weighted.length - 1]?.song ?? null;
+  }, []);
+
+  const playNext = useCallback(() => {
+    const recommendationPool = autoplayPoolRef.current;
+
+    if (recommendationPool.length > 0) {
+      if (currentSong) trackInteraction(currentSong.id, 'skip');
+
+      const nextSong = pickWeightedRandomSong(recommendationPool, currentSong?.id);
+
+      if (!nextSong) {
+        return;
+      }
+
+      setQueue((prev) => {
+        const existingIndex = prev.findIndex((song) => song.id === nextSong.id);
+        if (existingIndex !== -1) {
+          setQueueIndex(existingIndex);
+          return prev;
+        }
+
+        const updated = [...prev, nextSong];
+        setQueueIndex(updated.length - 1);
+        return updated;
+      });
+
+      void loadSong(nextSong);
       return;
     }
 
-    const nextIndex = isShuffled
-      ? Math.floor(Math.random() * queue.length)
-      : Math.min(queueIndex + 1, queue.length - 1);
+    if (queue.length === 0) return;
+    if (currentSong) trackInteraction(currentSong.id, 'skip');
 
-    const nextSong = queue[nextIndex];
-    if (!nextSong) {
-      return;
+    let nextIdx = queueIndex + 1;
+    if (isShuffled) {
+      nextIdx = Math.floor(Math.random() * queue.length);
     }
 
-    setQueueIndex(nextIndex);
-    void loadSong(nextSong);
-  };
+    if (nextIdx < queue.length) {
+      setQueueIndex(nextIdx);
+      void loadSong(queue[nextIdx]);
+    } else {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    }
+  }, [queue, queueIndex, isShuffled, currentSong, pickWeightedRandomSong]);
 
   const playPrevious = () => {
-    if (queue.length === 0) {
-      console.log('Previous song - queue is empty');
-      return;
+    if (queueIndex > 0) {
+      if (currentSong) trackInteraction(currentSong.id, 'skip');
+      const nextIdx = queueIndex - 1;
+      setQueueIndex(nextIdx);
+      void loadSong(queue[nextIdx]);
     }
-
-    const prevIndex = Math.max(queueIndex - 1, 0);
-    const prevSong = queue[prevIndex];
-    if (!prevSong) {
-      return;
-    }
-
-    setQueueIndex(prevIndex);
-    void loadSong(prevSong);
   };
+
+  const closePlayer = () => {
+    setIsPlaying(false);
+    setCurrentSong(null);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+  };
+
+  const setAutoplayPool = useCallback((songs: SongData[]) => {
+    autoplayPoolRef.current = songs;
+  }, []);
 
   return (
     <AudioPlayerContext.Provider
       value={{
-        currentSong,
-        isPlaying,
-        currentTime,
-        duration,
-        volume,
-        isMuted,
-        isShuffled,
-        isRepeated,
-        playSong,
-        togglePlayPause,
-        seekTo,
-        setVolume,
-        toggleMute,
-        toggleShuffle,
-        toggleRepeat,
-        playNext,
-        playPrevious,
+        currentSong, isPlaying, currentTime, duration, volume, isMuted, isShuffled, isRepeated,
+        playSong, togglePlayPause, seekTo, setVolume, toggleMute, toggleShuffle, toggleRepeat,
+        playNext, playPrevious, setAutoplayPool, closePlayer,
       }}
     >
       {children}

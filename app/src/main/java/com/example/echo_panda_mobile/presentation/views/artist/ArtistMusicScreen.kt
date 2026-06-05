@@ -24,10 +24,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import com.example.echo_panda_mobile.data.remote.SongDto
 import com.example.echo_panda_mobile.presentation.components.ArtistBottomBar
 import com.example.echo_panda_mobile.presentation.components.ErrorState
+import com.example.echo_panda_mobile.presentation.components.SquareArtCard
 import com.example.echo_panda_mobile.presentation.navigation.Routes
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.viewsmodel.ArtistMusicViewModel
@@ -128,6 +128,9 @@ fun ArtistMusicScreen(
                                 ArtistTrackRow(
                                     song = song,
                                     onDelete = { viewModel.deleteSong(song.id.toString()) },
+                                    onEdit = {
+                                        onNavigate(Routes.ARTIST_EDIT_SONG.replace("{trackId}", song.id.toString()))
+                                    },
                                     onClick = {
                                         onNavigate(Routes.ARTIST_PLAYER.replace("{trackId}", song.id.toString()))
                                     }
@@ -189,6 +192,7 @@ private fun EmptyCatalog(onUpload: () -> Unit) {
 private fun ArtistTrackRow(
     song: SongDto,
     onDelete: () -> Unit,
+    onEdit: () -> Unit,
     onClick: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -206,26 +210,13 @@ private fun ArtistTrackRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Song Cover Thumbnail
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.05f)),
-                contentAlignment = Alignment.Center
-            ) {
-                val imageUrl = song.getDisplayCoverUrl()
-                if (!imageUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = imageUrl,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        error = androidx.compose.ui.graphics.painter.ColorPainter(Color.DarkGray)
-                    )
-                } else {
-                    Icon(Icons.Default.MusicNote, null, tint = Color.White.copy(alpha = 0.2f), modifier = Modifier.size(28.dp))
-                }
-            }
+            SquareArtCard(
+                colors = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26)),
+                imageUrl = song.coverUrl, // Already resolved by ArtistRepository
+                size = 64.dp,
+                cornerRadius = 12.dp,
+                onClick = onClick
+            )
             
             Spacer(Modifier.width(16.dp))
             
@@ -255,13 +246,7 @@ private fun ArtistTrackRow(
             }
             
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "8.5K", // Placeholder for streams
-                    color = Color.White.copy(alpha = 0.4f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Icon(Icons.Default.PlayArrow, null, tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(14.dp))
+          
                 
                 Spacer(Modifier.width(8.dp))
                 
@@ -277,13 +262,12 @@ private fun ArtistTrackRow(
                         DropdownMenuItem(
                             text = { Text("Edit Details", color = Color.White) },
                             leadingIcon = { Icon(Icons.Default.Edit, null, tint = EchoPandaColors.AccentBlue) },
-                            onClick = { showMenu = false }
+                            onClick = { 
+                                showMenu = false
+                                onEdit()
+                            }
                         )
-                        DropdownMenuItem(
-                            text = { Text("View Analytics", color = Color.White) },
-                            leadingIcon = { Icon(Icons.Default.BarChart, null, tint = Color(0xFF4CAF50)) },
-                            onClick = { showMenu = false }
-                        )
+
                         HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                         DropdownMenuItem(
                             text = { Text("Delete Song", color = EchoPandaColors.ErrorRed) },

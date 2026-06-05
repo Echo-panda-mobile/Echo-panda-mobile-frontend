@@ -1,211 +1,117 @@
-const viteEnv = (import.meta as any).env || {};
-const BACKEND_API_BASE_URL =
-  viteEnv.VITE_BACKEND_API_URL || "http://localhost:8082/api";
+import { buildApiUrl } from "./backendUrls";
 
 export interface Playlist {
   id: string;
-  user_id: string;
   name: string;
+  description?: string;
+  image_url?: string;
+  song_count: number;
   created_at: string;
-  updated_at: string;
-  song_count?: number;
 }
 
-const getBackendToken = (): string | null => {
-  return localStorage.getItem("userToken") || localStorage.getItem("authToken");
-};
+const getAuthToken = () => localStorage.getItem("userToken") || localStorage.getItem("authToken") || localStorage.getItem('token');
 
-const backendRequest = async <T = any>(
-  path: string,
-  init: RequestInit = {}
-): Promise<T> => {
-  const token = getBackendToken();
+const request = async <T = any>(path: string, options: RequestInit = {}): Promise<T> => {
+  const token = getAuthToken();
+  const headers = {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
+  };
 
-  if (!token) {
-    throw new Error("Missing backend auth token");
-  }
-
-  const response = await fetch(`${BACKEND_API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(init.headers || {}),
-    },
-  });
-
-  const data = await response.json().catch(() => null);
+  const response = await fetch(buildApiUrl(path), { ...options, headers });
 
   if (!response.ok) {
-    throw new Error(data?.message || `Request failed with ${response.status}`);
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.message || "Playlist request failed");
   }
 
-  return data as T;
+  return response.json();
 };
 
-import { getSignedAlbumCoverUrl, getSignedSongCoverUrl } from "./songMediaApi";
+export async function getUserPlaylists(): Promise<Playlist[]> {
+  const token = getAuthToken();
+  if (!token) return [];
 
-// Get all playlists for current user
-export const getUserPlaylists = async (): Promise<Playlist[]> => {
-  if (!getBackendToken()) return [];
+  const response = await request("/playlists").catch(() => ({ data: [] }));
+  const standard = Array.isArray(response) ? response : (response?.data || []);
 
-  try {
-    const result = await backendRequest<{ data: any[] }>("/playlists");
+  return standard.map((p: any) => ({
+    id: String(p.id),
+    name: p.name,
+    description: p.description,
+    image_url: p.image_url,
+    song_count: p.songs_count || 0,
+    created_at: p.created_at
+  })).sort((a: any, b: any) =>
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+}
 
-    return (result?.data || []).map((playlist: any) => ({
-      id: String(playlist.id),
-      user_id: String(playlist.user_id),
-      name: playlist.name,
-      created_at: playlist.created_at,
-      updated_at: playlist.updated_at,
-      song_count: playlist.songs_count || 0,
-    }));
-  } catch (error) {
-    console.error("Error fetching playlists:", error);
-    return [];
-  }
-};
+export async function createPlaylist(name: string, description?: string, imageUrl?: string): Promise<Playlist> {
+  const response = await request("/playlists", {
+    method: "POST",
+    body: JSON.stringify({ name, description, image_url: imageUrl }),
+  });
+  const data = response?.data || response;
 
-// Create new playlist
-export const createPlaylist = async (name: string): Promise<Playlist | null> => {
-  if (!getBackendToken()) {
-    console.error("User not logged in");
-    return null;
-  }
+  return {
+    id: String(data.id),
+    name: data.name,
+    description: data.description,
+    image_url: data.image_url,
+    song_count: 0,
+    created_at: data.created_at
+  };
+}
 
-  try {
-    const result = await backendRequest<{ data: any }>("/playlists", {
-      method: "POST",
-      body: JSON.stringify({ name }),
-    });
-    const data = result?.data;
+export async function updatePlaylist(id: string, name: string, description?: string, imageUrl?: string): Promise<Playlist> {
+  const response = await request(`/playlists/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ name, description, image_url: imageUrl }),
+  });
+  const data = response?.data || response;
 
-    console.log(`✅ Playlist "${name}" created`);
-    return {
-      id: String(data.id),
-      user_id: String(data.user_id),
-      name: data.name,
-      created_at: data.created_at,
-      updated_at: data.updated_at,
-      song_count: 0,
-    };
-  } catch (error) {
-    console.error("Error creating playlist:", error);
-    return null;
-  }
-};
+  return {
+    id: String(data.id),
+    name: data.name,
+    description: data.description,
+    image_url: data.image_url,
+    song_count: data.songs_count || 0,
+    created_at: data.created_at
+  };
+}
 
-// Add song to playlist
-export const addSongToPlaylist = async (
-  playlistId: string,
-  songId: string
-): Promise<boolean> => {
-  try {
-    const parsedSongId = Number.parseInt(songId, 10);
-    if (Number.isNaN(parsedSongId)) return false;
+export async function deletePlaylist(id: string): Promise<void> {
+  await request(`/playlists/${id}`, { method: "DELETE" });
+}
 
-    await backendRequest(`/playlists/${playlistId}/songs`, {
-      method: "POST",
-      body: JSON.stringify({ song_id: parsedSongId }),
-    });
+export async function getPlaylistSongs(id: string): Promise<any[]> {
+  const response = await request(`/playlists/${id}/songs`);
+  const data = Array.isArray(response) ? response : (response?.data || []);
 
-    console.log(`✅ Song ${songId} added to playlist ${playlistId}`);
-    return true;
-  } catch (error: any) {
-    if ((error?.message || "").toLowerCase().includes("already in playlist")) {
-      return true;
-    }
-    console.error("Error adding song to playlist:", error);
-    return false;
-  }
-};
+  return data.map((s: any) => ({
+    ...s,
+    id: String(s.id),
+    duration: Number(s.duration),
+  }));
+}
 
-// Remove song from playlist
-export const removeSongFromPlaylist = async (
-  playlistId: string,
-  songId: string
-): Promise<boolean> => {
-  try {
-    const parsedSongId = Number.parseInt(songId, 10);
-    if (Number.isNaN(parsedSongId)) return false;
+export async function addSongToPlaylist(playlistId: string, songId: string): Promise<void> {
+  await request(`/playlists/${playlistId}/songs`, {
+    method: "POST",
+    body: JSON.stringify({ song_id: songId }),
+  });
+}
 
-    await backendRequest(`/playlists/${playlistId}/songs/${parsedSongId}`, {
-      method: "DELETE",
-    });
+export async function removeSongFromPlaylist(playlistId: string, songId: string): Promise<void> {
+  await request(`/playlists/${playlistId}/songs/${songId}`, {
+    method: "DELETE"
+  });
+}
 
-    console.log(`✅ Song ${songId} removed from playlist ${playlistId}`);
-    return true;
-  } catch (error) {
-    console.error("Error removing song from playlist:", error);
-    return false;
-  }
-};
-
-// Get songs in a playlist
-export const getPlaylistSongs = async (playlistId: string): Promise<any[]> => {
-  try {
-    const result = await backendRequest<{ data: any[] }>(`/playlists/${playlistId}/songs`);
-
-    return Promise.all((result?.data || []).map(async (song: any) => {
-      const coverUrl = await getSignedSongCoverUrl(song.id);
-      const albumCoverUrl = song.album?.id ? await getSignedAlbumCoverUrl(song.album.id) : null;
-
-      return {
-        id: String(song.id),
-        title: song.title,
-        duration: song.duration,
-        album_id: song.album_id ? String(song.album_id) : null,
-        audio_url: song.original_key || null,
-        songCover_url: coverUrl || albumCoverUrl || song.album?.cover_url || null,
-        artists: song.artist ? [{ id: String(song.id), name: song.artist, image_url: "" }] : [],
-        album: song.album
-          ? {
-              id: String(song.album.id),
-              title: song.album.title,
-              cover_url: albumCoverUrl || null,
-            }
-          : null,
-        added_at: song.pivot?.added_at || song.created_at,
-      };
-    }));
-  } catch (error) {
-    console.error("Error fetching playlist songs:", error);
-    return [];
-  }
-};
-
-// Delete playlist
-export const deletePlaylist = async (playlistId: string): Promise<boolean> => {
-  try {
-    await backendRequest(`/playlists/${playlistId}`, {
-      method: "DELETE",
-    });
-
-    console.log(`✅ Playlist ${playlistId} deleted`);
-    return true;
-  } catch (error) {
-    console.error("Error deleting playlist:", error);
-    return false;
-  }
-};
-
-// Check if song is in playlist
-export const isSongInPlaylist = async (
-  playlistId: string,
-  songId: string
-): Promise<boolean> => {
-  try {
-    const parsedSongId = Number.parseInt(songId, 10);
-    if (Number.isNaN(parsedSongId)) return false;
-
-    const result = await backendRequest<{ exists: boolean }>(
-      `/playlists/${playlistId}/songs/${parsedSongId}/exists`
-    );
-
-    return !!result?.exists;
-  } catch (error) {
-    console.error("Error checking playlist:", error);
-    return false;
-  }
-};
+export async function isSongInPlaylist(playlistId: string, songId: string): Promise<boolean> {
+  const data = await request(`/playlists/${playlistId}/songs/${songId}/exists`);
+  return !!data.exists;
+}

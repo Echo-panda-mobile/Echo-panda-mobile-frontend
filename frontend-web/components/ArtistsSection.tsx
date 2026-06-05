@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { getDerivedArtists } from "../backend/catalogService";
 import { useDataCache } from "../contexts/DataCacheContext";
+import { useTheme } from "../contexts/ThemeContext";
+import { FaChevronLeft, FaChevronRight } from "react-icons/fa";
 
 interface Artist {
   id: string;
@@ -11,19 +13,23 @@ interface Artist {
 
 interface Props {
   title?: string;
-  isLightMode?: boolean;
-  limit?: number; // how many artists to show
-  layout?: "carousel" | "grid"; // display style
-  artists?: Artist[]; // optional pre-fetched artists
+  limit?: number;
+  layout?: "carousel" | "grid";
+  artists?: Artist[];
+  viewAllLink?: string;
 }
 
-const ArtistSection: React.FC<Props> = ({ title = "Artists", isLightMode = true, limit = 10, layout = "carousel", artists: propArtists }) => {
+const ArtistSection: React.FC<Props> = ({ title = "Artists", limit = 10, layout = "carousel", artists: propArtists, viewAllLink }) => {
   const navigate = useNavigate();
+  const { isLightMode } = useTheme();
   const { getCachedData } = useDataCache();
   const [artists, setArtists] = useState<Artist[]>([]);
   const [loading, setLoading] = useState(true);
-  const bgClass = "bg-transparent";
-  const textColor = isLightMode ? "text-gray-900" : "text-white";
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const titleParts = title.split(" ");
+  const mainTitle = titleParts[0];
+  const accentTitle = titleParts.slice(1).join(" ");
 
   useEffect(() => {
     if (propArtists) {
@@ -32,18 +38,15 @@ const ArtistSection: React.FC<Props> = ({ title = "Artists", isLightMode = true,
     } else {
       fetchArtists();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [limit, propArtists]);
 
   const fetchArtists = async () => {
     try {
       setLoading(true);
-
       const data = await getCachedData(`artists_limit${limit}`, async () => {
         const artistsData = await getDerivedArtists(Math.max(1, limit));
         return artistsData || [];
       });
-
       setArtists(data);
     } catch (error) {
       if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('NetworkError'))) {
@@ -55,56 +58,83 @@ const ArtistSection: React.FC<Props> = ({ title = "Artists", isLightMode = true,
     }
   };
 
+  const scroll = (direction: 'left' | 'right') => {
+    if (scrollContainerRef.current) {
+      const { scrollLeft, clientWidth } = scrollContainerRef.current;
+      const offset = direction === 'left' ? -clientWidth * 0.75 : clientWidth * 0.75;
+
+      scrollContainerRef.current.scrollTo({
+        left: scrollLeft + offset,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   return (
-    <section className={`${bgClass} p-4 rounded-lg`}>
-      <div className="flex justify-between items-center mb-4">
-        <h2 className={`text-2xl font-bold ${textColor}`}>{title}</h2>
+    <section className="w-full py-4">
+      {/* Header Layout Container */}
+      <div className="flex justify-between items-center mb-6 px-1">
+        <div>
+          <h2 className={`text-2xl md:text-3xl font-black tracking-tight ${isLightMode ? "text-zinc-900" : "text-white"}`}>
+            {mainTitle} <span className="text-pink-500">{accentTitle}</span>
+          </h2>
+        </div>
+
+        {/* Action Controls Side Wrapper removed */}
       </div>
 
-      {layout === "grid" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-8">
-          {artists.map((artist) => (
-            <button
-              key={artist.id}
+      {/* Artists Track Container Row */}
+      <div
+        ref={scrollContainerRef}
+        className={`scrollbar-none ${
+          layout === "grid"
+            ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5"
+            : "flex gap-5 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-3"
+        }`}
+        style={{ scrollbarWidth: 'none' }}
+      >
+        {artists.map((artist) => (
+          <div
+            key={artist.id}
+            className={`shrink-0 ${layout === "carousel" ? "w-[155px] sm:w-[175px] md:w-[195px] snap-start" : "w-full"}`}
+          >
+            <div
               onClick={() => navigate(`/artist/${artist.id}`)}
-              className="group focus:outline-none"
-              aria-label={`Open artist ${artist.name}`}
+              className="cursor-pointer group flex flex-col items-center text-center"
             >
-              <div className="mx-auto w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-gray-600/60 ring-1 ring-white/10 overflow-hidden transition-transform duration-200 group-hover:scale-105">
+              {/* Profile Image Frame Wrapper */}
+              <div className={`w-32 h-32 sm:w-36 sm:h-36 rounded-full overflow-hidden mb-4 relative shadow-xl transition-transform duration-500 group-hover:scale-105 ${isLightMode ? 'bg-zinc-200' : 'bg-zinc-800'}`}>
                 {artist.image_url ? (
-                  <img src={artist.image_url} alt={artist.name} className="w-full h-full object-cover" />
+                  <img
+                    src={artist.image_url}
+                    alt={artist.name}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
                 ) : (
-                  <div className="w-full h-full bg-gray-600/60" />
+                  <div className="w-full h-full bg-gradient-to-br from-blue-500 to-pink-500 flex items-center justify-center">
+                    <span className="text-white text-3xl font-black uppercase">{artist.name.charAt(0)}</span>
+                  </div>
                 )}
+                <div className="absolute inset-0 bg-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </div>
-              <p className={`mt-3 text-center text-sm sm:text-base font-medium truncate ${textColor}`}>{artist.name}</p>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div
-          className="flex gap-6 overflow-x-auto scroll-hide pb-3 snap-x snap-mandatory"
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-        >
-          {artists.map((artist) => (
-            <button
-              key={artist.id}
-              onClick={() => navigate(`/artist/${artist.id}`)}
-              className="flex flex-col items-center shrink-0 w-28 sm:w-32 snap-start cursor-pointer group"
-              aria-label={`Open artist ${artist.name}`}
-            >
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-gray-600/60 ring-1 ring-white/10 overflow-hidden transition-transform duration-200 group-hover:scale-105">
-                {artist.image_url ? (
-                  <img src={artist.image_url} alt={artist.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-gray-600/60" />
-                )}
+
+              <div className="min-w-0 w-full space-y-1">
+                  <h3 className={`font-bold text-sm tracking-tight truncate ${
+                    isLightMode ? "text-zinc-900" : "text-white"
+                  } group-hover:text-pink-500 transition-colors`}>
+                    {artist.name}
+                  </h3>
+                  <p className={`text-[10px] font-bold uppercase tracking-widest ${isLightMode ? "text-zinc-500" : "text-zinc-500"}`}>
+                    Artist
+                  </p>
               </div>
-              <p className={`mt-2 text-center text-sm font-medium truncate ${textColor}`}>{artist.name}</p>
-            </button>
-          ))}
-        </div>
-      )}
+            </div>
+          </div>
+        ))}
+
+
+      </div>
     </section>
   );
 };

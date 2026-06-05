@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import SideBar from "../pages/SideBar";
 import  NavBar  from '../pages/NavBar';
 import Player from '../components/Player';
+import { getCurrentUser } from "../routes/authContext";
+import { getAdminBackendUrl } from "../routes/backendAuth";
+import { useTheme } from "../contexts/ThemeContext";
 
 const HomeLayout: React.FC = () => {
-  const [isLightMode, setIsLightMode] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { isLightMode, setIsLightMode } = useTheme();
   // Start collapsed by default on first run
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
@@ -23,18 +28,36 @@ const HomeLayout: React.FC = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Persistent role-based redirection
+  useEffect(() => {
+    const user = getCurrentUser();
+    const role = user?.backendRole || user?.role;
+
+    if (!role) {
+      return;
+    }
+
+    if (role === "admin") {
+      window.location.href = getAdminBackendUrl();
+      return;
+    }
+
+    if (["artist", "publicer"].includes(role) && !location.pathname.startsWith("/artist")) {
+      navigate("/artist/dashboard", { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
   const mainBg = isLightMode ? "bg-gray-50" : "bg-black";
   const textColor = isLightMode ? "text-gray-900" : "text-white";
 
  return (
     <div className="flex flex-col h-screen">
       {/* NavBar at the top */}
-      <NavBar isLightMode={isLightMode} setIsLightMode={setIsLightMode} />
+      <NavBar />
 
       {/* Content area with sidebar */}
       <div className={`flex flex-1 ${mainBg} ${textColor} overflow-hidden`}>
         <SideBar 
-          isLightMode={isLightMode}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={setIsSidebarCollapsed}
         />

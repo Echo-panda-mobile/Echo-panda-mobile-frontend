@@ -138,6 +138,7 @@ class AlbumArtistFieldAdapter : JsonDeserializer<AlbumArtistField> {
 data class AlbumDto(
     @SerializedName("id") val id: Int,
     @SerializedName("title") val title: String,
+    @SerializedName("artist_id") val artistId: Int? = null,
     @SerializedName("artist_name") val artistName: String? = null,
     @SerializedName("artist")
     @JsonAdapter(AlbumArtistFieldAdapter::class)
@@ -187,6 +188,7 @@ data class SongDto(
     @SerializedName("id") val id: Int? = null,
     @SerializedName("title") val title: String? = null,
     @SerializedName("name") val name: String? = null,
+    @SerializedName("artist_id") val artistId: Int? = null,
     @SerializedName("artist_name") val artistName: String? = null,
     @SerializedName("artist")
     @JsonAdapter(AlbumArtistFieldAdapter::class)
@@ -196,8 +198,12 @@ data class SongDto(
     @SerializedName("album_id") val albumId: Int? = null,
     @SerializedName("cover_url") val coverUrl: String? = null,
     @SerializedName("cover_key") val coverKey: String? = null,
+    @SerializedName("original_key") val originalKey: String? = null,
     @SerializedName("audio_url") val audioUrl: String? = null,
     @SerializedName("album") val album: AlbumDto? = null,
+    @SerializedName("lyrics") val lyrics: String? = null,
+    @SerializedName("category_id") val categoryId: Int? = null,
+    @SerializedName("tag_id") val tagId: Int? = null,
     @SerializedName("is_favorited") val isFavorite: Boolean? = null,
     @SerializedName("is_active") val isActive: Boolean? = true
 ) {
@@ -266,6 +272,19 @@ data class CreateSongRequest(
     @SerializedName("original_key") val originalKey: String? = null, 
     @SerializedName("cover_key") val coverKey: String? = null,
     @SerializedName("preview_key") val previewKey: String? = null
+)
+
+data class UpdateSongRequest(
+    @SerializedName("album_id") val albumId: Int,
+    @SerializedName("title") val title: String,
+    @SerializedName("artist") val artist: String? = null,
+    @SerializedName("duration") val duration: Int,
+    @SerializedName("track_number") val trackNumber: Int,
+    @SerializedName("lyrics") val lyrics: String? = null,
+    @SerializedName("category_id") val categoryId: String,
+    @SerializedName("tag_id") val tagId: Int? = null,
+    @SerializedName("cover_key") val coverKey: String? = null,
+    @SerializedName("original_key") val originalKey: String? = null,
 )
 
 data class UploadResponse(
@@ -422,7 +441,7 @@ interface MusicApiService {
     @PUT("api/songs/{id}")
     suspend fun updateSong(
         @Path("id") songId: String,
-        @Body request: CreateSongRequest
+        @Body request: UpdateSongRequest
     ): Response<BaseResponse<SongDto>>
 
     @DELETE("api/songs/{id}")
@@ -535,6 +554,11 @@ interface MusicApiService {
     @GET("api/artist/analytics")
     suspend fun getArtistAnalytics(): Response<BaseResponse<ArtistAnalyticsDto>>
 
+    @GET("api/mb/artist/top-listened-songs")
+    suspend fun getArtistTopListenedSongs(
+        @Query("limit") limit: Int = 6
+    ): Response<BaseResponse<List<MbArtistTopSongDto>>>
+
     @PUT("api/artist/profile")
     suspend fun updateArtistProfile(
         @Body profile: ArtistDto
@@ -561,5 +585,12 @@ data class MostPlayedAlbumDto(
 
 data class MostPlayedSongDto(
     @SerializedName("song") val song: SongDto,
+    @SerializedName("play_count") val playCount: Int? = null
+)
+
+data class MbArtistTopSongDto(
+    @SerializedName("song") val song: SongDto,
+    @SerializedName("listen_count") val listenCount: Int? = null,
+    @SerializedName("stream_count") val streamCount: Int? = null,
     @SerializedName("play_count") val playCount: Int? = null
 )

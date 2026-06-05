@@ -34,8 +34,17 @@ export interface ArtistSong {
   lyricsUrl: string;
   lyrics: string;
   createdAt: string;
+  coverUrl: string;
+  coverKey?: string | null;
+  originalKey?: string | null;
   playCount: number;
   processingStatus: string;
+  mood?: string;
+  song_type?: string;
+  bpm?: number;
+  is_explicit?: boolean;
+  featured_artists?: string;
+  category_id?: string;
 }
 
 export interface ArtistProfilePayload {
@@ -114,16 +123,22 @@ export function getArtistIdentity(): ArtistIdentity | null {
     return null;
   }
 
+  // Ensure displayName is always a string to avoid React "Objects are not valid as a React child" errors
+  let displayName = artistUser.displayName || artistUser.name || user.displayName || user.name || "Artist";
+  if (typeof displayName === "object" && displayName !== null) {
+    displayName = (displayName as any).stage_name || (displayName as any).name || "Artist";
+  }
+
   return {
     userId,
     artistId,
     role: (artistUser.role || user.role || "artist") as ArtistIdentity["role"],
-    displayName: artistUser.displayName || artistUser.name || user.displayName || user.name || "Artist",
+    displayName: String(displayName),
   };
 }
 
 export async function getOwnedAlbums(identity: ArtistIdentity): Promise<ArtistAlbum[]> {
-  const payload = await request<PaginatedResponse<any>>("/albums?per_page=300&sort_by=latest");
+  const payload = await request<PaginatedResponse<any>>("/albums?per_page=300&sort_by=latest", {}, true);
   const rows = Array.isArray(payload.data) ? payload.data : [];
 
   return rows
@@ -132,10 +147,15 @@ export async function getOwnedAlbums(identity: ArtistIdentity): Promise<ArtistAl
       const rawType = String(row.description || row.type || "album").toLowerCase();
       const type: "album" | "single" | "ep" = rawType === "single" || rawType === "ep" ? rawType : "album";
 
+      const artistName = row.artist?.stage_name || row.artist_name || identity.displayName;
+      const safeArtistName = typeof artistName === "object" && artistName !== null
+        ? (artistName as any).stage_name || (artistName as any).name || identity.displayName
+        : artistName;
+
       return {
         id: String(row.id),
         title: row.title || "Untitled",
-        artist: row.artist?.stage_name || row.artist_name || identity.displayName,
+        artist: String(safeArtistName || "Unknown Artist"),
         releaseDate: row.release_date || "",
         coverUrl: row.cover_url || "",
         description: row.description || "",
@@ -147,16 +167,22 @@ export async function getOwnedAlbums(identity: ArtistIdentity): Promise<ArtistAl
 }
 
 export async function getOwnedSongs(identity: ArtistIdentity): Promise<ArtistSong[]> {
-  const payload = await request<PaginatedResponse<any>>("/songs?per_page=500&sort_by=latest");
+  const payload = await request<PaginatedResponse<any>>("/songs?per_page=500&sort_by=latest", {}, true);
   const rows = Array.isArray(payload.data) ? payload.data : [];
 
   return rows
     .filter((row) => Number(row.artist_id) === identity.artistId)
-    .map((row) => ({
-      id: String(row.id),
-      title: row.title || "Untitled",
-      artist: row.artist?.stage_name || row.artist_name || identity.displayName,
-      albumId: row.album_id ? String(row.album_id) : null,
+    .map((row) => {
+      const artistName = row.artist?.stage_name || row.artist_name || identity.displayName;
+      const safeArtistName = typeof artistName === "object" && artistName !== null
+        ? (artistName as any).stage_name || (artistName as any).name || identity.displayName
+        : artistName;
+
+      return {
+        id: String(row.id),
+        title: row.title || "Untitled",
+        artist: String(safeArtistName || "Unknown Artist"),
+        albumId: row.album_id ? String(row.album_id) : null,
       albumTitle: row.album?.title || "Unassigned",
       duration: Number(row.duration || 0),
       trackNumber: Number(row.track_number || 1),
@@ -164,9 +190,19 @@ export async function getOwnedSongs(identity: ArtistIdentity): Promise<ArtistSon
       lyricsUrl: row.lyrics_url || "",
       lyrics: row.lyrics || "",
       createdAt: row.created_at || new Date().toISOString(),
+      coverUrl: row.songCover_url || "",
+      coverKey: row.cover_key || null,
+      originalKey: row.original_key || null,
       playCount: Number(row.play_count || 0),
       processingStatus: String(row.processing_status || "ready"),
-    }));
+      mood: row.mood,
+      song_type: row.song_type,
+      bpm: row.bpm,
+      is_explicit: Boolean(row.is_explicit),
+      featured_artists: row.featured_artists,
+      category_id: row.category_id,
+    };
+    });
 }
 
 export async function getSongPlayMap(): Promise<Map<string, number>> {
@@ -257,6 +293,12 @@ export async function createArtistSong(payload: {
   preview_key?: string | null;
   lyrics?: string;
   lyrics_url?: string;
+  mood?: string;
+  song_type?: string;
+  bpm?: number;
+  is_explicit?: boolean;
+  featured_artists?: string;
+  category_id?: string;
 }) {
   return request("/songs", {
     method: "POST",
@@ -277,6 +319,12 @@ export async function updateArtistSong(
     preview_key?: string | null;
     lyrics?: string;
     lyrics_url?: string;
+    mood?: string;
+    song_type?: string;
+    bpm?: number;
+    is_explicit?: boolean;
+    featured_artists?: string;
+    category_id?: string;
   }
 ) {
   return request(`/songs/${songId}`, {
@@ -289,7 +337,7 @@ export async function deleteArtistSong(songId: string) {
   return request(`/songs/${songId}`, { method: "DELETE" }, true);
 }
 
-export async function uploadArtistMedia(payload: { file: File; purpose: "album_cover" | "song_audio" | "artist_image" | "song_lyrics" }) {
+export async function uploadArtistMedia(payload: { file: File; purpose: "album_cover" | "song_cover" | "song_audio" | "artist_image" | "song_lyrics" }) {
   return uploadMediaDirectly(payload.file, payload.purpose);
 }
 

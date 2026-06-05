@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { getDerivedArtists, getAlbums, getSongs } from "../backend/catalogService";
 import { useDataCache } from "../contexts/DataCacheContext";
-import { useAudioPlayer } from "../contexts/AudioPlayerContext";
+import { useAudioPlayer } from "../contexts/AudioPlayerContextCore";
 import AppFooter from "../components/AppFooter";
 import ArtistSection from "../components/ArtistsSection";
 import AlbumCard from "../components/AlbumCard";
 import Song from "../components/Song";
-import { FaSpinner, FaCheckCircle } from "react-icons/fa";
+import { FaSpinner, FaCheckCircle, FaFlag, FaChevronLeft, FaChevronRight } from "react-icons/fa";
+import ReportModal from "../components/ReportModal";
+import { useTheme } from "../contexts/ThemeContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,6 +54,8 @@ function HeroBanner({
   onRefresh?: () => void;
   loading?: boolean;
 }) {
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+
   return (
     <div className="relative w-full bg-linear-to-b from-slate-900 via-slate-900 to-slate-950 p-6">
       <div
@@ -82,6 +86,13 @@ function HeroBanner({
             <span className="text-white text-sm font-semibold">
               Verified Artist
             </span>
+            <button
+              onClick={() => setIsReportModalOpen(true)}
+              className="ml-4 flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+            >
+              <FaFlag size={10} />
+              Report
+            </button>
             {onRefresh && (
               <button
                 onClick={onRefresh}
@@ -115,6 +126,14 @@ function HeroBanner({
           </p>
         </div>
       </div>
+
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        type="artist"
+        id={artist.id}
+        title={artist.name}
+      />
     </div>
   );
 }
@@ -255,7 +274,7 @@ function AlbumsSection({ artistId }: { artistId: string }) {
   const { getCachedData } = useDataCache();
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAll, setShowAll] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchArtistAlbums();
@@ -294,6 +313,16 @@ function AlbumsSection({ artistId }: { artistId: string }) {
     }
   };
 
+  const scroll = (direction: 'left' | 'right') => {
+    if (scrollContainerRef.current) {
+      const { scrollLeft, clientWidth } = scrollContainerRef.current;
+      const scrollTo = direction === 'left'
+        ? scrollLeft - clientWidth * 0.8
+        : scrollLeft + clientWidth * 0.8;
+      scrollContainerRef.current.scrollTo({ left: scrollTo, behavior: 'smooth' });
+    }
+  };
+
   if (loading) {
     return (
       <section>
@@ -309,24 +338,24 @@ function AlbumsSection({ artistId }: { artistId: string }) {
 
   if (albums.length === 0) return null;
 
-  const displayedAlbums = showAll ? albums : albums.slice(0, 5);
-
   return (
-    <section>
-      <div className="flex justify-between items-center mb-3">
-        <h2 className="text-xl font-semibold">
+    <section className="relative group/section">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">
           Artist's <span className="text-blue-400">Albums</span>
         </h2>
-        <button
-          onClick={() => setShowAll(!showAll)}
-          className="text-sm text-purple-400 hover:text-purple-300 transition-colors"
-        >
-          {showAll ? "View Less" : "View More"}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => scroll('left')} className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all">
+            <FaChevronLeft size={12} />
+          </button>
+          <button onClick={() => scroll('right')} className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all">
+            <FaChevronRight size={12} />
+          </button>
+        </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {displayedAlbums.map((album) => (
-          <div key={album.id} className="w-full">
+      <div ref={scrollContainerRef} className="flex gap-6 overflow-x-auto no-scrollbar pb-4 snap-x">
+        {albums.map((album) => (
+          <div key={album.id} className="w-44 md:w-52 shrink-0 snap-start">
             <AlbumCard album={album} />
           </div>
         ))}
@@ -341,7 +370,7 @@ function SingleSongs({ artistId }: { artistId: string }) {
   const { getCachedData } = useDataCache();
   const [singles, setSingles] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAll, setShowAll] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchSingles();
@@ -380,6 +409,16 @@ function SingleSongs({ artistId }: { artistId: string }) {
     }
   };
 
+  const scroll = (direction: 'left' | 'right') => {
+    if (scrollContainerRef.current) {
+      const { scrollLeft, clientWidth } = scrollContainerRef.current;
+      const scrollTo = direction === 'left'
+        ? scrollLeft - clientWidth * 0.8
+        : scrollLeft + clientWidth * 0.8;
+      scrollContainerRef.current.scrollTo({ left: scrollTo, behavior: 'smooth' });
+    }
+  };
+
   if (loading) {
     return (
       <section>
@@ -395,24 +434,24 @@ function SingleSongs({ artistId }: { artistId: string }) {
 
   if (singles.length === 0) return null;
 
-  const displayedSingles = showAll ? singles : singles.slice(0, 5);
-
   return (
-    <section>
-      <div className="flex justify-between items-center mb-2">
-        <h2 className="text-xl font-semibold">
+    <section className="relative group/section">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">
           Single <span className="text-blue-400">Songs</span>
         </h2>
-        <button
-          onClick={() => setShowAll(!showAll)}
-          className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
-        >
-          {showAll ? "View Less" : "View More"}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => scroll('left')} className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all">
+            <FaChevronLeft size={12} />
+          </button>
+          <button onClick={() => scroll('right')} className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all">
+            <FaChevronRight size={12} />
+          </button>
+        </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {displayedSingles.map((single) => (
-          <div key={single.id} className="w-full">
+      <div ref={scrollContainerRef} className="flex gap-6 overflow-x-auto no-scrollbar pb-4 snap-x">
+        {singles.map((single) => (
+          <div key={single.id} className="w-44 md:w-52 shrink-0 snap-start">
             <AlbumCard album={single} />
           </div>
         ))}
@@ -487,9 +526,9 @@ function FansAlsoListen({ artistId }: { artistId?: string }) {
 const Artist: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { getCachedData } = useDataCache();
+  const { isLightMode } = useTheme();
   const [artist, setArtist] = useState<Artist | null>(null);
   const [loading, setLoading] = useState(true);
-  const isLightMode = false;
 
   useEffect(() => {
     if (id) fetchArtist(id);
@@ -530,7 +569,7 @@ const Artist: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <FaSpinner className="text-purple-400 text-5xl animate-spin" />
       </div>
     );
@@ -538,7 +577,7 @@ const Artist: React.FC = () => {
 
   if (!artist) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4 opacity-20">🎤</div>
           <p className="text-slate-400 text-xl">Artist not found</p>

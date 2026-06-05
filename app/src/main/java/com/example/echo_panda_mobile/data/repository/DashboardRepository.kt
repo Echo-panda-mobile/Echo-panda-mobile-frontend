@@ -1,8 +1,12 @@
 package com.example.echo_panda_mobile.data.repository
 
+import com.example.echo_panda_mobile.BuildConfig
 import com.example.echo_panda_mobile.data.model.*
 import com.example.echo_panda_mobile.data.model.DashboardStats
 import com.example.echo_panda_mobile.data.remote.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -102,6 +106,7 @@ class DashboardRepository(
             } else {
                 android.util.Log.d("DashboardRepository", "Making API call to: artist/analytics")
                 val response = apiService.getArtistAnalytics()
+                val topSongs = fetchTopListenedSongs(limit = 6)
                 
                 android.util.Log.d("DashboardRepository", "Response Code: ${response.code()}")
                 
@@ -134,6 +139,7 @@ class DashboardRepository(
                             ranking = if (analytics.topTrack != null) "Top Track" else "Upload your first track",
                             imageUrl = analytics.topTrack?.getDisplayCoverUrl()
                         ),
+                        topListenedSongs = topSongs,
                         recentActivities = analytics.recentActivities.map {
                             ActivityItem(it.id, it.text, it.timestamp)
                         }.ifEmpty { 
@@ -157,6 +163,63 @@ class DashboardRepository(
         } catch (e: Exception) {
             android.util.Log.e("DashboardRepository", "Exception: ${e.message}", e)
             DashboardResult.Error(e.message ?: "Failed to load dashboard")
+        }
+    }
+
+    private suspend fun fetchTopListenedSongs(limit: Int): List<TopListenedSong> {
+        val service = apiService ?: return emptyList()
+        return try {
+            val response = service.getArtistTopListenedSongs(limit = limit)
+            if (!response.isSuccessful) return emptyList()
+
+            val items = response.body()?.data ?: return emptyList()
+            coroutineScope {
+                items.map { dto ->
+                    async {
+                        val song = dto.song
+                        val songId = (song.id ?: 0).toString()
+                        val imageUrl = resolveSongCoverUrl(songId, song.getDisplayCoverUrl())
+                        TopListenedSong(
+                            id = songId,
+                            title = song.title ?: song.name ?: "Unknown",
+                            imageUrl = imageUrl,
+                            playCount = dto.playCount ?: 0
+                        )
+                    }
+                }.awaitAll()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("DashboardRepository", "Failed to load top listened songs: ${e.message}")
+            emptyList()
+        }
+    }
+
+    private suspend fun resolveSongCoverUrl(songId: String, rawUrl: String?): String? {
+        try {
+            val response = apiService?.getSongCoverUrl(songId)
+            if (response?.isSuccessful == true) {
+                val signed = response.body()?.signedUrl ?: response.body()?.url
+                if (!signed.isNullOrBlank()) return directImageUrl(signed)
+            }
+        } catch (_: Exception) {
+        }
+        return directImageUrl(rawUrl)
+    }
+
+    private fun directImageUrl(url: String?): String? {
+        val raw = url?.takeIf { it.isNotBlank() && it != "null" } ?: return null
+        if (raw.startsWith("http") || raw.startsWith("content://") || raw.startsWith("file://")) {
+            return raw
+        }
+
+        val apiBase = BuildConfig.API_BASE_URL
+        val domainBase = apiBase.replace("/api/", "/")
+        val cleanPath = if (raw.startsWith("/")) raw.substring(1) else raw
+
+        return if (!cleanPath.contains("storage/") && !cleanPath.startsWith("http")) {
+            "${domainBase}storage/$cleanPath"
+        } else {
+            "$domainBase$cleanPath"
         }
     }
 

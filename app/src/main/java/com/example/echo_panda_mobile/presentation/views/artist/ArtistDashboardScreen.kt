@@ -78,19 +78,18 @@ fun ArtistDashboardScreen(
                         
                         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                             Spacer(Modifier.height(24.dp))
+
+                            if (state.data.topListenedSongs.isNotEmpty()) {
+                                TopListenedSongsSection(
+                                    songs = state.data.topListenedSongs,
+                                    onSongClick = { songId ->
+                                        onNavigate(Routes.ARTIST_PLAYER.replace("{trackId}", songId))
+                                    }
+                                )
+                                Spacer(Modifier.height(32.dp))
+                            }
                             
-                            DashboardStatsGrid(stats = state.data.stats)
-                            
-                            Spacer(Modifier.height(32.dp))
-                            
-                            TopSongAnalyticsSection(
-                                topTrack = state.data.topTrack,
-                                onNavigate = onNavigate
-                            )
-                            
-                            Spacer(Modifier.height(32.dp))
-                            
-                            GlobalReachSection(reachData = state.data.globalReach)
+
                             
                             Spacer(Modifier.height(32.dp))
                             
@@ -147,15 +146,28 @@ private fun ArtistDashboardHeader(
                     contentAlignment = Alignment.Center
                 ) {
                     val photoUrl = user.getDisplayPhotoUrl()
-                    if (photoUrl != null) {
+                    if (!photoUrl.isNullOrBlank()) {
                         AsyncImage(
                             model = photoUrl,
                             contentDescription = "Profile",
                             modifier = Modifier.fillMaxSize().clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                            contentScale = ContentScale.Crop,
+                            error = androidx.compose.ui.graphics.painter.ColorPainter(Color.DarkGray)
                         )
                     } else {
-                        Icon(Icons.Default.Person, null, tint = Color.White, modifier = Modifier.size(28.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Brush.linearGradient(listOf(EchoPandaColors.AccentBlue, Color(0xFFA78BFA)))),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = user.name.take(1).uppercase(),
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.width(16.dp))
@@ -209,30 +221,77 @@ private fun ArtistDashboardHeader(
     }
 }
 
-@Composable
-private fun DashboardStatsGrid(stats: DashboardStats) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatCard(
-                title = "Total Streams",
-                value = stats.streams,
-                growth = "+12%",
-                icon = Icons.Default.PlayArrow,
-                color = EchoPandaColors.AccentBlue,
-                modifier = Modifier.weight(1f)
-            )
-            StatCard(
-                title = "Monthly Listeners",
-                value = stats.listeners,
-                growth = "+8%",
-                icon = Icons.Default.Headset,
-                color = Color(0xFFA78BFA),
-                modifier = Modifier.weight(1f)
-            )
-        }
 
+@Composable
+private fun TopListenedSongsSection(
+    songs: List<TopListenedSong>,
+    onSongClick: (String) -> Unit
+) {
+    Column {
+        Text(
+            text = "Top Listened Songs",
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(16.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(songs, key = { it.id }) { song ->
+                TopListenedSongCard(
+                    song = song,
+                    onClick = { onSongClick(song.id) }
+                )
+            }
+        }
     }
 }
+
+@Composable
+private fun TopListenedSongCard(
+    song: TopListenedSong,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(120.dp)
+            .clickable { onClick() }
+    ) {
+        SquareArtCard(
+            colors = listOf(Color(0xFF2C2C3A), Color(0xFF1A1A26)),
+            imageUrl = song.imageUrl,
+            size = 120.dp,
+            cornerRadius = 16.dp,
+            onClick = onClick
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = song.title,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = formatPlayCount(song.playCount),
+            color = Color.White.copy(alpha = 0.5f),
+            fontSize = 11.sp,
+            maxLines = 1
+        )
+    }
+}
+
+private fun formatPlayCount(count: Int): String {
+    return when {
+        count >= 1_000_000 -> "${String.format("%.1f", count / 1_000_000f)}M plays"
+        count >= 1_000 -> "${String.format("%.1f", count / 1_000f)}K plays"
+        count > 0 -> "$count plays"
+        else -> "0 plays"
+    }
+}
+
 
 @Composable
 private fun StatCard(
@@ -277,107 +336,6 @@ private fun StatCard(
     }
 }
 
-@Composable
-private fun TopSongAnalyticsSection(
-    topTrack: TopTrack,
-    onNavigate: (String) -> Unit
-) {
-    Column {
-        Text("Top Song Analytics", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(16.dp))
-        Surface(
-            color = Color(0xFF121A26),
-            shape = RoundedCornerShape(24.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, EchoPandaColors.AccentBlue.copy(alpha = 0.1f)),
-            modifier = Modifier.clickable { 
-                if (topTrack.id.isNotBlank()) {
-                    onNavigate(Routes.ARTIST_PLAYER.replace("{trackId}", topTrack.id))
-                }
-            }
-        ) {
-            Row(
-                modifier = Modifier.padding(20.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.05f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (topTrack.imageUrl != null) {
-                        AsyncImage(model = topTrack.imageUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                    } else {
-                        Icon(Icons.Default.MusicNote, null, tint = EchoPandaColors.AccentBlue, modifier = Modifier.size(32.dp))
-                    }
-                }
-                
-                Spacer(Modifier.width(20.dp))
-                
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(topTrack.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Text(topTrack.ranking, color = EchoPandaColors.AccentBlue, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.PlayArrow, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
-                        Text("${topTrack.streams} total streams", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
-                    }
-                }
-                
-                IconButton(
-                    onClick = { 
-                        if (topTrack.id.isNotBlank()) {
-                            onNavigate(Routes.ARTIST_PLAYER.replace("{trackId}", topTrack.id))
-                        }
-                    },
-                    modifier = Modifier.background(Color.White.copy(alpha = 0.05f), CircleShape)
-                ) {
-                    Icon(Icons.Default.ChevronRight, null, tint = Color.White)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun GlobalReachSection(reachData: List<Pair<String, String>>) {
-    Column {
-        Text("Global Reach", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(16.dp))
-        Surface(
-            color = Color(0xFF121A26),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                reachData.forEach { (country, percentage) ->
-                    Row(
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(country, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, modifier = Modifier.weight(1f))
-                        Box(
-                            modifier = Modifier
-                                .weight(2f)
-                                .height(6.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.05f))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(percentage.removeSuffix("%").toFloatOrNull()?.div(100f) ?: 0f)
-                                    .fillMaxHeight()
-                                    .background(EchoPandaColors.AccentBlue)
-                            )
-                        }
-                        Text(percentage, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp).width(35.dp), textAlign = TextAlign.End)
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun RecentActivitySection(activities: List<ActivityItem>) {
@@ -513,6 +471,26 @@ private fun ArtistDashboardSkeleton() {
                     modifier = Modifier
                         .size(width = 80.dp, height = 14.dp)
                         .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(4.dp))
+                )
+            }
+        }
+
+        Spacer(Modifier.height(32.dp))
+
+        Box(
+            modifier = Modifier
+                .size(width = 180.dp, height = 24.dp)
+                .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(4.dp))
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(3) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 120.dp, height = 160.dp)
+                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
                 )
             }
         }

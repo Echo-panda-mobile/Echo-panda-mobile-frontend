@@ -97,7 +97,9 @@ fun ArtistPlayerScreen(
                             )
                         }
                     }
-
+                    IconButton(onClick = { /* Share or Edit */ }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit Track", tint = Color.White)
+                    }
                 }
 
                 Spacer(Modifier.height(32.dp))

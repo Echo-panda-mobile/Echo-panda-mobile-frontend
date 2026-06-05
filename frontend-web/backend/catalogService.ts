@@ -1,5 +1,10 @@
 import { buildApiUrl, resolveMediaUrl } from "./backendUrls";
-import { getSignedAlbumCoverUrl, getSignedSongCoverUrl, getSignedArtistImageUrl } from "./songMediaApi";
+import {
+  getSignedAlbumCoverUrl,
+  getSignedSongCoverUrl,
+  getSignedArtistImageUrl,
+  getSignedGenreImageUrl
+} from "./songMediaApi";
 
 export interface CatalogArtist {
   id: string;
@@ -40,6 +45,7 @@ export interface CatalogCategory {
   id: string;
   name: string;
   description: string;
+  image_url?: string;
 }
 
 const request = async <T = any>(path: string): Promise<T> => {
@@ -79,10 +85,10 @@ const getArtistName = (artistField: any, artistNameField?: string): string | nul
 };
 
 export async function getAlbums(limit = 10, offset = 0): Promise<CatalogAlbum[]> {
-  const data = await request<{ data?: any[] }>(`/albums?per_page=200&sort_by=latest`);
+  const data = await request<{ data?: any[] }>(`/albums?per_page=${limit}&sort_by=latest`);
   const rows = Array.isArray(data?.data) ? data.data : [];
 
-  return Promise.all(rows.slice(offset, offset + limit).map(async (album: any) => ({
+  return Promise.all(rows.map(async (album: any) => ({
     id: String(album.id),
     title: album.title,
     cover_key: album.cover_key || null,
@@ -95,8 +101,38 @@ export async function getAlbums(limit = 10, offset = 0): Promise<CatalogAlbum[]>
   })));
 }
 
-export async function getSongs(limit = 25): Promise<CatalogSong[]> {
-  const data = await request<{ data?: any[] }>(`/songs?per_page=${Math.max(1, limit)}&sort_by=latest`);
+export async function getNewReleasesToday(limit = 10): Promise<CatalogAlbum[]> {
+  try {
+    const data = await request<{ data?: any[] }>(`/albums/new-releases-today?limit=${Math.max(1, limit)}`);
+    const rows = Array.isArray(data?.data) ? data.data : [];
+
+    return Promise.all(rows.map(async (album: any) => ({
+      id: String(album.id),
+      title: album.title,
+      cover_key: album.cover_key || null,
+      cover_url: (await getSignedAlbumCoverUrl(album.id)) || album.cover_url || undefined,
+      release_date: album.release_date || undefined,
+      type: album.type || undefined,
+      artists: getArtistName(album.artist, album.artist_name)
+        ? [{ id: String(album.artist_id || album.id), name: String(getArtistName(album.artist, album.artist_name)), image_url: undefined }]
+        : [],
+    })));
+  } catch (error) {
+    console.error('Error fetching today new releases:', error);
+    return [];
+  }
+}
+
+export async function getSongs(limit = 25, params: Record<string, any> = {}): Promise<CatalogSong[]> {
+  const queryParams = new URLSearchParams({
+    per_page: String(Math.max(1, limit)),
+    sort_by: "latest",
+    ...Object.fromEntries(
+      Object.entries(params).map(([k, v]) => [k, String(v)])
+    )
+  });
+
+  const data = await request<{ data?: any[] }>(`/songs?${queryParams.toString()}`);
   const rows = Array.isArray(data?.data) ? data.data : [];
 
   return Promise.all(rows.map(async (song: any) => {
@@ -110,7 +146,7 @@ export async function getSongs(limit = 25): Promise<CatalogSong[]> {
       original_key: song.original_key || null,
       cover_key: song.cover_key || null,
       preview_key: song.preview_key || null,
-      audio_url: song.original_key || null,
+      audio_url: resolveMediaUrl(song.original_key || song.preview_key),
       songCover_url: coverUrl || resolveMediaUrl(song.songCover_url || song.album?.cover_url || song.album?.cover_image),
       created_at: song.created_at,
       artists: getArtistName(song.artist, song.artist_name)
@@ -203,58 +239,144 @@ export async function getDerivedArtists(limit = 10, search = ""): Promise<Catalo
   return list.slice(0, Math.max(1, limit));
 }
 
-const normalizeCategories = (items: any[]): CatalogCategory[] => {
-  return (Array.isArray(items) ? items : [])
-    .map((item: any) => {
+export async function getPopularArtists(limit = 10): Promise<Array<CatalogArtist & { play_count?: number; monthly_listeners?: string }>> {
+  try {
+    const data = await request<{ data?: any[] }>(`/artists/popular?limit=${Math.max(1, limit)}`);
+    const rows = Array.isArray(data?.data) ? data.data : [];
+
+    return Promise.all(rows.map(async (artist: any) => ({
+      id: String(artist.id),
+      name: artist.name,
+      image_url: artist.image_url || undefined,
+      play_count: artist.play_count,
+      monthly_listeners: artist.monthly_listeners,
+    })));
+  } catch (error) {
+    console.error('Error fetching popular artists:', error);
+    return [];
+  }
+}
+
+const normalizeCategories = async (items: any[]): Promise<CatalogCategory[]> => {
+  const normalized: Array<CatalogCategory | null> = await Promise.all((Array.isArray(items) ? items : [])
+    .map(async (item: any): Promise<CatalogCategory | null> => {
       const name = String(item?.name || item?.title || item?.genre || "").trim();
       if (!name) {
         return null;
       }
 
+      const id = String(item?.id || encodeURIComponent(name.toLowerCase()));
       const description = String(item?.description || item?.summary || `${name} music`).trim();
+      const image_url = await getSignedGenreImageUrl(id);
 
-      return {
-        id: String(item?.id || encodeURIComponent(name.toLowerCase())),
+      const category: CatalogCategory = {
+        id,
         name,
         description,
       };
-    })
-    .filter((item): item is CatalogCategory => Boolean(item));
+
+      if (image_url) {
+        category.image_url = image_url;
+      }
+
+      return category;
+    }));
+
+  return normalized.filter((item): item is CatalogCategory => Boolean(item));
 };
 
+const DEFAULT_GENRES: CatalogCategory[] = [
+  { id: "pop", name: "Pop", description: "Popular music" },
+  { id: "hip-hop", name: "Hip Hop", description: "Hip hop and rap" },
+  { id: "rnb", name: "R&B", description: "Rhythm and Blues" },
+  { id: "rock", name: "Rock", description: "Rock music" },
+  { id: "electronic", name: "Electronic", description: "EDM and electronic" },
+  { id: "jazz", name: "Jazz", description: "Jazz music" },
+  { id: "classical", name: "Classical", description: "Classical music" },
+  { id: "k-pop", name: "K-Pop", description: "Korean pop music" },
+  { id: "lo-fi", name: "Lo-Fi", description: "Low fidelity beats" },
+];
+
 export async function getGenres(): Promise<CatalogCategory[]> {
-  const parseResponse = (data: any): CatalogCategory[] => {
+  const parseResponse = async (data: any): Promise<CatalogCategory[]> => {
     if (Array.isArray(data)) {
-      return normalizeCategories(data);
+      return await normalizeCategories(data);
     }
 
     if (Array.isArray(data?.data)) {
-      return normalizeCategories(data.data);
+      return await normalizeCategories(data.data);
     }
 
     if (Array.isArray(data?.genres)) {
-      return normalizeCategories(data.genres);
+      return await normalizeCategories(data.genres);
     }
 
     return [];
   };
 
   try {
-    const genresRes = await request<any>("/genres");
-
-    const fromGenres = parseResponse(genresRes);
-    if (fromGenres.length > 0) {
-      return fromGenres;
+    const genresRes = await fetch(buildApiUrl("/genres"), {
+      headers: { Accept: "application/json" }
+    });
+    if (genresRes.ok) {
+      const data = await genresRes.json();
+      const fromGenres = await parseResponse(data);
+      if (fromGenres.length > 0) {
+        return fromGenres;
+      }
     }
   } catch (error) {
     console.error("Error fetching genres from backend:", error);
   }
 
-  return [];
+  return DEFAULT_GENRES;
+}
+
+export async function getDerivedTags(): Promise<CatalogCategory[]> {
+  try {
+    const res = await fetch(buildApiUrl("/tags"), {
+      headers: { Accept: "application/json" }
+    });
+    if (res.ok) {
+      const json = await res.json();
+      // API returns { data: [{ id, name, slug, image_url }] }
+      const rows: any[] = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
+      if (rows.length > 0) {
+        return rows
+          .filter((t: any) => t?.name)
+          .map((t: any) => ({
+            // Use tag name as value — Song.mood stores the tag name string
+            id: String(t.name),
+            name: String(t.name),
+            description: t.slug || String(t.name).toLowerCase(),
+          }));
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching tags from backend:", error);
+  }
+
+  return [
+    { id: "chill", name: "Chill", description: "Relaxing vibes" },
+    { id: "workout", name: "Workout", description: "High energy for the gym" },
+    { id: "party", name: "Party", description: "Upbeat celebration music" },
+  ];
 }
 
 export async function getDerivedCategories(): Promise<CatalogCategory[]> {
   return getGenres();
+}
+
+export async function getTags(): Promise<Array<{ id: string; name: string; slug: string | null }>> {
+  try {
+    const url = buildApiUrl('/tags');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn('Failed to load tags', err);
+    return [];
+  }
 }
 
 export async function getHomeTags(): Promise<Array<{ id: string; name: string; description: string; display_order: number; albums: CatalogAlbum[] }>> {

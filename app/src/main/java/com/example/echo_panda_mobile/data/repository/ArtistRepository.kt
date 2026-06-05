@@ -13,6 +13,10 @@ import java.io.File
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import com.example.echo_panda_mobile.BuildConfig
 
 class ArtistRepository(
     private val apiService: MusicApiService,
@@ -34,29 +38,64 @@ class ArtistRepository(
                 val allSongs = response.body()!!.allSongs
                 
                 // Filter by logged-in artist ID or Name (matching web logic)
-                val currentUserId = tokenStorage.getUserId()
                 val currentArtistId = tokenStorage.getArtistId()
-                val currentUserName = tokenStorage.getName()?.lowercase()?.trim()
+                val currentUserName = tokenStorage.getName()?.trim()
                 
-                android.util.Log.d("ArtistRepository", "Filtering for User ID: $currentUserId, Artist ID: $currentArtistId, Name: $currentUserName")
+                android.util.Log.d("ArtistRepository", "Filtering songs for Artist ID: $currentArtistId, Name: $currentUserName")
 
                 val filteredSongs = allSongs.filter { song ->
-                    val songArtistId = song.artist?.id?.toIntOrNull()
-                    val songArtistName = (song.artistName ?: song.artist?.name)?.lowercase()?.trim()
-                    
-                    // Match by Artist ID, User ID or Name
-                    (songArtistId != null && (songArtistId == currentArtistId || songArtistId == currentUserId)) || 
-                    (currentUserName != null && songArtistName != null && (songArtistName.contains(currentUserName) || currentUserName.contains(songArtistName)))
+                    songBelongsToLoggedInArtist(song, currentArtistId, currentUserName)
                 }
                 
-                android.util.Log.d("ArtistRepository", "✓ Successfully fetched ${filteredSongs.size} filtered songs (out of ${allSongs.size})")
-                _songs.value = filteredSongs
-                Result.success(filteredSongs)
+                // Resolve Image URLs for each song
+                val enrichedSongs = coroutineScope {
+                    filteredSongs.map { song ->
+                        async {
+                            val songId = song.id?.toString() ?: return@async song
+                            val resolvedUrl = resolveSongCoverUrl(songId, song.getDisplayCoverUrl())
+                            song.copy(coverUrl = resolvedUrl)
+                        }
+                    }.awaitAll()
+                }
+                
+                android.util.Log.d("ArtistRepository", "✓ Successfully fetched ${enrichedSongs.size} filtered songs (out of ${allSongs.size})")
+                _songs.value = enrichedSongs
+                Result.success(enrichedSongs)
             } else {
                 Result.failure(Exception("Error ${response.code()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    private suspend fun resolveSongCoverUrl(songId: String, rawUrl: String?): String? {
+        // Try to get signed URL first (standard app logic for private S3 images)
+        try {
+            val response = apiService.getSongCoverUrl(songId)
+            if (response.isSuccessful) {
+                val signed = response.body()?.signedUrl ?: response.body()?.url
+                if (!signed.isNullOrBlank()) return directImageUrl(signed)
+            }
+        } catch (_: Exception) { }
+        
+        return directImageUrl(rawUrl)
+    }
+
+    private fun directImageUrl(url: String?): String? {
+        val raw = url?.takeIf { it.isNotBlank() && it != "null" } ?: return null
+        if (raw.startsWith("http") || raw.startsWith("content://") || raw.startsWith("file://")) {
+            return raw
+        }
+        
+        val apiBase = BuildConfig.API_BASE_URL
+        val domainBase = apiBase.replace("/api/", "/")
+        val cleanPath = if (raw.startsWith("/")) raw.substring(1) else raw
+        
+        return if (!cleanPath.contains("storage/") && !cleanPath.startsWith("http")) {
+            "${domainBase}storage/$cleanPath"
+        } else {
+            "$domainBase$cleanPath"
         }
     }
 
@@ -70,16 +109,11 @@ class ArtistRepository(
                 val allAlbums = body.allAlbums
 
                 // Filter by logged-in artist ID or Name (matching web logic)
-                val currentUserId = tokenStorage.getUserId()
                 val currentArtistId = tokenStorage.getArtistId()
-                val currentUserName = tokenStorage.getName()?.lowercase()?.trim()
+                val currentUserName = tokenStorage.getName()?.trim()
 
                 val filteredAlbums = allAlbums.filter { album ->
-                    val songArtistId = album.artist?.id?.toIntOrNull()
-                    val albumArtistName = (album.artistName ?: album.artist?.name)?.lowercase()?.trim()
-                    
-                    (songArtistId != null && (songArtistId == currentArtistId || songArtistId == currentUserId)) ||
-                    (currentUserName != null && albumArtistName != null && (albumArtistName.contains(currentUserName) || currentUserName.contains(albumArtistName)))
+                    albumBelongsToLoggedInArtist(album, currentArtistId, currentUserName)
                 }
 
                 android.util.Log.d("ALBUM_API", "✓ Successfully fetched ${filteredAlbums.size} filtered albums (out of ${allAlbums.size})")
@@ -247,37 +281,176 @@ class ArtistRepository(
         }
     }
 
-    suspend fun updateSong(
-        songId: String,
-        albumId: Int?,
-        title: String,
-        duration: Int,
-        trackNumber: Int,
-        genre: String?,
-        lyrics: String?,
-        audioKey: String?,
-        coverKey: String?
-    ): Result<SongDto> {
-        return try {
-            val request = CreateSongRequest(
-                albumId = if (albumId != null && albumId > 0) albumId else null,
-                title = title,
-                duration = duration,
-                trackNumber = trackNumber,
-                genre = genre,
-                lyrics = lyrics,
-                originalKey = audioKey,
-                coverKey = coverKey
+    fun getLoggedInArtistDisplayName(): String? =
+        tokenStorage.getName()?.trim()?.takeIf { it.isNotBlank() }
+
+    suspend fun getSongFormOptions(): Result<Pair<List<MbGenreDto>, List<MbTagDto>>> = withContext(Dispatchers.IO) {
+        try {
+            android.util.Log.d(EDIT_SONG_LOG, "GET form options: /api/genres + /api/tags")
+            val genresResponse = apiService.getPublicGenres()
+            val tagsResponse = apiService.getPublicTags()
+            android.util.Log.d(
+                EDIT_SONG_LOG,
+                "Form options HTTP genres=${genresResponse.code()} tags=${tagsResponse.code()} " +
+                    "genresCount=${genresResponse.body()?.data?.size ?: 0} tagsCount=${tagsResponse.body()?.data?.size ?: 0}"
             )
-            val response = apiService.updateSong(songId, request)
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!.data)
-            } else {
-                Result.failure(Exception("Failed to update song"))
+            if (!genresResponse.isSuccessful || !tagsResponse.isSuccessful) {
+                val err = buildString {
+                    if (!genresResponse.isSuccessful) append("genres=${genresResponse.errorBody()?.string()} ")
+                    if (!tagsResponse.isSuccessful) append("tags=${tagsResponse.errorBody()?.string()}")
+                }
+                android.util.Log.e(EDIT_SONG_LOG, "Form options failed: $err")
+                return@withContext Result.failure(Exception(err.ifBlank { "Failed to load genres or tags" }))
             }
+            Result.success(
+                (genresResponse.body()?.data ?: emptyList()) to (tagsResponse.body()?.data ?: emptyList())
+            )
         } catch (e: Exception) {
+            android.util.Log.e(EDIT_SONG_LOG, "Form options exception", e)
             Result.failure(e)
         }
+    }
+
+    suspend fun getSongForEdit(songId: String): Result<SongDto> = withContext(Dispatchers.IO) {
+        try {
+            android.util.Log.d(EDIT_SONG_LOG, "GET song for edit: /api/songs/$songId")
+            val response = apiService.getSongDetail(songId)
+            val errorBody = response.errorBody()?.string()
+            android.util.Log.d(
+                EDIT_SONG_LOG,
+                "GET song response code=${response.code()} success=${response.isSuccessful} errorBody=${errorBody?.take(500)}"
+            )
+            if (response.isSuccessful && response.body() != null) {
+                val song = response.body()!!
+                android.util.Log.d(
+                    EDIT_SONG_LOG,
+                    "GET song parsed id=${song.id} title=${song.title} albumId=${song.albumId} " +
+                        "categoryId=${song.categoryId} tagId=${song.tagId} coverKey=${song.coverKey}"
+                )
+                val coverUrl = resolveSongCoverUrl(songId, song.getDisplayCoverUrl())
+                Result.success(song.copy(coverUrl = coverUrl))
+            } else {
+                Result.failure(Exception(errorBody ?: "Failed to load song (HTTP ${response.code()})"))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e(EDIT_SONG_LOG, "GET song exception", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateSongForEdit(
+        songId: String,
+        request: UpdateSongRequest
+    ): Result<SongDto> = withContext(Dispatchers.IO) {
+        try {
+            val token = tokenStorage.getToken()
+            if (token.isNullOrBlank()) {
+                android.util.Log.e(EDIT_SONG_LOG, "PUT song aborted: no auth token in storage")
+                return@withContext Result.failure(
+                    Exception("Unauthenticated: No token available. Please log in again.")
+                )
+            }
+
+            android.util.Log.d(
+                EDIT_SONG_LOG,
+                "PUT song edit: /api/songs/$songId body=" +
+                    "album_id=${request.albumId}, title=${request.title}, artist=${request.artist}, " +
+                    "duration=${request.duration}, track_number=${request.trackNumber}, " +
+                    "category_id=${request.categoryId}, tag_id=${request.tagId}, " +
+                    "cover_key=${request.coverKey}, original_key=${request.originalKey}, " +
+                    "lyrics_len=${request.lyrics?.length ?: 0}"
+            )
+            val response = apiService.updateSong(songId, request)
+            val errorBody = response.errorBody()?.string()
+            android.util.Log.d(
+                EDIT_SONG_LOG,
+                "PUT song response code=${response.code()} success=${response.isSuccessful} " +
+                    "message=${response.body()?.message} errorBody=${errorBody?.take(1000)}"
+            )
+            if (response.isSuccessful && response.body()?.data != null) {
+                val updated = response.body()!!.data
+                android.util.Log.d(
+                    EDIT_SONG_LOG,
+                    "PUT song success id=${updated.id} title=${updated.title} categoryId=${updated.categoryId} tagId=${updated.tagId}"
+                )
+                Result.success(updated)
+            } else {
+                val message = formatApiError(errorBody, response.code())
+                android.util.Log.e(EDIT_SONG_LOG, "PUT song failed: $message")
+                Result.failure(Exception(message))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e(EDIT_SONG_LOG, "PUT song exception", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun formatApiError(errorBody: String?, httpCode: Int): String {
+        if (errorBody.isNullOrBlank()) {
+            return when (httpCode) {
+                401 -> "Unauthenticated. Please log out and sign in again."
+                403 -> "You do not have permission to edit this song."
+                else -> "Failed to update song (HTTP $httpCode)"
+            }
+        }
+        return try {
+            val json = org.json.JSONObject(errorBody)
+            val message = json.optString("message").takeIf { it.isNotBlank() }
+            val errors = json.optJSONObject("errors")
+            if (errors != null) {
+                val details = buildList {
+                    errors.keys().forEach { key ->
+                        val arr = errors.optJSONArray(key)
+                        if (arr != null && arr.length() > 0) add("$key: ${arr.getString(0)}")
+                    }
+                }
+                if (details.isNotEmpty()) {
+                    return listOfNotNull(message).plus(details).joinToString(" | ")
+                }
+            }
+            message ?: errorBody
+        } catch (_: Exception) {
+            errorBody
+        }
+    }
+
+    private fun songBelongsToLoggedInArtist(
+        song: SongDto,
+        currentArtistId: Int?,
+        currentUserName: String?,
+    ): Boolean {
+        if (currentArtistId == null) return false
+
+        val songArtistId = song.artistId ?: song.artist?.id?.toIntOrNull()
+        if (songArtistId == currentArtistId) return true
+
+        val albumArtistId = song.album?.artistId ?: song.album?.artist?.id?.toIntOrNull()
+        if (albumArtistId == currentArtistId) return true
+
+        val songArtistName = (song.artistName ?: song.artist?.name)?.trim()
+        return !currentUserName.isNullOrBlank()
+            && !songArtistName.isNullOrBlank()
+            && currentUserName.equals(songArtistName, ignoreCase = true)
+    }
+
+    private fun albumBelongsToLoggedInArtist(
+        album: AlbumDto,
+        currentArtistId: Int?,
+        currentUserName: String?,
+    ): Boolean {
+        if (currentArtistId == null) return false
+
+        val albumArtistId = album.artistId ?: album.artist?.id?.toIntOrNull()
+        if (albumArtistId == currentArtistId) return true
+
+        val albumArtistName = (album.artistName ?: album.artist?.name)?.trim()
+        return !currentUserName.isNullOrBlank()
+            && !albumArtistName.isNullOrBlank()
+            && currentUserName.equals(albumArtistName, ignoreCase = true)
+    }
+
+    companion object {
+        private const val EDIT_SONG_LOG = "ArtistEditSong"
     }
 
     suspend fun deleteSong(songId: String): Result<Unit> {

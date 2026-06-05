@@ -67,6 +67,13 @@ data class FirebaseSessionResponse(
     val redirect_to: String? = null
 )
 
+data class LoginApiResponse(
+    val message: String,
+    val user: BackendUser,
+    val token: String,
+    @SerializedName("token_type") val tokenType: String? = null,
+)
+
 data class MeResponse(
     val user: BackendUser
 )
@@ -100,7 +107,7 @@ interface AuthApiService {
     suspend fun usersByRole(): UsersByRoleResponse
 
     @POST("api/login")
-    suspend fun login(@Body body: com.example.echo_panda_mobile.data.model.LoginRequest): com.example.echo_panda_mobile.data.model.AuthResponse
+    suspend fun login(@Body body: com.example.echo_panda_mobile.data.model.LoginRequest): LoginApiResponse
 
     @POST("api/logout")
     suspend fun logout()

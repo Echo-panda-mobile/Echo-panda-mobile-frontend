@@ -32,38 +32,76 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
         return try {
             android.util.Log.d("AuthRepository", "━━━ ARTIST LOGIN START ━━━")
             android.util.Log.d("AuthRepository", "Email: ${request.email}")
-            
+
             val response = authApi.login(request)
             android.util.Log.d("AuthRepository", "✓ Login API response received")
-            
+
             if (response.token.isBlank()) {
                 return AuthResult.Error("Login failed: Server returned no authentication token")
             }
-            
-            val finalRole = if (response.user.role.isBlank() || response.user.role.lowercase().trim() == "user") {
-                "artist"
-            } else {
-                response.user.role.lowercase().trim()
-            }
-            
-            val resolvedPhoto = resolveUserProfileImageUrl(response.user.id, response.user.photoUrl)
-            val updatedUser = response.user.copy(role = finalRole, photoUrl = resolvedPhoto)
-            val finalResponse = response.copy(user = updatedUser)
 
-            tokenStorage.saveToken(finalResponse.token)
-            tokenStorage.saveRole(finalRole)
-            tokenStorage.saveEmail(finalResponse.user.email)
-            tokenStorage.saveName(finalResponse.user.name)
-            tokenStorage.saveUserId(finalResponse.user.id)
-            
+            val role = response.user.role.trim().lowercase()
+            if (role !in CREATOR_ROLES) {
+                return AuthResult.Error(
+                    "Access denied. Backend role for ${response.user.email} is '$role'. " +
+                        "Set Laravel users.role to artist/publicer/admin for this account."
+                )
+            }
+
+            val artistId = response.user.artist_id ?: response.user.artist?.id
+            val resolvedPhoto = resolveUserProfileImageUrl(
+                response.user.id,
+                response.user.imageUrl ?: response.user.artist?.profileImageSource()
+            )
+
+            tokenStorage.saveToken(response.token)
+            tokenStorage.saveRole(role)
+            tokenStorage.saveEmail(response.user.email)
+            tokenStorage.saveName(response.user.name)
+            tokenStorage.saveUserId(response.user.id)
+            if (artistId != null) {
+                tokenStorage.saveArtistId(artistId)
+            }
+
             RetrofitClient.resetAll()
-            
-            android.util.Log.d("AuthRepository", "━━━ ARTIST LOGIN SUCCESS ━━━")
-            AuthResult.Success(finalResponse)
+
+            val user = User(
+                id = response.user.id,
+                name = response.user.name,
+                email = response.user.email,
+                role = role,
+                token = response.token,
+                photoUrl = resolvedPhoto,
+                artistId = artistId,
+            )
+
+            android.util.Log.d("AuthRepository", "━━━ ARTIST LOGIN SUCCESS (role=$role artistId=$artistId) ━━━")
+            AuthResult.Success(
+                AuthResponse(
+                    user = user,
+                    token = response.token,
+                    message = response.message,
+                )
+            )
         } catch (e: Exception) {
             android.util.Log.e("AuthRepository", "Artist login failed: ${e.message}")
             AuthResult.Error(e.message ?: "Artist login failed")
         }
+    }
+
+    private suspend fun loginCreatorAccount(email: String, password: String): AuthResult<AuthResponse> {
+        // Match web artist studio: Firebase sign-in + /api/firebase/session Sanctum token.
+        val firebaseResult = runCatching { loginFirebaseUser(email, password) }.getOrNull()
+        if (firebaseResult is AuthResult.Success) {
+            val role = firebaseResult.data.user.role.lowercase()
+            if (role in CREATOR_ROLES) {
+                android.util.Log.d("AuthRepository", "Creator login via Firebase session (role=$role)")
+                return firebaseResult
+            }
+        }
+
+        android.util.Log.d("AuthRepository", "Firebase session unavailable; falling back to /api/login")
+        return artistLogin(LoginRequest(email = email, password = password))
     }
 
     suspend fun login(request: LoginRequest): AuthResult<AuthResponse> {
@@ -81,7 +119,7 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
         if (adminDoc != null) {
             val storedPassword = adminDoc.getString("password")?.trim().orEmpty()
             if (storedPassword == password) {
-                return artistLogin(request) 
+                return loginCreatorAccount(email, password)
             } else {
                 return AuthResult.Error("Incorrect password for Admin account.")
             }
@@ -92,7 +130,7 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
         if (artistDoc != null) {
             val storedPassword = artistDoc.getString("password")?.trim().orEmpty()
             if (storedPassword == password) {
-                return artistLogin(request)
+                return loginCreatorAccount(email, password)
             } else {
                 return AuthResult.Error("Incorrect password for Artist account.")
             }
@@ -185,7 +223,10 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
         val token = tokenStorage.getToken() ?: ""
         val role = backend.role.trim().lowercase()
         val artistId = backend.artist_id ?: backend.artist?.id
-        val resolvedPhoto = resolveUserProfileImageUrl(backend.id, backend.imageUrl)
+        
+        // Prioritize user image, fallback to artist profile image
+        val rawPhoto = backend.imageUrl ?: backend.artist?.profileImageSource()
+        val resolvedPhoto = resolveUserProfileImageUrl(backend.id, rawPhoto)
 
         tokenStorage.saveRole(role)
         tokenStorage.saveEmail(backend.email)
@@ -407,7 +448,7 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
 
             val resolvedPhoto = resolveUserProfileImageUrl(
                 response.user.id,
-                response.user.imageUrl
+                response.user.imageUrl ?: response.user.artist?.profileImageSource()
             )
 
             val user = User(
@@ -431,6 +472,10 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Backend sync failed.")
         }
+    }
+
+    companion object {
+        private val CREATOR_ROLES = setOf("artist", "publicer", "admin")
     }
 
     private fun mapFirebaseAuthError(e: Exception): String = when {
