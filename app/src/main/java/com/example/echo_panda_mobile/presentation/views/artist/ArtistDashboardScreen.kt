@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +38,7 @@ import com.example.echo_panda_mobile.presentation.viewsmodel.ArtistDashboardView
 import com.example.echo_panda_mobile.presentation.viewsmodel.ArtistDashboardViewModelFactory
 import androidx.compose.ui.platform.LocalContext
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArtistDashboardScreen(
     currentUser: User?,
@@ -46,6 +48,7 @@ fun ArtistDashboardScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val hasUnread by viewModel.hasUnreadNotifications.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     val scrollState = rememberScrollState()
 
     LaunchedEffect(currentUser) {
@@ -58,28 +61,32 @@ fun ArtistDashboardScreen(
         containerColor = Color(0xFF05070D),
         bottomBar = { ArtistBottomBar(Routes.ARTIST_DASHBOARD, onNavigate) }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (val state = uiState) {
-                is ArtistDashboardViewModel.DashboardUiState.Loading -> {
-                    ArtistDashboardSkeleton()
-                }
-                is ArtistDashboardViewModel.DashboardUiState.Success -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(scrollState)
-                    ) {
-                        ArtistDashboardHeader(
-                            user = state.data.user,
-                            onLogout = onLogout,
-                            onNavigate = onNavigate,
-                            hasUnreadNotifications = hasUnread
-                        )
-                        
-                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                            Spacer(Modifier.height(24.dp))
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { currentUser?.let { viewModel.refreshDashboard(it) } },
+            modifier = Modifier.padding(padding)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (val state = uiState) {
+                    is ArtistDashboardViewModel.DashboardUiState.Loading -> {
+                        ArtistDashboardSkeleton()
+                    }
+                    is ArtistDashboardViewModel.DashboardUiState.Success -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(scrollState)
+                        ) {
+                            ArtistDashboardHeader(
+                                user = state.data.user,
+                                onLogout = onLogout,
+                                onNavigate = onNavigate,
+                                hasUnreadNotifications = hasUnread
+                            )
+                            
+                            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                Spacer(Modifier.height(24.dp))
 
-                            if (state.data.topListenedSongs.isNotEmpty()) {
                                 TopListenedSongsSection(
                                     songs = state.data.topListenedSongs,
                                     onSongClick = { songId ->
@@ -87,25 +94,21 @@ fun ArtistDashboardScreen(
                                     }
                                 )
                                 Spacer(Modifier.height(32.dp))
+                                
+                                RecentActivitySection(activities = state.data.recentActivities)
+                                
+                                Spacer(Modifier.height(32.dp))
+                                
+                                QuickActionsSection(onNavigate = onNavigate)
+                                
+                                Spacer(Modifier.height(40.dp))
                             }
-                            
-
-                            
-                            Spacer(Modifier.height(32.dp))
-                            
-                            RecentActivitySection(activities = state.data.recentActivities)
-                            
-                            Spacer(Modifier.height(32.dp))
-                            
-                            QuickActionsSection(onNavigate = onNavigate)
-                            
-                            Spacer(Modifier.height(40.dp))
                         }
                     }
-                }
-                is ArtistDashboardViewModel.DashboardUiState.Error -> {
-                    ErrorState(message = state.message) { 
-                        viewModel.loadDashboard(currentUser)
+                    is ArtistDashboardViewModel.DashboardUiState.Error -> {
+                        ErrorState(message = state.message) { 
+                            viewModel.loadDashboard(currentUser)
+                        }
                     }
                 }
             }
@@ -235,14 +238,22 @@ private fun TopListenedSongsSection(
             fontWeight = FontWeight.Bold
         )
         Spacer(Modifier.height(16.dp))
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(songs, key = { it.id }) { song ->
-                TopListenedSongCard(
-                    song = song,
-                    onClick = { onSongClick(song.id) }
-                )
+        if (songs.isEmpty()) {
+            Text(
+                text = "No songs yet. Upload a track to see listening stats here.",
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 13.sp
+            )
+        } else {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(songs, key = { it.id }) { song ->
+                    TopListenedSongCard(
+                        song = song,
+                        onClick = { onSongClick(song.id) }
+                    )
+                }
             }
         }
     }
@@ -394,22 +405,7 @@ private fun QuickActionsSection(onNavigate: (String) -> Unit) {
                     onClick = { onNavigate(Routes.ARTIST_ALBUMS) }
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                QuickActionButton(
-                    title = "Support",
-                    icon = Icons.AutoMirrored.Filled.HelpOutline,
-                    color = Color(0xFF4CAF50),
-                    modifier = Modifier.weight(1f),
-                    onClick = { /* Navigate to support */ }
-                )
-                QuickActionButton(
-                    title = "Comments",
-                    icon = Icons.AutoMirrored.Filled.Comment,
-                    color = Color(0xFFFFC107),
-                    modifier = Modifier.weight(1f),
-                    onClick = { onNavigate(Routes.ARTIST_COMMENTS) }
-                )
-            }
+           
         }
     }
 }

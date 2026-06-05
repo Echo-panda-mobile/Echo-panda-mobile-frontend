@@ -205,7 +205,8 @@ data class SongDto(
     @SerializedName("category_id") val categoryId: Int? = null,
     @SerializedName("tag_id") val tagId: Int? = null,
     @SerializedName("is_favorited") val isFavorite: Boolean? = null,
-    @SerializedName("is_active") val isActive: Boolean? = true
+    @SerializedName("is_active") val isActive: Boolean? = true,
+    @SerializedName("play_count") val playCount: Int? = null
 ) {
     fun getDisplayCoverUrl(): String? = coverUrl ?: coverKey ?: album?.getDisplayCoverUrl()
 }

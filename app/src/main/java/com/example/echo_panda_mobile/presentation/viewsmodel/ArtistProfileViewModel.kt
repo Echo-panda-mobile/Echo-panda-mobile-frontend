@@ -24,6 +24,7 @@ import android.net.Uri
 
 data class ArtistProfileUiState(
     val isLoading: Boolean = true,
+    val isRefreshing: Boolean = false,
     val user: User? = null,
     val bio: String = "",
     val artistImageUrl: String? = null,
@@ -51,9 +52,13 @@ class ArtistProfileViewModel(
         loadProfile()
     }
 
-    fun loadProfile() {
+    fun loadProfile(isRefresh: Boolean = false) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            if (isRefresh) {
+                _uiState.value = _uiState.value.copy(isRefreshing = true)
+            } else {
+                _uiState.value = _uiState.value.copy(isLoading = true)
+            }
             try {
                 val user = authRepository.getCurrentUserProfile()
                 var currentBio = ""
@@ -74,6 +79,7 @@ class ArtistProfileViewModel(
 
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     isUpdating = false,
                     user = user,
                     bio = currentBio,
@@ -84,6 +90,7 @@ class ArtistProfileViewModel(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     isUpdating = false,
                     errorMessage = e.message ?: "An unexpected error occurred"
                 )

@@ -117,7 +117,9 @@ class DashboardRepository(
 
                     if (analytics == null) {
                         android.util.Log.w("DashboardRepository", "⚠️ Analytics data field is null in response")
-                        return DashboardResult.Success(createEmptyDashboard(user))
+                        return DashboardResult.Success(
+                            createEmptyDashboard(user).copy(topListenedSongs = topSongs)
+                        )
                     }
 
                     val dashboardData = ArtistDashboardData(
@@ -170,27 +172,37 @@ class DashboardRepository(
         val service = apiService ?: return emptyList()
         return try {
             val response = service.getArtistTopListenedSongs(limit = limit)
-            if (!response.isSuccessful) return emptyList()
-
-            val items = response.body()?.data ?: return emptyList()
-            coroutineScope {
-                items.map { dto ->
-                    async {
-                        val song = dto.song
-                        val songId = (song.id ?: 0).toString()
-                        val imageUrl = resolveSongCoverUrl(songId, song.getDisplayCoverUrl())
-                        TopListenedSong(
-                            id = songId,
-                            title = song.title ?: song.name ?: "Unknown",
-                            imageUrl = imageUrl,
-                            playCount = dto.playCount ?: 0
-                        )
-                    }
-                }.awaitAll()
+            if (!response.isSuccessful) {
+                android.util.Log.w(
+                    "DashboardRepository",
+                    "Top listened API failed: ${response.code()} ${response.message()}"
+                )
+                return emptyList()
             }
+
+            mapTopSongDtos(response.body()?.data.orEmpty())
         } catch (e: Exception) {
-            android.util.Log.e("DashboardRepository", "Failed to load top listened songs: ${e.message}")
+            android.util.Log.e("DashboardRepository", "Failed to load top listened songs: ${e.message}", e)
             emptyList()
+        }
+    }
+
+    private suspend fun mapTopSongDtos(items: List<MbArtistTopSongDto>): List<TopListenedSong> {
+        if (items.isEmpty()) return emptyList()
+        return coroutineScope {
+            items.map { dto ->
+                async {
+                    val song = dto.song
+                    val songId = (song.id ?: 0).toString()
+                    val imageUrl = resolveSongCoverUrl(songId, song.getDisplayCoverUrl())
+                    TopListenedSong(
+                        id = songId,
+                        title = song.title ?: song.name ?: "Unknown",
+                        imageUrl = imageUrl,
+                        playCount = dto.playCount ?: song.playCount ?: 0
+                    )
+                }
+            }.awaitAll()
         }
     }
 

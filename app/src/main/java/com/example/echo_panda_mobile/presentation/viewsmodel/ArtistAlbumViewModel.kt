@@ -26,6 +26,8 @@ class ArtistAlbumViewModel(
     }
 
     private val _loading = MutableStateFlow(false)
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing
     private val _error = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<AlbumUiState> = combine(
@@ -48,15 +50,15 @@ class ArtistAlbumViewModel(
         loadMyAlbums()
     }
 
-    fun loadMyAlbums() {
+    fun loadMyAlbums(isRefresh: Boolean = false) {
         viewModelScope.launch {
-            _loading.value = true
+            if (isRefresh) _isRefreshing.value = true else _loading.value = true
             _error.value = null
             val result = repository.getMyAlbums()
             if (result.isFailure) {
                 _error.value = result.exceptionOrNull()?.message ?: "Unknown error"
             }
-            _loading.value = false
+            if (isRefresh) _isRefreshing.value = false else _loading.value = false
         }
     }
 

@@ -9,7 +9,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +38,7 @@ fun ArtistNotificationScreen(
     viewModel: ArtistNotificationViewModel = viewModel(factory = ArtistNotificationViewModelFactory(LocalContext.current))
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     Scaffold(
         containerColor = Color(0xFF05070D),
@@ -50,31 +54,50 @@ fun ArtistNotificationScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (val state = uiState) {
-                is ArtistNotificationViewModel.NotificationUiState.Loading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = EchoPandaColors.AccentBlue)
-                }
-                is ArtistNotificationViewModel.NotificationUiState.Success -> {
-                    if (state.notifications.isEmpty()) {
-                        Text("No notifications", color = Color.White.copy(alpha = 0.5f), modifier = Modifier.align(Alignment.Center))
-                    } else {
-                        LazyColumn(
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            items(state.notifications) { notification ->
-                                NotificationRow(notification)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.loadNotifications(isRefresh = true) },
+            modifier = Modifier.padding(padding)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (val state = uiState) {
+                    is ArtistNotificationViewModel.NotificationUiState.Loading -> {
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = EchoPandaColors.AccentBlue)
+                    }
+                    is ArtistNotificationViewModel.NotificationUiState.Success -> {
+                        if (state.notifications.isEmpty()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("No notifications", color = Color.White.copy(alpha = 0.5f))
+                            }
+                        } else {
+                            LazyColumn(
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(state.notifications) { notification ->
+                                    NotificationRow(notification)
+                                }
                             }
                         }
                     }
-                }
-                is ArtistNotificationViewModel.NotificationUiState.Error -> {
-                    Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Error: ${state.message}", color = Color.Red)
-                        Button(onClick = { viewModel.loadNotifications() }) {
-                            Text("Retry")
+                    is ArtistNotificationViewModel.NotificationUiState.Error -> {
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .verticalScroll(rememberScrollState()),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("Error: ${state.message}", color = Color.Red)
+                            Button(onClick = { viewModel.loadNotifications() }) {
+                                Text("Retry")
+                            }
                         }
                     }
                 }

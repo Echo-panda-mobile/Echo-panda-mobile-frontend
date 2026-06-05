@@ -5,11 +5,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,12 +36,14 @@ import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
 import com.example.echo_panda_mobile.presentation.viewsmodel.ArtistMusicViewModel
 import com.example.echo_panda_mobile.presentation.viewsmodel.ArtistMusicViewModelFactory
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArtistMusicScreen(
     onNavigate: (String) -> Unit,
     viewModel: ArtistMusicViewModel = viewModel(factory = ArtistMusicViewModelFactory(LocalContext.current))
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
 
     Scaffold(
@@ -96,52 +101,65 @@ fun ArtistMusicScreen(
         },
         bottomBar = { ArtistBottomBar(Routes.ARTIST_MY_MUSIC, onNavigate) }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (val state = uiState) {
-                is ArtistMusicViewModel.MusicUiState.Loading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        color = EchoPandaColors.AccentBlue
-                    )
-                }
-                is ArtistMusicViewModel.MusicUiState.Success -> {
-                    val filteredSongs = if (searchQuery.isBlank()) state.songs 
-                                        else state.songs.filter { it.title?.contains(searchQuery, ignoreCase = true) == true }
-                    
-                    if (filteredSongs.isEmpty()) {
-                        EmptyCatalog(onUpload = { onNavigate(Routes.ARTIST_UPLOAD) })
-                    } else {
-                        LazyColumn(
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            item {
-                                Text(
-                                    "${filteredSongs.size} Songs Found",
-                                    color = Color.White.copy(alpha = 0.5f),
-                                    fontSize = 14.sp,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.loadMyMusic(isRefresh = true) },
+            modifier = Modifier.padding(padding)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (val state = uiState) {
+                    is ArtistMusicViewModel.MusicUiState.Loading -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.align(Alignment.Center),
+                            color = EchoPandaColors.AccentBlue
+                        )
+                    }
+                    is ArtistMusicViewModel.MusicUiState.Success -> {
+                        val filteredSongs = if (searchQuery.isBlank()) state.songs 
+                                            else state.songs.filter { it.title?.contains(searchQuery, ignoreCase = true) == true }
+                        
+                        if (filteredSongs.isEmpty()) {
+                            // Empty Catalog needs to be scrollable for pull to refresh to work
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                EmptyCatalog(onUpload = { onNavigate(Routes.ARTIST_UPLOAD) })
                             }
-                            items(filteredSongs) { song ->
-                                ArtistTrackRow(
-                                    song = song,
-                                    onDelete = { viewModel.deleteSong(song.id.toString()) },
-                                    onEdit = {
-                                        onNavigate(Routes.ARTIST_EDIT_SONG.replace("{trackId}", song.id.toString()))
-                                    },
-                                    onClick = {
-                                        onNavigate(Routes.ARTIST_PLAYER.replace("{trackId}", song.id.toString()))
-                                    }
-                                )
+                        } else {
+                            LazyColumn(
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                item {
+                                    Text(
+                                        "${filteredSongs.size} Songs Found",
+                                        color = Color.White.copy(alpha = 0.5f),
+                                        fontSize = 14.sp,
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+                                }
+                                items(filteredSongs) { song ->
+                                    ArtistTrackRow(
+                                        song = song,
+                                        onDelete = { viewModel.deleteSong(song.id.toString()) },
+                                        onEdit = {
+                                            onNavigate(Routes.ARTIST_EDIT_SONG.replace("{trackId}", song.id.toString()))
+                                        },
+                                        onClick = {
+                                            onNavigate(Routes.ARTIST_PLAYER.replace("{trackId}", song.id.toString()))
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
-                }
-                is ArtistMusicViewModel.MusicUiState.Error -> {
-                    ErrorState(message = state.message) {
-                        viewModel.loadMyMusic()
+                    is ArtistMusicViewModel.MusicUiState.Error -> {
+                        ErrorState(message = state.message) {
+                            viewModel.loadMyMusic()
+                        }
                     }
                 }
             }

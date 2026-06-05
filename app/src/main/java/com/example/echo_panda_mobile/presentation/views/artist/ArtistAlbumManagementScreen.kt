@@ -11,7 +11,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +45,7 @@ fun ArtistAlbumManagementScreen(
     viewModel: ArtistAlbumViewModel = viewModel(factory = ArtistAlbumViewModelFactory(LocalContext.current))
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     // Refresh when returning to this screen
     LaunchedEffect(Unit) {
@@ -80,47 +84,59 @@ fun ArtistAlbumManagementScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // Background subtle gradient
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(EchoPandaColors.AccentBlue.copy(alpha = 0.05f), Color.Transparent)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.loadMyAlbums(isRefresh = true) },
+            modifier = Modifier.padding(padding)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Background subtle gradient
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(EchoPandaColors.AccentBlue.copy(alpha = 0.05f), Color.Transparent)
+                            )
                         )
-                    )
-            )
-            
-            when (val state = uiState) {
-                is ArtistAlbumViewModel.AlbumUiState.Loading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        color = EchoPandaColors.AccentBlue
-                    )
-                }
-                is ArtistAlbumViewModel.AlbumUiState.Success -> {
-                    if (state.albums.isEmpty()) {
-                        EmptyAlbumState(onNavigateToCreate)
-                    } else {
-                        LazyColumn(
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            items(state.albums) { album ->
-                                AlbumManageRow(
-                                    album = album,
-                                    onDelete = { viewModel.deleteAlbum(album.id.toString()) }
-                                )
+                )
+                
+                when (val state = uiState) {
+                    is ArtistAlbumViewModel.AlbumUiState.Loading -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.align(Alignment.Center),
+                            color = EchoPandaColors.AccentBlue
+                        )
+                    }
+                    is ArtistAlbumViewModel.AlbumUiState.Success -> {
+                        if (state.albums.isEmpty()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                EmptyAlbumState(onNavigateToCreate)
+                            }
+                        } else {
+                            LazyColumn(
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(state.albums) { album ->
+                                    AlbumManageRow(
+                                        album = album,
+                                        onDelete = { viewModel.deleteAlbum(album.id.toString()) }
+                                    )
+                                }
                             }
                         }
                     }
-                }
-                is ArtistAlbumViewModel.AlbumUiState.Error -> {
-                    ErrorState(message = state.message) {
-                        viewModel.loadMyAlbums()
+                    is ArtistAlbumViewModel.AlbumUiState.Error -> {
+                        ErrorState(message = state.message) {
+                            viewModel.loadMyAlbums()
+                        }
                     }
                 }
             }

@@ -27,19 +27,23 @@ class ArtistNotificationViewModel(
     private val _uiState = MutableStateFlow<NotificationUiState>(NotificationUiState.Loading)
     val uiState: StateFlow<NotificationUiState> = _uiState.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     init {
         loadNotifications()
     }
 
-    fun loadNotifications() {
+    fun loadNotifications(isRefresh: Boolean = false) {
         viewModelScope.launch {
-            _uiState.value = NotificationUiState.Loading
+            if (isRefresh) _isRefreshing.value = true else _uiState.value = NotificationUiState.Loading
             val result = repository.getNotifications()
             _uiState.value = when (result) {
                 is DashboardResult.Success -> NotificationUiState.Success(result.data)
                 is DashboardResult.Error -> NotificationUiState.Error(result.message)
                 DashboardResult.Loading -> NotificationUiState.Loading
             }
+            if (isRefresh) _isRefreshing.value = false
         }
     }
 }
