@@ -161,6 +161,7 @@ fun ArtistMusicScreen(
                     }
                     is ArtistMusicViewModel.MusicUiState.Success -> {
                         if (typeFilter == CatalogTypeFilter.ALBUM) {
+                            val trackCountByAlbumId = songCountByAlbumId(state.songs)
                             val filteredAlbums = state.albums
                                 .filter { album ->
                                     searchQuery.isBlank() ||
@@ -168,7 +169,9 @@ fun ArtistMusicScreen(
                                 }
                                 .let { albums ->
                                     if (sortFilter == CatalogSortFilter.MOST_PLAYED) {
-                                        albums.sortedByDescending { it.songsCount ?: 0 }
+                                        albums.sortedByDescending { album ->
+                                            trackCountByAlbumId[album.id] ?: album.songsCount ?: 0
+                                        }
                                     } else {
                                         albums
                                     }
@@ -199,7 +202,10 @@ fun ArtistMusicScreen(
                                     items(filteredAlbums, key = { it.id }) { album ->
                                         ArtistAlbumRow(
                                             album = album,
-                                            showTrackCount = sortFilter == CatalogSortFilter.MOST_PLAYED,
+                                            trackCount = trackCountByAlbumId[album.id]
+                                                ?: album.songsCount
+                                                ?: 0,
+                                            highlightTrackCount = sortFilter == CatalogSortFilter.MOST_PLAYED,
                                             onClick = { viewModel.loadAlbumTracks(album) },
                                         )
                                     }
@@ -457,10 +463,21 @@ private fun EmptyCatalog(onUpload: () -> Unit) {
     }
 }
 
+private fun songCountByAlbumId(songs: List<SongDto>): Map<Int, Int> {
+    return songs
+        .mapNotNull { song ->
+            val albumId = song.albumId ?: song.album?.id
+            albumId?.let { id -> id to song }
+        }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, albumSongs) -> albumSongs.size }
+}
+
 @Composable
 private fun ArtistAlbumRow(
     album: AlbumDto,
-    showTrackCount: Boolean = false,
+    trackCount: Int,
+    highlightTrackCount: Boolean = false,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -500,16 +517,13 @@ private fun ArtistAlbumRow(
                         color = Color.White.copy(alpha = 0.5f),
                         fontSize = 12.sp
                     )
-                    val trackCount = album.songsCount ?: 0
-                    if (showTrackCount || trackCount > 0) {
-                        Text(" • ", color = Color.White.copy(alpha = 0.2f))
-                        Text(
-                            "$trackCount Track${if (trackCount == 1) "" else "s"}",
-                            color = if (showTrackCount) Color(0xFF4ADE80) else Color.White.copy(alpha = 0.5f),
-                            fontSize = 11.sp,
-                            fontWeight = if (showTrackCount) FontWeight.Bold else FontWeight.Normal,
-                        )
-                    }
+                    Text(" • ", color = Color.White.copy(alpha = 0.2f))
+                    Text(
+                        "$trackCount Track${if (trackCount == 1) "" else "s"}",
+                        color = if (highlightTrackCount) Color(0xFF4ADE80) else Color.White.copy(alpha = 0.5f),
+                        fontSize = 11.sp,
+                        fontWeight = if (highlightTrackCount) FontWeight.Bold else FontWeight.Normal,
+                    )
                 }
             }
 
