@@ -49,6 +49,7 @@ fun ArtistEditSongScreen(
     var selectedTagId by remember { mutableStateOf<String?>(null) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var validationError by remember { mutableStateOf("") }
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
     val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedImageUri = uri
@@ -80,6 +81,13 @@ fun ArtistEditSongScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.deleteSuccess.collect {
+            Toast.makeText(context, "Song deleted successfully", Toast.LENGTH_SHORT).show()
+            onBack()
+        }
+    }
+
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
             android.util.Log.e("ArtistEditSong", "UI error: $it")
@@ -91,7 +99,7 @@ fun ArtistEditSongScreen(
         }
     }
 
-    val canSave = uiState.song != null && !uiState.isSaving
+    val canSave = uiState.song != null && !uiState.isSaving && !uiState.isDeleting
 
     fun attemptSave() {
         android.util.Log.d("ArtistEditSong", "Save clicked title='$title' genreId=$selectedGenreId songLoaded=${uiState.song != null}")
@@ -261,12 +269,27 @@ fun ArtistEditSongScreen(
                         Text("Save Changes", color = Color.Black, fontWeight = FontWeight.Bold)
                     }
 
+                    OutlinedButton(
+                        onClick = { showDeleteDialog = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        enabled = canSave,
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, EchoPandaColors.ErrorRed.copy(alpha = 0.5f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = EchoPandaColors.ErrorRed),
+                    ) {
+                        Icon(Icons.Default.Delete, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Delete Song", fontWeight = FontWeight.Bold)
+                    }
+
                     Spacer(Modifier.height(24.dp))
                 }
             }
             }
 
-            if (uiState.isSaving) {
+            if (uiState.isSaving || uiState.isDeleting) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = Color.Black.copy(alpha = 0.45f),
@@ -277,6 +300,35 @@ fun ArtistEditSongScreen(
                 }
             }
         }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            containerColor = Color(0xFF121A26),
+            title = { Text("Delete Song", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Are you sure you want to delete \"${uiState.song?.title ?: "this song"}\"? This action cannot be undone.",
+                    color = Color.White.copy(alpha = 0.7f),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        viewModel.deleteSong(songId)
+                    },
+                ) {
+                    Text("Delete", color = EchoPandaColors.ErrorRed, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel", color = Color.White)
+                }
+            },
+        )
     }
 }
 

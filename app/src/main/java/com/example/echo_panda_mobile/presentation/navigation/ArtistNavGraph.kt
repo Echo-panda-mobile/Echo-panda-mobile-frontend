@@ -99,7 +99,11 @@ fun NavGraphBuilder.artistNavGraph(
                 onNavigateToCreate = { 
                     android.util.Log.d("NAVIGATION", "Navigating to: ${Routes.ARTIST_CREATE_ALBUM}")
                     navController.navigate(Routes.ARTIST_CREATE_ALBUM) 
-                }
+                },
+                onNavigate = { route ->
+                    android.util.Log.d("NAVIGATION", "ArtistAlbums navigating to: $route")
+                    navController.navigate(route)
+                },
             )
         }
 

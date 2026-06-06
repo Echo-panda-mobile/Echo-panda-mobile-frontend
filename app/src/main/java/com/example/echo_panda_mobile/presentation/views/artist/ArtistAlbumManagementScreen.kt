@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.echo_panda_mobile.data.remote.AlbumDto
+import com.example.echo_panda_mobile.presentation.components.AlbumTracksBottomSheet
 import com.example.echo_panda_mobile.presentation.components.ErrorState
 import com.example.echo_panda_mobile.presentation.navigation.Routes
 import com.example.echo_panda_mobile.presentation.theme.EchoPandaColors
@@ -42,10 +43,12 @@ import com.example.echo_panda_mobile.presentation.viewsmodel.ArtistAlbumViewMode
 fun ArtistAlbumManagementScreen(
     onBack: () -> Unit,
     onNavigateToCreate: () -> Unit,
+    onNavigate: (String) -> Unit = {},
     viewModel: ArtistAlbumViewModel = viewModel(factory = ArtistAlbumViewModelFactory(LocalContext.current))
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val albumTracks by viewModel.albumTracks.collectAsState()
 
     // Refresh when returning to this screen
     LaunchedEffect(Unit) {
@@ -124,9 +127,10 @@ fun ArtistAlbumManagementScreen(
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
-                                items(state.albums) { album ->
+                                items(state.albums, key = { it.id }) { album ->
                                     AlbumManageRow(
                                         album = album,
+                                        onManageTracks = { viewModel.loadAlbumTracks(album) },
                                         onDelete = { viewModel.deleteAlbum(album.id.toString()) }
                                     )
                                 }
@@ -142,6 +146,24 @@ fun ArtistAlbumManagementScreen(
             }
         }
     }
+
+    AlbumTracksBottomSheet(
+        visible = albumTracks.album != null,
+        albumTitle = albumTracks.album?.title ?: "Album",
+        isLoading = albumTracks.isLoading,
+        error = albumTracks.error,
+        songs = albumTracks.songs,
+        onDismiss = { viewModel.dismissAlbumTracks() },
+        onRetry = { albumTracks.album?.let { viewModel.loadAlbumTracks(it) } },
+        onSongClick = { songId ->
+            viewModel.dismissAlbumTracks()
+            onNavigate(Routes.ARTIST_PLAYER.replace("{trackId}", songId))
+        },
+        onEditSong = { songId ->
+            viewModel.dismissAlbumTracks()
+            onNavigate(Routes.ARTIST_EDIT_SONG.replace("{trackId}", songId))
+        },
+    )
 }
 
 @Composable
@@ -184,6 +206,7 @@ private fun EmptyAlbumState(onNavigateToCreate: () -> Unit) {
 @Composable
 private fun AlbumManageRow(
     album: AlbumDto,
+    onManageTracks: () -> Unit,
     onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -273,7 +296,8 @@ private fun AlbumManageRow(
                         )
                     }
                     Spacer(Modifier.width(8.dp))
-                    Text("12 Tracks", color = Color.White.copy(alpha = 0.3f), fontSize = 11.sp)
+                    val trackLabel = album.songsCount?.let { "$it Track${if (it == 1) "" else "s"}" } ?: "Tracks"
+                    Text(trackLabel, color = Color.White.copy(alpha = 0.3f), fontSize = 11.sp)
                 }
             }
             
@@ -298,7 +322,10 @@ private fun AlbumManageRow(
                     DropdownMenuItem(
                         text = { Text("Manage Tracks", color = Color.White) },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, null, tint = Color(0xFFA78BFA)) },
-                        onClick = { showMenu = false }
+                        onClick = {
+                            showMenu = false
+                            onManageTracks()
+                        }
                     )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                     DropdownMenuItem(

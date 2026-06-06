@@ -48,12 +48,15 @@ class ArtistRepository(
                 }
                 
                 // Resolve Image URLs for each song
+                val playCountBySongId = fetchTopListenedPlayCounts()
+
                 val enrichedSongs = coroutineScope {
                     filteredSongs.map { song ->
                         async {
                             val songId = song.id?.toString() ?: return@async song
                             val resolvedUrl = resolveSongCoverUrl(songId, song.getDisplayCoverUrl())
-                            song.copy(coverUrl = resolvedUrl)
+                            val playCount = song.id?.let { playCountBySongId[it] } ?: song.playCount ?: 0
+                            song.copy(coverUrl = resolvedUrl, playCount = playCount)
                         }
                     }.awaitAll()
                 }
@@ -66,6 +69,24 @@ class ArtistRepository(
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Uses existing mobile dashboard endpoint (max 20 songs) for listen + stream totals.
+     * Other catalog songs fall back to [SongDto.playCount] from GET /api/songs.
+     */
+    private suspend fun fetchTopListenedPlayCounts(): Map<Int, Int> {
+        return try {
+            val response = apiService.getArtistTopListenedSongs(limit = 20)
+            if (!response.isSuccessful) return emptyMap()
+            response.body()?.data.orEmpty().mapNotNull { row ->
+                val songId = row.song.id ?: return@mapNotNull null
+                songId to (row.playCount ?: row.song.playCount ?: 0)
+            }.toMap()
+        } catch (e: Exception) {
+            android.util.Log.w("ArtistRepository", "Top listened play counts unavailable: ${e.message}")
+            emptyMap()
         }
     }
 
@@ -228,6 +249,32 @@ class ArtistRepository(
             } else {
                 Result.failure(Exception("Failed to delete album"))
             }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getSongsForAlbum(albumId: Int): Result<List<SongDto>> = withContext(Dispatchers.IO) {
+        try {
+            val response = apiService.getSongs(albumId = albumId, perPage = 500, sortBy = "track_number")
+            if (!response.isSuccessful || response.body() == null) {
+                return@withContext Result.failure(Exception("Failed to load album tracks (${response.code()})"))
+            }
+
+            val songs = response.body()!!.data
+                .sortedBy { it.trackNumber ?: Int.MAX_VALUE }
+
+            val enrichedSongs = coroutineScope {
+                songs.map { song ->
+                    async {
+                        val songId = song.id?.toString() ?: return@async song
+                        val resolvedUrl = resolveSongCoverUrl(songId, song.getDisplayCoverUrl())
+                        song.copy(coverUrl = resolvedUrl)
+                    }
+                }.awaitAll()
+            }
+
+            Result.success(enrichedSongs)
         } catch (e: Exception) {
             Result.failure(e)
         }

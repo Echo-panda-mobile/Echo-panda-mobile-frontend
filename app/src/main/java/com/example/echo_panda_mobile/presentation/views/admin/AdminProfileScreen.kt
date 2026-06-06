@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,97 +79,102 @@ fun AdminProfileScreen(
         },
         containerColor = BgDark
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(scrollState)
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        PullToRefreshBox(
+            isRefreshing = uiState.isLoading,
+            onRefresh = { viewModel.loadAdminProfile() },
+            modifier = Modifier.padding(paddingValues)
         ) {
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Box(
+            Column(
                 modifier = Modifier
-                    .size(120.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.05f)),
-                contentAlignment = Alignment.Center
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = AccentPurple
-                )
-            }
+                Spacer(modifier = Modifier.height(32.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = user?.name ?: "Admin User",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Text(
-                text = user?.email ?: "admin@echopanda.com",
-                fontSize = 14.sp,
-                color = TextMuted
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Surface(
-                color = AccentPurple.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, AccentPurple.copy(alpha = 0.2f))
-            ) {
-                Text(
-                    text = roleLabel,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                    color = AccentPurple,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (uiState.isLoading) {
-                CircularProgressIndicator(color = AccentPurple)
-            }
-
-            uiState.errorMessage?.let { message ->
-                Text(
-                    text = message,
-                    color = Color(0xFFFF5252),
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(vertical = 12.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-
-
-            Button(
-                onClick = { showLogoutDialog = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252).copy(alpha = 0.1f)),
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF5252).copy(alpha = 0.3f))
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = Color(0xFFFF5252))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Log Out", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.05f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = AccentPurple
+                    )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = user?.name ?: "Admin User",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = user?.email ?: "admin@echopanda.com",
+                    fontSize = 14.sp,
+                    color = TextMuted
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Surface(
+                    color = AccentPurple.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentPurple.copy(alpha = 0.2f))
+                ) {
+                    Text(
+                        text = roleLabel,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        color = AccentPurple,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (uiState.isLoading && uiState.user == null) {
+                    CircularProgressIndicator(color = AccentPurple)
+                }
+
+                uiState.errorMessage?.let { message ->
+                    Text(
+                        text = message,
+                        color = Color(0xFFFF5252),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+
+
+                Button(
+                    onClick = { showLogoutDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252).copy(alpha = 0.1f)),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF5252).copy(alpha = 0.3f))
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = Color(0xFFFF5252))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Log Out", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+            }
         }
     }
 }

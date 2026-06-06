@@ -1,23 +1,29 @@
 package com.example.echo_panda_mobile.presentation.views.admin
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.foundation.clickable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -25,9 +31,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextStyle
 import com.example.echo_panda_mobile.data.remote.GenreData
 import com.example.echo_panda_mobile.data.remote.TagData
 import com.example.echo_panda_mobile.presentation.components.AdminBottomBar
@@ -42,6 +45,7 @@ private val TextMuted = Color.White.copy(alpha = 0.5f)
 private val ActiveGreen = Color(0xFF00C853)
 private val InactiveRed = Color(0xFFFF5252)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminLibraryScreen(
     selectedNav: Int,
@@ -72,93 +76,101 @@ fun AdminLibraryScreen(
         },
         containerColor = BgDark
     ) { paddingValues ->
-        Column(
+        PullToRefreshBox(
+            isRefreshing = uiState.isLoading,
+            onRefresh = { viewModel.refresh() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 20.dp)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (uiState.isLoading) {
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = AccentPurple)
-                }
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            uiState.errorMessage?.let { message ->
-                Text(
-                    text = message,
-                    color = Color(0xFFFF5252),
-                    fontSize = 14.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp)
-                )
-            }
-
-            uiState.successMessage?.let { message ->
-                Text(
-                    text = message,
-                    color = AccentPurple,
-                    fontSize = 14.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp)
-                )
-            }
-
-            // Filter Chips
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
-                filters.forEach { filter ->
-                    FilterChip(
-                        selected = selectedFilter == filter,
-                        onClick = { selectedFilter = filter },
-                        label = { Text(filter) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = Color.Transparent,
-                            selectedContainerColor = AccentPurple.copy(alpha = 0.2f),
-                            labelColor = TextMuted,
-                            selectedLabelColor = AccentPurple
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            borderColor = Color.White.copy(alpha = 0.1f),
-                            selectedBorderColor = AccentPurple,
-                            borderWidth = 1.dp,
-                            selectedBorderWidth = 1.dp,
-                            enabled = true,
-                            selected = selectedFilter == filter
-                        ),
-                        shape = RoundedCornerShape(20.dp)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (uiState.isLoading && uiState.tags.isEmpty() && uiState.genres.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = AccentPurple)
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
+                uiState.errorMessage?.let { message ->
+                    Text(
+                        text = message,
+                        color = Color(0xFFFF5252),
+                        fontSize = 14.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp)
                     )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+                uiState.successMessage?.let { message ->
+                    Text(
+                        text = message,
+                        color = AccentPurple,
+                        fontSize = 14.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp)
+                    )
+                }
 
-            when (selectedFilter) {
-                "Tag" -> CollectionTagsSection(
-                    tags = uiState.tags,
-                    onNavigateToTagDetail = onNavigateToTagDetail,
-                    onNavigateToTagAlbums = onNavigateToTagAlbums,
-                    onCreateTag = { viewModel.createTag(it) },
-                    onDeleteTag = { viewModel.deleteTag(it) },
-                    onUpdateTag = { id, name -> viewModel.updateTag(id, name) },
-                    onToggleTagActive = { id, isActive -> viewModel.setTagActive(id, isActive) }
-                )
-                "Category" -> CategoryLibrarySection(
-                    genres = uiState.genres,
-                    onNavigateToCategoryDetail = onNavigateToCategoryDetail,
-                    onNavigateToCategoryAlbums = onNavigateToCategoryAlbums,
-                    onCreateCategory = { viewModel.createGenre(it) },
-                    onDeleteCategory = { viewModel.deleteGenre(it) },
-                    onUpdateCategory = { id, name -> viewModel.updateGenre(id, name) },
-                    onToggleCategoryActive = { id, isActive -> viewModel.setGenreActive(id, isActive) }
-                )
+                // Filter Chips
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    filters.forEach { filter ->
+                        FilterChip(
+                            selected = selectedFilter == filter,
+                            onClick = { selectedFilter = filter },
+                            label = { Text(filter) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = Color.Transparent,
+                                selectedContainerColor = AccentPurple.copy(alpha = 0.2f),
+                                labelColor = TextMuted,
+                                selectedLabelColor = AccentPurple
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = Color.White.copy(alpha = 0.1f),
+                                selectedBorderColor = AccentPurple,
+                                borderWidth = 1.dp,
+                                selectedBorderWidth = 1.dp,
+                                enabled = true,
+                                selected = selectedFilter == filter
+                            ),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                when (selectedFilter) {
+                    "Tag" -> CollectionTagsSection(
+                        tags = uiState.tags,
+                        onNavigateToTagDetail = onNavigateToTagDetail,
+                        onNavigateToTagAlbums = onNavigateToTagAlbums,
+                        onCreateTag = { viewModel.createTag(it) },
+                        onDeleteTag = { viewModel.deleteTag(it) },
+                        onUpdateTag = { id, name -> viewModel.updateTag(id, name) },
+                        onToggleTagActive = { id, isActive -> viewModel.setTagActive(id, isActive) }
+                    )
+                    "Category" -> CategoryLibrarySection(
+                        genres = uiState.genres,
+                        onNavigateToCategoryDetail = onNavigateToCategoryDetail,
+                        onNavigateToCategoryAlbums = onNavigateToCategoryAlbums,
+                        onCreateCategory = { viewModel.createGenre(it) },
+                        onDeleteCategory = { viewModel.deleteGenre(it) },
+                        onUpdateCategory = { id, name -> viewModel.updateGenre(id, name) },
+                        onToggleCategoryActive = { id, isActive -> viewModel.setGenreActive(id, isActive) }
+                    )
+                }
             }
         }
     }

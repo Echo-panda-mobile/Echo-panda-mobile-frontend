@@ -29,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -82,43 +83,43 @@ fun AdminUserDetailScreen(
         },
         containerColor = BgDark
     ) { paddingValues ->
-        when {
-            uiState.isLoading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = AccentPurple)
+        PullToRefreshBox(
+            isRefreshing = uiState.isLoading,
+            onRefresh = { viewModel.loadUser() },
+            modifier = Modifier.padding(paddingValues)
+        ) {
+            when {
+                uiState.isLoading && uiState.user == null -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = AccentPurple)
+                    }
                 }
-            }
 
-            uiState.errorMessage != null -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                        .padding(20.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = uiState.errorMessage.orEmpty(),
-                        color = Color(0xFFFF6B6B),
-                        fontSize = 14.sp
-                    )
+                uiState.errorMessage != null && uiState.user == null -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(20.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = uiState.errorMessage.orEmpty(),
+                            color = Color(0xFFFF6B6B),
+                            fontSize = 14.sp
+                        )
+                    }
                 }
-            }
 
-            uiState.user != null -> {
-                val user = uiState.user
-                if (user != null) {
+                uiState.user != null -> {
+                    val user = uiState.user!!
                     UserDetailContent(
                         user = user,
                         profileImageUrl = uiState.profileImageUrl,
                         albums = uiState.albums,
                         isArtistLoading = uiState.isArtistContentLoading,
-                        paddingValues = paddingValues,
                         onBack = onBack,
                         onNavigateToAlbumDetail = onNavigateToAlbumDetail
                     )
@@ -134,14 +135,12 @@ private fun UserDetailContent(
     profileImageUrl: String?,
     albums: List<Album>,
     isArtistLoading: Boolean,
-    paddingValues: PaddingValues,
     onBack: () -> Unit,
     onNavigateToAlbumDetail: (String) -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(paddingValues)
             .padding(horizontal = 20.dp)
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally

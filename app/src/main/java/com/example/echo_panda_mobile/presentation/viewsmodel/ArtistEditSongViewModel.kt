@@ -28,6 +28,7 @@ import java.io.FileOutputStream
 data class ArtistEditSongUiState(
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
+    val isDeleting: Boolean = false,
     val song: SongDto? = null,
     val genres: List<MbGenreDto> = emptyList(),
     val tags: List<MbTagDto> = emptyList(),
@@ -48,6 +49,9 @@ class ArtistEditSongViewModel(
 
     private val _saveSuccess = MutableSharedFlow<Unit>()
     val saveSuccess = _saveSuccess.asSharedFlow()
+
+    private val _deleteSuccess = MutableSharedFlow<Unit>()
+    val deleteSuccess = _deleteSuccess.asSharedFlow()
 
     fun load(songId: String) {
         android.util.Log.d(TAG, "load() songId=$songId")
@@ -205,6 +209,23 @@ class ArtistEditSongViewModel(
                 _uiState.value = _uiState.value.copy(
                     isSaving = false,
                     errorMessage = e.message ?: "Failed to update song",
+                )
+            }
+        }
+    }
+
+    fun deleteSong(songId: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isDeleting = true, errorMessage = null)
+            val result = repository.deleteSong(songId)
+            if (result.isSuccess) {
+                repository.getMySongs()
+                _uiState.value = _uiState.value.copy(isDeleting = false)
+                _deleteSuccess.emit(Unit)
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isDeleting = false,
+                    errorMessage = result.exceptionOrNull()?.message ?: "Failed to delete song",
                 )
             }
         }

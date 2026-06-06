@@ -39,6 +39,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -118,141 +119,146 @@ fun AdminCategoryAlbumsScreen(
             }
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 20.dp)
+        PullToRefreshBox(
+            isRefreshing = uiState.isLoading,
+            onRefresh = { viewModel.loadAlbums(categoryId) },
+            modifier = Modifier.padding(paddingValues)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            if (uiState.isLoading) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = AccentPurple)
-            }
-
-            Text(
-                text = buildAnnotatedString {
-                    append("Albums in ")
-                    withStyle(style = SpanStyle(color = AccentPurple)) {
-                        append("Category #$categoryId")
-                    }
-                },
-                color = Color.White,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            uiState.errorMessage?.let {
-                Text(it, color = Color.Red, modifier = Modifier.padding(bottom = 16.dp))
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
             ) {
-                TextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    placeholder = { Text("Search albums...", color = TextMuted, fontSize = 14.sp) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.White.copy(alpha = 0.05f),
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    singleLine = true
-                )
-
-                IconButton(
-                    onClick = { showCreateDialog = true },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(
-                            Brush.horizontalGradient(colors = listOf(Color(0xFF8E24AA), Color(0xFFFF4081))),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Create Category", tint = Color.White)
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                if (uiState.isLoading && uiState.albums.isEmpty()) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = AccentPurple)
                 }
-            }
 
-            if (showCreateDialog) {
-                AlertDialog(
-                    onDismissRequest = { showCreateDialog = false },
-                    containerColor = CardBg,
-                    title = { Text("Create New Category", color = Color.White) },
-                    text = {
-                        OutlinedTextField(
-                            value = newCategoryName,
-                            onValueChange = { newCategoryName = it },
-                            label = { Text("Category Name") },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = AccentPurple,
-                                unfocusedBorderColor = TextMuted,
-                                focusedLabelColor = AccentPurple,
-                                unfocusedLabelColor = TextMuted
-                            )
-                        )
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                showCreateDialog = false
-                                if (newCategoryName.isNotBlank()) {
-                                    viewModel.createCategory(newCategoryName)
-                                }
-                                newCategoryName = ""
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
-                        ) {
-                            Text("Create", color = Color.White)
+                Text(
+                    text = buildAnnotatedString {
+                        append("Albums in ")
+                        withStyle(style = SpanStyle(color = AccentPurple)) {
+                            append("Category #$categoryId")
                         }
                     },
-                    dismissButton = {
-                        TextButton(onClick = { showCreateDialog = false }) {
-                            Text("Cancel", color = Color.White)
-                        }
-                    }
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
                 )
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                uiState.errorMessage?.let {
+                    Text(it, color = Color.Red, modifier = Modifier.padding(bottom = 16.dp))
+                }
 
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = Color.White.copy(alpha = 0.03f),
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
-            ) {
-                Column {
-                    Row(
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    TextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
                         modifier = Modifier
-                            .padding(horizontal = 16.dp, vertical = 16.dp)
-                            .fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        placeholder = { Text("Search albums...", color = TextMuted, fontSize = 14.sp) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.White.copy(alpha = 0.05f),
+                            unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        singleLine = true
+                    )
+
+                    IconButton(
+                        onClick = { showCreateDialog = true },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(
+                                Brush.horizontalGradient(colors = listOf(Color(0xFF8E24AA), Color(0xFFFF4081))),
+                                shape = RoundedCornerShape(12.dp)
+                            )
                     ) {
-                        Text("ALBUM", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(3f))
-                        Text("ARTIST", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2f))
-                        Text("ACTION", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+                        Icon(Icons.Default.Add, contentDescription = "Create Category", tint = Color.White)
                     }
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
-                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                        items(albums, key = { it.id }) { album ->
-                            CategoryAlbumRow(album, categoryId, viewModel)
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(alpha = 0.03f))
+                }
+
+                if (showCreateDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showCreateDialog = false },
+                        containerColor = CardBg,
+                        title = { Text("Create New Category", color = Color.White) },
+                        text = {
+                            OutlinedTextField(
+                                value = newCategoryName,
+                                onValueChange = { newCategoryName = it },
+                                label = { Text("Category Name") },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = AccentPurple,
+                                    unfocusedBorderColor = TextMuted,
+                                    focusedLabelColor = AccentPurple,
+                                    unfocusedLabelColor = TextMuted
+                                )
+                            )
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showCreateDialog = false
+                                    if (newCategoryName.isNotBlank()) {
+                                        viewModel.createCategory(newCategoryName)
+                                    }
+                                    newCategoryName = ""
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
+                            ) {
+                                Text("Create", color = Color.White)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showCreateDialog = false }) {
+                                Text("Cancel", color = Color.White)
+                            }
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White.copy(alpha = 0.03f),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 16.dp)
+                                .fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("ALBUM", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(3f))
+                            Text("ARTIST", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2f))
+                            Text("ACTION", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+                        }
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
+                        LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                            items(albums, key = { it.id }) { album ->
+                                CategoryAlbumRow(album, categoryId, viewModel)
+                                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(alpha = 0.03f))
+                            }
                         }
                     }
                 }

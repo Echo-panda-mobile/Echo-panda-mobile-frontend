@@ -5,12 +5,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.echo_panda_mobile.data.remote.AlbumDto
+import com.example.echo_panda_mobile.data.remote.SongDto
 import com.example.echo_panda_mobile.data.remote.RetrofitClient
 import com.example.echo_panda_mobile.data.repository.ArtistRepository
 import com.example.echo_panda_mobile.data.repository.TokenStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -25,10 +27,20 @@ class ArtistAlbumViewModel(
         data class Error(val message: String) : AlbumUiState()
     }
 
+    data class AlbumTracksUiState(
+        val album: AlbumDto? = null,
+        val isLoading: Boolean = false,
+        val songs: List<SongDto> = emptyList(),
+        val error: String? = null,
+    )
+
     private val _loading = MutableStateFlow(false)
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing
     private val _error = MutableStateFlow<String?>(null)
+
+    private val _albumTracks = MutableStateFlow(AlbumTracksUiState())
+    val albumTracks: StateFlow<AlbumTracksUiState> = _albumTracks.asStateFlow()
 
     val uiState: StateFlow<AlbumUiState> = combine(
         repository.albums,
@@ -69,6 +81,28 @@ class ArtistAlbumViewModel(
                 loadMyAlbums()
             }
         }
+    }
+
+    fun loadAlbumTracks(album: AlbumDto) {
+        viewModelScope.launch {
+            _albumTracks.value = AlbumTracksUiState(album = album, isLoading = true)
+            val result = repository.getSongsForAlbum(album.id)
+            _albumTracks.value = if (result.isSuccess) {
+                AlbumTracksUiState(
+                    album = album,
+                    songs = result.getOrNull().orEmpty(),
+                )
+            } else {
+                AlbumTracksUiState(
+                    album = album,
+                    error = result.exceptionOrNull()?.message ?: "Failed to load tracks",
+                )
+            }
+        }
+    }
+
+    fun dismissAlbumTracks() {
+        _albumTracks.value = AlbumTracksUiState()
     }
 }
 

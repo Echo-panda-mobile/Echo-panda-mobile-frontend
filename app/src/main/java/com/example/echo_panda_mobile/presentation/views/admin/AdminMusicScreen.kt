@@ -36,6 +36,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -99,69 +100,76 @@ fun AdminMusicScreen(
         },
         containerColor = BgDark
     ) { paddingValues ->
-        Column(
+        PullToRefreshBox(
+            isRefreshing = uiState.isLoading,
+            onRefresh = { viewModel.refresh() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 20.dp)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+            ) {
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                filters.forEach { filter ->
-                    FilterChip(
-                        selected = selectedFilter == filter,
-                        onClick = { selectedFilter = filter },
-                        label = { Text(filter) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = Color.Transparent,
-                            selectedContainerColor = AccentPurple.copy(alpha = 0.2f),
-                            labelColor = TextMuted,
-                            selectedLabelColor = AccentPurple
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            borderColor = Color.White.copy(alpha = 0.1f),
-                            selectedBorderColor = AccentPurple,
-                            borderWidth = 1.dp,
-                            selectedBorderWidth = 1.dp,
-                            enabled = true,
-                            selected = selectedFilter == filter
-                        ),
-                        shape = RoundedCornerShape(20.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            if (uiState.isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = AccentPurple)
-                }
-            } else {
-                uiState.errorMessage?.let { message ->
-                    Text(message, color = Color(0xFFFF6B6B), fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    filters.forEach { filter ->
+                        FilterChip(
+                            selected = selectedFilter == filter,
+                            onClick = { selectedFilter = filter },
+                            label = { Text(filter) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = Color.Transparent,
+                                selectedContainerColor = AccentPurple.copy(alpha = 0.2f),
+                                labelColor = TextMuted,
+                                selectedLabelColor = AccentPurple
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = Color.White.copy(alpha = 0.1f),
+                                selectedBorderColor = AccentPurple,
+                                borderWidth = 1.dp,
+                                selectedBorderWidth = 1.dp,
+                                enabled = true,
+                                selected = selectedFilter == filter
+                            ),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                    }
                 }
 
-                when (selectedFilter) {
-                    "Song" -> SongManagementSection(
-                        searchQuery = searchQuery,
-                        onSearchQueryChange = { searchQuery = it },
-                        songs = uiState.songs.filter {
-                            listOf(it.title, it.artist, it.album.orEmpty()).joinToString(" ").contains(searchQuery, ignoreCase = true)
-                        },
-                        onNavigateToDetail = onNavigateToSongDetail
-                    )
+                Spacer(modifier = Modifier.height(20.dp))
 
-                    else -> AlbumManagementSection(
-                        searchQuery = searchQuery,
-                        onSearchQueryChange = { searchQuery = it },
-                        albums = uiState.albums.filter {
-                            listOf(it.title, it.artist).joinToString(" ").contains(searchQuery, ignoreCase = true)
-                        },
-                        onNavigateToDetail = onNavigateToAlbumDetail
-                    )
+                if (uiState.isLoading && uiState.songs.isEmpty() && uiState.albums.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = AccentPurple)
+                    }
+                } else {
+                    uiState.errorMessage?.let { message ->
+                        Text(message, color = Color(0xFFFF6B6B), fontSize = 13.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    when (selectedFilter) {
+                        "Song" -> SongManagementSection(
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = { searchQuery = it },
+                            songs = uiState.songs.filter {
+                                listOf(it.title, it.artist, it.album.orEmpty()).joinToString(" ").contains(searchQuery, ignoreCase = true)
+                            },
+                            onNavigateToDetail = onNavigateToSongDetail
+                        )
+
+                        else -> AlbumManagementSection(
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = { searchQuery = it },
+                            albums = uiState.albums.filter {
+                                listOf(it.title, it.artist).joinToString(" ").contains(searchQuery, ignoreCase = true)
+                            },
+                            onNavigateToDetail = onNavigateToAlbumDetail
+                        )
+                    }
                 }
             }
         }

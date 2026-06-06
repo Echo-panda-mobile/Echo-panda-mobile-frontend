@@ -45,8 +45,9 @@ class AdminUserDetailViewModel(
         loadUser()
     }
 
-    private fun loadUser() {
+    fun loadUser() {
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             when (val result = repository.findUserByIdAndRole(userId, role)) {
                 is AdminResult.Success -> {
                     if (result.data != null) {
